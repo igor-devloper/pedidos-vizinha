@@ -89,6 +89,30 @@ function getApiErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
+function isInstanceItem(data: unknown): data is InstanceItem {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      "id" in data &&
+      "name" in data &&
+      "status" in data &&
+      "createdAt" in data &&
+      "updatedAt" in data
+  );
+}
+
+function isFlowItem(data: unknown): data is FlowItem {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      "id" in data &&
+      "nome" in data &&
+      "gatilho" in data &&
+      "resposta" in data &&
+      "prioridade" in data
+  );
+}
+
 function getStatusClass(status: string) {
   switch (status) {
     case "connected":
@@ -253,7 +277,7 @@ export function ManhiaBotDashboard({
         | { error?: string }
         | null;
 
-      if (!response.ok || !data || "error" in data) {
+      if (!response.ok || !isInstanceItem(data)) {
         throw new Error(getApiErrorMessage(data, "Falha ao criar instancia."));
       }
 
@@ -299,7 +323,7 @@ export function ManhiaBotDashboard({
           setQrInstanceId(null);
           setQrDataUrl(null);
         }
-      } else if (data && !("removed" in data)) {
+      } else if (isInstanceItem(data)) {
         setInstances((current) =>
           current.map((item) => (item.id === instanceId ? data : item))
         );
@@ -357,7 +381,7 @@ export function ManhiaBotDashboard({
         | { error?: string }
         | null;
 
-      if (!response.ok || !data || "error" in data) {
+      if (!response.ok || !isFlowItem(data)) {
         throw new Error(getApiErrorMessage(data, "Falha ao salvar fluxo."));
       }
 
