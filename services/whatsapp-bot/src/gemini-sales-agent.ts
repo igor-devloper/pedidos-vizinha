@@ -5,6 +5,7 @@ import { logger } from "./logger.js";
 import type { BotLead } from "./lead-repository.js";
 import { listActiveProducts } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
+import type { ProductRecord } from "./product-repository.js";
 
 type AgentResult = {
   reply: string;
@@ -44,7 +45,10 @@ function formatProductsForPrompt(
   }
 
   return products
-    .map((product) => `- ${product.nome} | R$ ${product.preco} | ${product.descricao}`)
+    .map(
+      (product: ProductRecord) =>
+        `- ${product.nome} | R$ ${product.preco} | ${product.descricao}`
+    )
     .join("\n");
 }
 

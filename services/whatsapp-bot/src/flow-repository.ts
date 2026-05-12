@@ -68,10 +68,10 @@ export async function findMatchingFlow(instanceId: string, message: string) {
     );
 
     const instanceFlows = result.rows
-      .filter((flow) => flow.instanceId === instanceId)
+      .filter((flow: BotFlow) => flow.instanceId === instanceId)
       .sort(sortFlows);
     const globalFlows = result.rows
-      .filter((flow) => flow.instanceId === null)
+      .filter((flow: BotFlow) => flow.instanceId === null)
       .sort(sortFlows);
 
     const allFlows = [...instanceFlows, ...globalFlows];

@@ -1,5 +1,5 @@
 import express from "express";
-import pinoHttp from "pino-http";
+import { pinoHttp } from "pino-http";
 import { z } from "zod";
 
 import { requireApiKey } from "./auth.js";
