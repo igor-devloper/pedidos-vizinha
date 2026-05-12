@@ -75,6 +75,20 @@ const EMPTY_FLOW: FlowFormState = {
   prioridade: "0",
 };
 
+function getApiErrorMessage(data: unknown, fallback: string) {
+  if (
+    data &&
+    typeof data === "object" &&
+    "error" in data &&
+    typeof data.error === "string" &&
+    data.error
+  ) {
+    return data.error;
+  }
+
+  return fallback;
+}
+
 function getStatusClass(status: string) {
   switch (status) {
     case "connected":
@@ -240,7 +254,7 @@ export function ManhiaBotDashboard({
         | null;
 
       if (!response.ok || !data || "error" in data) {
-        throw new Error(data?.error || "Falha ao criar instancia.");
+        throw new Error(getApiErrorMessage(data, "Falha ao criar instancia."));
       }
 
       setInstances((current) => [data, ...current]);
@@ -276,11 +290,7 @@ export function ManhiaBotDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(
-          data && typeof data === "object" && "error" in data
-            ? data.error
-            : "Falha ao executar acao."
-        );
+        throw new Error(getApiErrorMessage(data, "Falha ao executar acao."));
       }
 
       if (action === "delete") {
@@ -348,7 +358,7 @@ export function ManhiaBotDashboard({
         | null;
 
       if (!response.ok || !data || "error" in data) {
-        throw new Error(data?.error || "Falha ao salvar fluxo.");
+        throw new Error(getApiErrorMessage(data, "Falha ao salvar fluxo."));
       }
 
       if (editingFlowId) {
@@ -396,7 +406,7 @@ export function ManhiaBotDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Falha ao excluir fluxo.");
+        throw new Error(getApiErrorMessage(data, "Falha ao excluir fluxo."));
       }
 
       setFlows((current) => current.filter((item) => item.id !== flowId));

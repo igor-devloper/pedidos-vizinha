@@ -155,6 +155,18 @@ class InstanceManager {
           continue;
         }
 
+        if (message.key.remoteJid.endsWith("@g.us")) {
+          logger.info(
+            {
+              instanceId,
+              remoteJid: message.key.remoteJid,
+              messageId: message.key.id,
+            },
+            "Skipping message because it came from a group"
+          );
+          continue;
+        }
+
         const text =
           message.message?.conversation ||
           message.message?.extendedTextMessage?.text ||
