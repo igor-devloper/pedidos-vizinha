@@ -29,6 +29,10 @@ type Encomenda = {
   itens: EncomendaItem[];
 };
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Erro ao carregar pedido.";
+}
+
 export default function PagamentoPage() {
   const params = useParams<{ txid: string }>();
   const txid = params.txid;
@@ -50,8 +54,8 @@ export default function PagamentoPage() {
         }
         const data = (await res.json()) as Encomenda;
         setEncomenda(data);
-      } catch (e: any) {
-        setError(e.message || "Erro ao carregar pedido.");
+      } catch (error: unknown) {
+        setError(getErrorMessage(error));
       } finally {
         setLoading(false);
       }

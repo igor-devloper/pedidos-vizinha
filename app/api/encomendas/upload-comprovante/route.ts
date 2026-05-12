@@ -2,6 +2,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+function hasErrorCode(error: unknown): error is { code: string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -18,7 +27,7 @@ export async function POST(req: Request) {
 
     if (!txid || !comprovanteBase64) {
       return NextResponse.json(
-        { error: "txid e comprovante são obrigatórios." },
+        { error: "txid e comprovante sao obrigatorios." },
         { status: 400 }
       );
     }
@@ -33,12 +42,12 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true, encomenda });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("UPLOAD_COMPROVANTE_ERROR", err);
 
-    if (err?.code === "P2025") {
+    if (hasErrorCode(err) && err.code === "P2025") {
       return NextResponse.json(
-        { error: "Encomenda não encontrada para este TXID." },
+        { error: "Encomenda nao encontrada para este TXID." },
         { status: 404 }
       );
     }

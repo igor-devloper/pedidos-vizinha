@@ -1,6 +1,5 @@
 // components/pix-payment.tsx
 "use client";
-
 import {
   useRef,
   useState,

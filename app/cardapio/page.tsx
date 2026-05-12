@@ -53,33 +53,6 @@ export default async function CardapioPage() {
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-pink-100 bg-pink-50/80 p-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-pink-500">
-                    Cardapio vivo
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">
-                    Atualizado pelo painel da Manhia
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-pink-100 bg-pink-50/80 p-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-pink-500">
-                    Produtos ativos
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">
-                    {produtos.length} item(ns) no cardapio
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-pink-100 bg-pink-50/80 p-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-pink-500">
-                    Atendimento
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">
-                    Consulte disponibilidade pelo WhatsApp
-                  </p>
-                </div>
-              </div>
-
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button
                   asChild

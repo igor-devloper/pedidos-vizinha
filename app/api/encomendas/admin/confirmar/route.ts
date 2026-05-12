@@ -207,7 +207,7 @@ export async function POST(req: Request) {
     );
 
     return NextResponse.json({ ok: true, encomenda });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("ADMIN_CONFIRMAR_ERROR", err);
     return NextResponse.json(
       { error: "Erro ao atualizar status da encomenda." },
