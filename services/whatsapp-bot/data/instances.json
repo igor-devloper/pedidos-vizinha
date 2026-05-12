@@ -1,0 +1,12 @@
+[
+  {
+    "id": "febe474d-c294-4685-a9a7-d19ee8235846",
+    "name": "attm",
+    "status": "connected",
+    "createdAt": "2026-05-12T13:27:42.844Z",
+    "updatedAt": "2026-05-12T13:28:06.670Z",
+    "connectedJid": "558386120323:1@s.whatsapp.net",
+    "connectedNumber": "558386120323",
+    "lastConnectedAt": "2026-05-12T13:28:06.659Z"
+  }
+]

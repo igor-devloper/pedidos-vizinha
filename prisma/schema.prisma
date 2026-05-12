@@ -33,6 +33,51 @@ model Encomenda {
   updatedAt    DateTime      @updatedAt
 }
 
+model Produto {
+  id           String   @id @default(cuid())
+  nome         String
+  descricao    String
+  preco        Decimal  @db.Decimal(10, 2)
+  imagemBase64 String
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model BotFlow {
+  id            String   @id @default(cuid())
+  nome          String
+  descricao     String?
+  instanceId    String?
+  gatilho       String
+  resposta      String
+  ativo         Boolean  @default(true)
+  prioridade    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model BotLead {
+  id              String   @id @default(cuid())
+  instanceId      String
+  remoteJid       String
+  pushName        String?
+  phoneNumber     String?
+  nome            String?
+  stage           String   @default("new")
+  status          String   @default("open")
+  intent          String?
+  eventoDetalhes  String?
+  bairroRetirada  String?
+  observacoes     String?
+  lastInboundText String?
+  lastOutboundText String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([instanceId, remoteJid])
+}
+
 model EncomendaItem {
   id          String     @id @default(cuid())
   tipo        String
