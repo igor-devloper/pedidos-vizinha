@@ -8,7 +8,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -21,7 +21,7 @@ export async function DELETE(
     return NextResponse.json(result);
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Falha ao excluir instancia.";
+      error instanceof Error ? error.message : "Falha ao excluir instância.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

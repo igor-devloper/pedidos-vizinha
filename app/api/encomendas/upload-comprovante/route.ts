@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
     if (!txid || !comprovanteBase64) {
       return NextResponse.json(
-        { error: "txid e comprovante sao obrigatorios." },
+        { error: "txid e comprovante são obrigatórios." },
         { status: 400 }
       );
     }
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     if (hasErrorCode(err) && err.code === "P2025") {
       return NextResponse.json(
-        { error: "Encomenda nao encontrada para este TXID." },
+        { error: "Encomenda não encontrada para este TXID." },
         { status: 404 }
       );
     }

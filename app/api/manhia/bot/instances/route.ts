@@ -12,7 +12,7 @@ const createInstanceSchema = z.object({
 
 export async function GET(req: Request) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -24,14 +24,14 @@ export async function GET(req: Request) {
     return NextResponse.json(instances);
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Falha ao carregar instancias.";
+      error instanceof Error ? error.message : "Falha ao carregar instâncias.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -46,13 +46,13 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Payload invalido.", details: error.flatten() },
+        { error: "Payload inválido.", details: error.flatten() },
         { status: 400 }
       );
     }
 
     const message =
-      error instanceof Error ? error.message : "Falha ao criar instancia.";
+      error instanceof Error ? error.message : "Falha ao criar instância.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

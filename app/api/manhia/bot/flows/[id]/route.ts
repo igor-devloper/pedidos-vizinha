@@ -19,7 +19,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -42,7 +42,7 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Payload invalido.", details: error.flatten() },
+        { error: "Payload inválido.", details: error.flatten() },
         { status: 400 }
       );
     }
@@ -58,7 +58,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {

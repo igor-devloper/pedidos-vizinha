@@ -8,7 +8,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -22,7 +22,7 @@ export async function POST(
     return NextResponse.json(instance);
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Falha ao parar instancia.";
+      error instanceof Error ? error.message : "Falha ao parar instância.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,5 +1,5 @@
-// app/api/encomendas/admin/confirmar/route.ts
 import { NextResponse } from "next/server";
+
 import { prisma } from "@/lib/db";
 import {
   sendPedidoConfirmadoEmail,
@@ -23,7 +23,7 @@ async function enviarWhatsappConfirmacao({
 }) {
   try {
     if (!telefone) {
-      console.warn("[GZAPPY] Telefone não informado, pulando envio de WhatsApp.");
+      console.warn("[GZAPPY] Telefone não informado, envio de WhatsApp ignorado.");
       return;
     }
 
@@ -33,10 +33,9 @@ async function enviarWhatsappConfirmacao({
       return;
     }
 
-    // Normaliza telefone: remove tudo que não for número (ex: (84) 99999-9999 → 84999999999)
     const phone = telefone.replace(/\D/g, "");
     if (!phone) {
-      console.error("[GZAPPY] Telefone inválido após normalização:", telefone);
+      console.error("[GZAPPY] Telefone inválido após a normalização:", telefone);
       return;
     }
 
@@ -47,14 +46,14 @@ async function enviarWhatsappConfirmacao({
 Oi, ${nome}! 😊
 
 Recebemos o *pagamento parcial* do seu pedido *#${txid}*.
-O seu pedido já está *confirmado*.
+Seu pedido já está *confirmado*.
 
-Responda essa mensgem para combinarmos sobre horário para entrega de sua encomenda. 
-Lembrando que só entregamos até as 17:30h, em?😊
+Se precisar ajustar o horário combinado, responda esta mensagem por aqui.
+A tolerância de atraso é de 15 minutos para ambas as partes. 😊
 
 Qualquer dúvida, estou por aqui!
 
-Obrigado pela confiança! 🚀✨
+Obrigada pela confiança! 🚀✨
       `;
     }
 
@@ -64,12 +63,12 @@ Oi, ${nome}! 👋😊
 
 Seu pagamento do pedido *#${txid}* foi confirmado com sucesso! 🎉
 
-Responda essa mensgem para combinarmos sobre horário para entrega de sua encomenda. 
-Lembrando que só entregamos até as 17:30h, em?😊
+Se precisar ajustar o horário combinado, responda esta mensagem por aqui.
+A tolerância de atraso é de 15 minutos para ambas as partes. 😊
 
 Qualquer dúvida, estou por aqui!
 
-Obrigado pela confiança! 🚀✨
+Obrigada pela confiança! 🚀✨
       `;
     }
 
@@ -80,7 +79,7 @@ Oi, ${nome}. Tudo bem?
 Seu pedido *#${txid}* foi *cancelado*.
 ${motivo ? `Motivo: ${motivo}\n` : ""}
 
-Se precisar fazer um novo pedido ou tiver alguma dúvida, pode chamar aqui mesmo. 🙂
+Se quiser fazer um novo pedido ou tiver alguma dúvida, pode me chamar por aqui. 🙂
       `;
     }
 
@@ -110,6 +109,7 @@ Se precisar fazer um novo pedido ou tiver alguma dúvida, pode chamar aqui mesmo
       });
       return;
     }
+
     console.log("[GZAPPY] Mensagem enviada com sucesso:", data);
   } catch (error) {
     console.error("[GZAPPY] Erro ao enviar mensagem:", error);
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
     const {
       txid,
       aprovado,
-      tipo, // "METADE" | "TOTAL" (quando aprovado)
+      tipo,
       motivo,
     } = body as {
       txid: string;
@@ -134,12 +134,11 @@ export async function POST(req: Request) {
 
     if (!txid) {
       return NextResponse.json(
-        { error: "txid é obrigatório." },
+        { error: "O txid é obrigatório." },
         { status: 400 }
       );
     }
 
-    // CASO APROVADO (METADE ou TOTAL) → sempre confirma o pedido
     if (aprovado) {
       let status: "PAGO_METADE" | "CONFIRMADO" = "CONFIRMADO";
       let tipoWhatsapp: TipoWhatsapp = "TOTAL";
@@ -155,7 +154,6 @@ export async function POST(req: Request) {
         include: { itens: true },
       });
 
-      // WhatsApp: pagamento confirmado (metade ou total)
       await enviarWhatsappConfirmacao({
         telefone: encomenda.telefone,
         tipo: tipoWhatsapp,
@@ -163,7 +161,6 @@ export async function POST(req: Request) {
         txid: encomenda.txid,
       });
 
-      // E-mail de confirmação (meia ou total)
       await sendPedidoConfirmadoEmail(
         {
           txid: encomenda.txid,
@@ -181,14 +178,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, encomenda });
     }
 
-    // CASO REPROVAÇÃO / CANCELAMENTO
     const encomenda = await prisma.encomenda.update({
       where: { txid },
       data: { status: "CANCELADO" },
       include: { itens: true },
     });
 
-    // WhatsApp: pedido cancelado
     await enviarWhatsappConfirmacao({
       telefone: encomenda.telefone,
       tipo: "CANCELADO",
@@ -210,7 +205,7 @@ export async function POST(req: Request) {
   } catch (err: unknown) {
     console.error("ADMIN_CONFIRMAR_ERROR", err);
     return NextResponse.json(
-      { error: "Erro ao atualizar status da encomenda." },
+      { error: "Erro ao atualizar o status da encomenda." },
       { status: 500 }
     );
   }

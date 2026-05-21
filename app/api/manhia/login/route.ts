@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Senha do painel nao configurada. Defina MANHIA_ACCESS_PASSWORD no ambiente.",
+            "Senha do painel não configurada. Defina MANHIA_ACCESS_PASSWORD no ambiente.",
         },
         { status: 500 }
       );

@@ -18,6 +18,7 @@ async function getProdutos(): Promise<ProdutoAdmin[]> {
       descricao: produto.descricao,
       preco: Number(produto.preco),
       imagemBase64: produto.imagemBase64,
+      categoria: produto.categoria,
       ativo: produto.ativo,
       createdAt: produto.createdAt.toISOString(),
     }));

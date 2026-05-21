@@ -31,7 +31,7 @@ export async function botServiceFetch<T>({
 
   if (!config.configured || !config.baseUrl || !config.apiKey) {
     throw new Error(
-      "Servico do bot nao configurado. Defina BOT_SERVICE_URL e BOT_SERVICE_API_KEY."
+      "Serviço do bot não configurado. Defina BOT_SERVICE_URL e BOT_SERVICE_API_KEY."
     );
   }
 

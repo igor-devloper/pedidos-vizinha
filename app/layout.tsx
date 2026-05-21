@@ -6,7 +6,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Vizinha Salgateria",
-  description: "Cardapio e informacoes da Vizinha Salgateria.",
+  description: "Cardápio e informações da Vizinha Salgateria.",
 };
 
 export default function RootLayout({
@@ -34,8 +34,8 @@ export default function RootLayout({
         <main className="mt-10 flex-1">{children}</main>
 
         <footer className="mt-8 border-t border-pink-100 pt-4 text-center text-xs text-pink-500">
-          (c) {new Date().getFullYear()} Vizinha Salgateria - Cardapio online -
-          WhatsApp (83) 98713-7721
+          (c) {new Date().getFullYear()} Vizinha Salgateria - Cardápio online -
+          WhatsApp (83) 99376-0485
         </footer>
 
         <Toaster richColors position="top-center" />

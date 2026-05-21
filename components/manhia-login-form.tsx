@@ -38,14 +38,14 @@ export function ManhiaLoginForm({ isConfigured }: { isConfigured: boolean }) {
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel entrar.");
+        throw new Error(data?.error || "Não foi possível entrar.");
       }
 
       router.refresh();
       toast.success("Acesso liberado.");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel entrar.";
+        error instanceof Error ? error.message : "Não foi possível entrar.";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -61,11 +61,11 @@ export function ManhiaLoginForm({ isConfigured }: { isConfigured: boolean }) {
               <LockKeyhole className="h-5 w-5" />
             </div>
             <CardTitle className="text-2xl text-pink-800">
-              Painel do cardapio
+              Painel do cardápio
             </CardTitle>
             <p className="text-sm leading-6 text-slate-500">
-              Area protegida para a Manhia cadastrar produtos, imagem, valor e
-              descricao.
+              Área protegida para a Manhia cadastrar produtos, imagens, valores e
+              descrições.
             </p>
           </CardHeader>
           <CardContent>
@@ -85,7 +85,7 @@ export function ManhiaLoginForm({ isConfigured }: { isConfigured: boolean }) {
 
               {!isConfigured && (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  O painel ainda nao tem senha configurada no ambiente.
+                  O painel ainda não tem senha configurada no ambiente.
                 </p>
               )}
 

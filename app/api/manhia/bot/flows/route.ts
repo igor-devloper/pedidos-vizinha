@@ -16,7 +16,7 @@ const flowSchema = z.object({
 
 export async function GET(req: Request) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Payload invalido.", details: error.flatten() },
+        { error: "Payload inválido.", details: error.flatten() },
         { status: 400 }
       );
     }

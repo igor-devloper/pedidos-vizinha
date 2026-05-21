@@ -8,16 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
-  title: "Cardapio | Vizinha Salgateria",
-  description: "Conheca o cardapio da Vizinha Salgateria.",
+  title: "Cardápio | Vizinha Salgateria",
+  description: "Conheça o cardápio da Vizinha Salgateria.",
 };
 
 async function getProdutos() {
   try {
     const produtos = await prisma.produto.findMany({
       where: { ativo: true },
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ categoria: "asc" }, { createdAt: "desc" }],
     });
 
     return produtos.map((produto) => ({
@@ -30,8 +32,87 @@ async function getProdutos() {
   }
 }
 
+function ProductGrid({
+  items,
+}: {
+  items: Awaited<ReturnType<typeof getProdutos>>;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {items.map((produto) => (
+        <article
+          key={produto.id}
+          className="overflow-hidden rounded-[2rem] border border-pink-200/70 bg-white/95 shadow-lg shadow-pink-100/40"
+        >
+          <div className="relative aspect-[4/3] bg-pink-50">
+            <Image
+              src={produto.imagemBase64}
+              alt={produto.nome}
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          </div>
+
+          <div className="space-y-3 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-900">{produto.nome}</h2>
+              <Badge className="shrink-0 rounded-full border border-pink-200 bg-white text-pink-700">
+                {Number(produto.preco).toLocaleString("pt-BR", {
+                  style: "currency",
+                  currency: "BRL",
+                })}
+              </Badge>
+            </div>
+            <p className="text-sm leading-6 text-slate-500">{produto.descricao}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ProductSection({
+  title,
+  description,
+  emptyMessage,
+  items,
+}: {
+  title: string;
+  description: string;
+  emptyMessage: string;
+  items: Awaited<ReturnType<typeof getProdutos>>;
+}) {
+  return (
+    <section className="space-y-5">
+      <div className="rounded-[2rem] border border-pink-200/70 bg-white/90 p-6 shadow-lg shadow-pink-100/40">
+        <h2 className="text-2xl font-semibold text-pink-800">{title}</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+          {description}
+        </p>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-[2rem] border border-pink-200/70 bg-white/90 p-8 text-center shadow-lg shadow-pink-100/40">
+          <p className="text-lg font-semibold text-pink-800">{emptyMessage}</p>
+        </div>
+      ) : (
+        <ProductGrid items={items} />
+      )}
+    </section>
+  );
+}
+
 export default async function CardapioPage() {
   const produtos = await getProdutos();
+  const produtosCento = produtos.filter((produto) => produto.categoria === "CENTO");
+  const produtosLanchonete = produtos.filter(
+    (produto) => produto.categoria === "LANCHONETE"
+  );
 
   return (
     <main className="px-4 py-8 sm:px-6 lg:px-8">
@@ -40,7 +121,7 @@ export default async function CardapioPage() {
           <div className="grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[1.3fr_0.7fr] lg:px-10 lg:py-10">
             <div className="space-y-5">
               <Badge className="border border-pink-200 bg-pink-100 text-pink-700">
-                Cardapio da Vizinha
+                Cardápio da Vizinha
               </Badge>
 
               <div className="space-y-3">
@@ -48,8 +129,9 @@ export default async function CardapioPage() {
                   Salgados com jeitinho caseiro e a cara da Vizinha.
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                  Veja os produtos da casa e fale direto no WhatsApp para combinar
-                  disponibilidade, quantidades e entrega.
+                  Veja os produtos da casa, escolha entre o cardápio de cento e o da
+                  lanchonete e fale direto no WhatsApp para combinar disponibilidade,
+                  horário da entrega e pagamento.
                 </p>
               </div>
 
@@ -59,7 +141,7 @@ export default async function CardapioPage() {
                   className="rounded-full bg-pink-600 px-6 text-white hover:bg-pink-700"
                 >
                   <a
-                    href="https://wa.me/5583987137721"
+                    href="https://wa.me/5583993760485"
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -104,15 +186,18 @@ export default async function CardapioPage() {
                 <div className="space-y-4 text-sm text-slate-600">
                   <div className="flex items-start gap-3">
                     <Sparkles className="mt-0.5 h-4 w-4 text-pink-500" />
-                    <p>Produtos com foto, descricao e valor visiveis no cardapio.</p>
+                    <p>Produtos com foto, descrição e valor visíveis no cardápio.</p>
                   </div>
                   <div className="flex items-start gap-3">
                     <Clock3 className="mt-0.5 h-4 w-4 text-pink-500" />
-                    <p>Consulte antecedencia e disponibilidade para producao.</p>
+                    <p>O horário da entrega é informado pelo cliente no atendimento.</p>
                   </div>
                   <div className="flex items-start gap-3">
                     <MapPin className="mt-0.5 h-4 w-4 text-pink-500" />
-                    <p>Atendimento local com contato direto pelo WhatsApp.</p>
+                    <p>
+                      Encomendas confirmadas com aceite da Vizinha e pagamento total
+                      ou metade.
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -120,52 +205,31 @@ export default async function CardapioPage() {
           </div>
         </section>
 
-        <section id="itens" className="space-y-5">
+        <section id="itens" className="space-y-8">
           {produtos.length === 0 ? (
             <div className="rounded-[2rem] border border-pink-200/70 bg-white/90 p-8 text-center shadow-lg shadow-pink-100/40">
               <p className="text-lg font-semibold text-pink-800">
-                O cardapio ainda esta sendo montado.
+                O cardápio ainda está sendo montado.
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Em breve novos produtos aparecerao aqui.
+                Em breve, novos produtos aparecerão aqui.
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {produtos.map((produto) => (
-                <article
-                  key={produto.id}
-                  className="overflow-hidden rounded-[2rem] border border-pink-200/70 bg-white/95 shadow-lg shadow-pink-100/40"
-                >
-                  <div className="relative aspect-[4/3] bg-pink-50">
-                    <Image
-                      src={produto.imagemBase64}
-                      alt={produto.nome}
-                      fill
-                      unoptimized
-                      className="object-cover"
-                    />
-                  </div>
-
-                  <div className="space-y-3 p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <h2 className="text-lg font-semibold text-slate-900">
-                        {produto.nome}
-                      </h2>
-                      <Badge className="shrink-0 rounded-full border border-pink-200 bg-white text-pink-700">
-                        {Number(produto.preco).toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </Badge>
-                    </div>
-                    <p className="text-sm leading-6 text-slate-500">
-                      {produto.descricao}
-                    </p>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <>
+              <ProductSection
+                title="Cardápio de cento"
+                description="Ideal para encomendas maiores, festas e eventos."
+                items={produtosCento}
+                emptyMessage="Nenhum item de cento foi publicado ainda."
+              />
+              <ProductSection
+                title="Cardápio da lanchonete"
+                description="Opções separadas para o atendimento da lanchonete, sem misturar com os produtos de cento."
+                items={produtosLanchonete}
+                emptyMessage="Nenhum item da lanchonete foi publicado ainda."
+              />
+            </>
           )}
         </section>
       </div>

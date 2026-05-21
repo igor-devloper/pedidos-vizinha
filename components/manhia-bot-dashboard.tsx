@@ -177,14 +177,14 @@ export function ManhiaBotDashboard({
         const message =
           data && typeof data === "object" && "error" in data
             ? data.error
-            : "Falha ao atualizar instancias.";
-        throw new Error(message || "Falha ao atualizar instancias.");
+            : "Falha ao atualizar instâncias.";
+        throw new Error(message || "Falha ao atualizar as instâncias.");
       }
 
       setInstances(data);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Falha ao atualizar instancias.";
+        error instanceof Error ? error.message : "Falha ao atualizar as instâncias.";
       toast.error(message);
     } finally {
       setLoadingInstances(false);
@@ -228,7 +228,7 @@ export function ManhiaBotDashboard({
         | null;
 
       if (!response.ok || !data?.dataUrl) {
-        const message = data?.error || "QR ainda nao disponivel.";
+        const message = data?.error || "QR ainda não está disponível.";
         throw new Error(message);
       }
 
@@ -278,7 +278,7 @@ export function ManhiaBotDashboard({
         | null;
 
       if (!response.ok || !isInstanceItem(data)) {
-        throw new Error(getApiErrorMessage(data, "Falha ao criar instancia."));
+        throw new Error(getApiErrorMessage(data, "Falha ao criar a instância."));
       }
 
       setInstances((current) => [data, ...current]);
@@ -286,7 +286,7 @@ export function ManhiaBotDashboard({
       toast.success("Instancia criada.");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Falha ao criar instancia.";
+        error instanceof Error ? error.message : "Falha ao criar a instância.";
       toast.error(message);
     } finally {
       setCreatingInstance(false);
@@ -457,10 +457,10 @@ export function ManhiaBotDashboard({
                 Painel estilo Sinapse
               </Badge>
               <h1 className="text-3xl font-semibold text-pink-800">
-                Dashboard de instancias e fluxos
+                Dashboard de instâncias e fluxos
               </h1>
               <p className="max-w-3xl text-sm leading-6 text-slate-500">
-                Aqui voce gerencia instancias, abre QR em tempo real e edita os
+                Aqui você gerencia instâncias, abre QR em tempo real e edita os
                 fluxos automatizados do bot.
               </p>
             </div>
@@ -488,7 +488,7 @@ export function ManhiaBotDashboard({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-pink-100 bg-pink-50/80 p-4">
               <p className="text-xs uppercase tracking-[0.25em] text-pink-500">
-                Instancias
+                Instâncias
               </p>
               <p className="mt-2 text-2xl font-semibold text-slate-900">
                 {instances.length}
@@ -512,7 +512,7 @@ export function ManhiaBotDashboard({
             </div>
             <div className="rounded-2xl border border-pink-100 bg-pink-50/80 p-4">
               <p className="text-xs uppercase tracking-[0.25em] text-pink-500">
-                Servico do bot
+                Serviço do bot
               </p>
               <p className="mt-2 text-sm font-semibold text-slate-900">
                 {botConfigured ? "Configurado" : "Pendente"}
@@ -526,7 +526,7 @@ export function ManhiaBotDashboard({
           {!botConfigured && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
               Defina `BOT_SERVICE_URL` e `BOT_SERVICE_API_KEY` no app Next para o
-              painel conseguir conversar com o servico do bot.
+              painel conseguir conversar com o serviço do bot.
             </div>
           )}
         </section>
@@ -536,14 +536,14 @@ export function ManhiaBotDashboard({
             <Card className="border-pink-200 bg-white/95 shadow-lg shadow-pink-100/40">
               <CardHeader>
                 <CardTitle className="text-pink-800">
-                  Criar nova instancia
+                  Criar nova instância
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="grid gap-4 md:grid-cols-2" onSubmit={handleCreateInstance}>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">
-                      Nome da instancia
+                      Nome da instância
                     </label>
                     <Input
                       value={instanceForm.name}
@@ -559,7 +559,7 @@ export function ManhiaBotDashboard({
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">
-                      Numero principal
+                      Número principal
                     </label>
                     <Input
                       value={instanceForm.phoneNumber}
@@ -575,7 +575,7 @@ export function ManhiaBotDashboard({
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium text-slate-700">
-                      Webhook da instancia
+                      Webhook da instância
                     </label>
                     <Input
                       value={instanceForm.webhookUrl}
@@ -603,7 +603,7 @@ export function ManhiaBotDashboard({
                       ) : (
                         <>
                           <Plus className="mr-2 h-4 w-4" />
-                          Criar instancia
+                          Criar instância
                         </>
                       )}
                     </Button>
@@ -614,7 +614,7 @@ export function ManhiaBotDashboard({
 
             <Card className="border-pink-200 bg-white/95 shadow-lg shadow-pink-100/40">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-pink-800">Instancias</CardTitle>
+                <CardTitle className="text-pink-800">Instâncias</CardTitle>
                 {loadingInstances && (
                   <LoaderCircle className="h-4 w-4 animate-spin text-pink-500" />
                 )}
@@ -622,7 +622,7 @@ export function ManhiaBotDashboard({
               <CardContent className="space-y-4">
                 {instances.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    Nenhuma instancia cadastrada ainda.
+                    Nenhuma instância cadastrada ainda.
                   </p>
                 ) : (
                   instances.map((instance) => (
@@ -655,7 +655,7 @@ export function ManhiaBotDashboard({
                           )}
                           {instance.lastConnectedAt && (
                             <p className="text-xs text-slate-400">
-                              Ultima conexao:{" "}
+                              Última conexão:{" "}
                               {new Date(instance.lastConnectedAt).toLocaleString("pt-BR")}
                             </p>
                           )}
@@ -765,7 +765,7 @@ export function ManhiaBotDashboard({
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">
-                      Descricao
+                      Descrição
                     </label>
                     <Input
                       value={flowForm.descricao}
@@ -828,7 +828,7 @@ export function ManhiaBotDashboard({
                           resposta: event.target.value,
                         }))
                       }
-                      placeholder={"Oi! Escolha uma opcao:\n1 - Cardapio\n2 - Atendente"}
+                      placeholder={"Oi! Escolha uma opção:\n1 - Cardápio\n2 - Atendente"}
                       className="min-h-32 border-pink-100 bg-white focus-visible:ring-pink-400"
                     />
                   </div>
@@ -872,7 +872,7 @@ export function ManhiaBotDashboard({
                         onClick={resetFlowForm}
                         className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
                       >
-                        Cancelar edicao
+                        Cancelar edição
                       </Button>
                     )}
                   </div>
@@ -920,7 +920,7 @@ export function ManhiaBotDashboard({
                             )}
                           </div>
                           <div className="text-xs text-slate-400">
-                            {flow.instanceId ? `Instancia ${flow.instanceId}` : "Global"}
+                            {flow.instanceId ? `Instância ${flow.instanceId}` : "Global"}
                           </div>
                         </div>
 
@@ -1005,22 +1005,22 @@ export function ManhiaBotDashboard({
                 <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-3xl border border-pink-100 bg-white p-4 shadow-sm">
                   <Image
                     src={qrDataUrl}
-                    alt="QR code da instancia"
+                    alt="QR code da instância"
                     fill
                     unoptimized
                     className="object-contain p-4"
                   />
                 </div>
                 <p className="text-center text-sm text-slate-500">
-                  Escaneie com o WhatsApp e mantenha esta janela aberta ate a conexao abrir.
+                  Escaneie com o WhatsApp e mantenha esta janela aberta até a conexão abrir.
                 </p>
               </div>
             ) : (
               <div className="flex min-h-80 flex-col items-center justify-center gap-3 rounded-3xl border border-amber-200 bg-amber-50/70 px-6 text-center">
                 <Bot className="h-8 w-8 text-amber-600" />
                 <p className="text-sm text-amber-700">
-                  O QR ainda nao foi disponibilizado por essa instancia. Inicie a
-                  conexao e tente novamente.
+                  O QR ainda não foi disponibilizado por essa instância. Inicie a
+                  conexão e tente novamente.
                 </p>
               </div>
             )}

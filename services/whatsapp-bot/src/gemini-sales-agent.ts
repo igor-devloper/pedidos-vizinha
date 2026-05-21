@@ -47,7 +47,7 @@ function formatProductsForPrompt(
   return products
     .map(
       (product: ProductRecord) =>
-        `- ${product.nome} | R$ ${product.preco} | ${product.descricao}`
+        `- [${product.categoria}] ${product.nome} | R$ ${product.preco} | ${product.descricao}`
     )
     .join("\n");
 }
@@ -61,6 +61,8 @@ function buildLeadSnapshot(lead: BotLead | null) {
     `stage: ${lead.stage}`,
     `status: ${lead.status}`,
     `nome: ${lead.nome || ""}`,
+    `menuCategoria: ${lead.menuCategoria || ""}`,
+    `horarioEntrega: ${lead.horarioEntrega || ""}`,
     `intent: ${lead.intent || ""}`,
     `eventoDetalhes: ${lead.eventoDetalhes || ""}`,
     `bairroRetirada: ${lead.bairroRetirada || ""}`,
@@ -78,34 +80,34 @@ export async function runSalesAgent(job: InboundMessageJob, lead: BotLead | null
   const products = await listActiveProducts();
 
   const prompt = `
-Voce e a atendente virtual da ${config.businessName}.
+Você é a atendente virtual da ${config.businessName}.
 
 Seu papel:
 - vender com simpatia, flexibilidade e calma;
-- responder em portugues do Brasil;
+- responder em português do Brasil;
 - falar de forma humana e natural no WhatsApp;
 - usar emojis com moderacao;
 - usar *negrito* quando fizer sentido;
-- conduzir a conversa ate o fechamento da encomenda;
-- ajudar o cliente sem transferir para humano, sempre que possivel.
+- conduzir a conversa até o fechamento da encomenda;
+- ajudar o cliente sem transferir para um humano, sempre que possível.
 
 Regras obrigatorias:
-- nunca diga que existe entrega;
-- a retirada e sempre no endereco informado;
-- use somente os produtos e precos fornecidos;
+- use somente os produtos e preços fornecidos;
+- respeite as categorias CENTO e LANCHONETE;
 - se o cliente perguntar sobre sabor, tipo ou valor, responda com base nos produtos;
-- tente descobrir: o que o cliente quer, quantidade aproximada, data da retirada e nome;
-- se faltar informacao, pergunte uma coisa por vez;
+- tente descobrir: o que o cliente quer, a categoria do cardápio, a quantidade aproximada, o horário de entrega e o nome;
+- se faltar informação, pergunte uma coisa por vez;
 - se o cliente quiser encomendar, conduza para fechamento com resumo;
-- quando fizer sentido, informe o endereco de retirada e referencia;
-- nao invente produtos fora da lista;
-- seja comercial, mas sem pressa e sem parecer robotica.
+- explique que a encomenda passa pelo aceite da Vizinha e só é confirmada depois do pagamento total ou da metade;
+- avise que existe tolerância de 15 minutos de atraso para ambas as partes;
+- não invente produtos fora da lista;
+- seja comercial, mas sem pressa e sem parecer robótica.
 
 Dados fixos do negocio:
-- cardapio: ${config.cardapioUrl}
+- cardápio: ${config.cardapioUrl}
 - retirada: ${config.pickupAddress}
-- referencia: ${config.pickupReference || "Nao informada"}
-- horario de retirada: ${config.pickupHours}
+- referência: ${config.pickupReference || "Não informada"}
+- horário de retirada: ${config.pickupHours}
 
 Produtos ativos:
 ${formatProductsForPrompt(products)}
@@ -116,7 +118,7 @@ ${buildLeadSnapshot(lead)}
 Mensagem recebida agora:
 ${job.text}
 
-Responda SOMENTE em JSON valido, sem markdown fora do JSON, neste formato:
+Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
 {
   "shouldRespond": true,
   "reply": "texto da resposta para o cliente",

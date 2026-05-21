@@ -8,11 +8,12 @@ type ProdutoPayload = {
   descricao?: string;
   preco?: number | string;
   imagemBase64?: string;
+  categoria?: "CENTO" | "LANCHONETE";
   ativo?: boolean;
 };
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
 }
 
 function validateProdutoPayload(body: ProdutoPayload) {
@@ -20,6 +21,8 @@ function validateProdutoPayload(body: ProdutoPayload) {
   const descricao = body.descricao?.trim() || "";
   const preco = Number(body.preco);
   const imagemBase64 = body.imagemBase64?.trim() || "";
+  const categoria: "CENTO" | "LANCHONETE" =
+    body.categoria === "LANCHONETE" ? "LANCHONETE" : "CENTO";
   const ativo = body.ativo ?? true;
 
   if (!nome) {
@@ -48,6 +51,7 @@ function validateProdutoPayload(body: ProdutoPayload) {
       descricao,
       preco: Number(preco.toFixed(2)),
       imagemBase64,
+      categoria,
       ativo,
     },
   };

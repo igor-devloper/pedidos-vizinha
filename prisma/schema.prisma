@@ -39,6 +39,7 @@ model Produto {
   descricao    String
   preco        Decimal  @db.Decimal(10, 2)
   imagemBase64 String
+  categoria    CategoriaProduto @default(CENTO)
   ativo        Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -64,6 +65,8 @@ model BotLead {
   pushName        String?
   phoneNumber     String?
   nome            String?
+  menuCategoria   CategoriaProduto?
+  horarioEntrega  String?
   stage           String   @default("new")
   status          String   @default("open")
   intent          String?
@@ -76,6 +79,26 @@ model BotLead {
   updatedAt       DateTime @updatedAt
 
   @@unique([instanceId, remoteJid])
+}
+
+model BotOrder {
+  id                  String   @id @default(cuid())
+  code                String   @unique
+  instanceId          String
+  leadId              String?
+  customerRemoteJid   String
+  customerPhoneNumber String?
+  customerName        String?
+  menuCategoria       CategoriaProduto
+  eventoDetalhes      String
+  horarioEntrega      String
+  observacoes         String?
+  summary             String
+  status              String   @default("PENDING_OWNER_APPROVAL")
+  ownerReason         String?
+  paymentStatus       String   @default("PENDING")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model EncomendaItem {
@@ -93,4 +116,9 @@ enum StatusEncomenda {
   PAGO_METADE      // meio pagamento confirmado
   CONFIRMADO       // pagamento total confirmado
   CANCELADO
+}
+
+enum CategoriaProduto {
+  CENTO
+  LANCHONETE
 }

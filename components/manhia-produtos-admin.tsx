@@ -20,6 +20,7 @@ export type ProdutoAdmin = {
   descricao: string;
   preco: string | number;
   imagemBase64: string;
+  categoria: "CENTO" | "LANCHONETE";
   ativo: boolean;
   createdAt: string;
 };
@@ -29,6 +30,7 @@ type ProdutoFormState = {
   descricao: string;
   preco: string;
   imagemBase64: string;
+  categoria: "CENTO" | "LANCHONETE";
   ativo: boolean;
 };
 
@@ -37,6 +39,7 @@ const EMPTY_FORM: ProdutoFormState = {
   descricao: "",
   preco: "",
   imagemBase64: "",
+  categoria: "CENTO",
   ativo: true,
 };
 
@@ -51,7 +54,7 @@ async function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Nao foi possivel ler a imagem."));
+    reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
     reader.readAsDataURL(file);
   });
 }
@@ -94,7 +97,7 @@ export function ManhiaProdutosAdmin({
       setForm((current) => ({ ...current, imagemBase64: dataUrl }));
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Falha ao carregar imagem.";
+        error instanceof Error ? error.message : "Falha ao carregar a imagem.";
       toast.error(message);
     } finally {
       setUploading(false);
@@ -118,6 +121,7 @@ export function ManhiaProdutosAdmin({
             descricao: form.descricao,
             preco: form.preco,
             imagemBase64: form.imagemBase64,
+            categoria: form.categoria,
             ativo: form.ativo,
           }),
         }
@@ -128,7 +132,7 @@ export function ManhiaProdutosAdmin({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel salvar o produto.");
+        throw new Error(data?.error || "Não foi possível salvar o produto.");
       }
 
       const produto = data as ProdutoAdmin;
@@ -148,7 +152,7 @@ export function ManhiaProdutosAdmin({
       router.refresh();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel salvar.";
+        error instanceof Error ? error.message : "Não foi possível salvar.";
       toast.error(message);
     } finally {
       setSaving(false);
@@ -162,6 +166,7 @@ export function ManhiaProdutosAdmin({
       descricao: produto.descricao,
       preco: Number(produto.preco).toFixed(2),
       imagemBase64: produto.imagemBase64,
+      categoria: produto.categoria,
       ativo: produto.ativo,
     });
   };
@@ -178,7 +183,7 @@ export function ManhiaProdutosAdmin({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel excluir o produto.");
+        throw new Error(data?.error || "Não foi possível excluir o produto.");
       }
 
       setProdutos((current) => current.filter((item) => item.id !== produtoId));
@@ -189,7 +194,7 @@ export function ManhiaProdutosAdmin({
       router.refresh();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel excluir.";
+        error instanceof Error ? error.message : "Não foi possível excluir.";
       toast.error(message);
     } finally {
       setDeletingId(null);
@@ -207,13 +212,13 @@ export function ManhiaProdutosAdmin({
         <section className="flex flex-col gap-4 rounded-[2rem] border border-pink-200/80 bg-white/95 p-6 shadow-xl shadow-pink-100/50 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
             <Badge className="border border-pink-200 bg-pink-100 text-pink-700">
-              Area protegida
+              Área protegida
             </Badge>
             <h1 className="text-3xl font-semibold text-pink-800">
               Gestão do cardápio
             </h1>
             <p className="max-w-2xl text-sm leading-6 text-slate-500">
-              Cadastre os produtos que devem aparecer na rota publica do cardá  pio.
+              Cadastre os produtos que devem aparecer no cardápio público.
             </p>
           </div>
 
@@ -270,7 +275,7 @@ export function ManhiaProdutosAdmin({
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">
-                    Descricao
+                    Descrição
                   </label>
                   <Textarea
                     value={form.descricao}
@@ -305,6 +310,25 @@ export function ManhiaProdutosAdmin({
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">
+                      Cardápio
+                    </label>
+                    <select
+                      value={form.categoria}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          categoria: event.target.value as "CENTO" | "LANCHONETE",
+                        }))
+                      }
+                      className="h-10 w-full rounded-md border border-pink-100 bg-white px-3 text-sm text-slate-700 outline-none focus:border-pink-300"
+                    >
+                      <option value="CENTO">Cardápio de cento</option>
+                      <option value="LANCHONETE">Cardápio da lanchonete</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">
                       Foto do produto
                     </label>
                     <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-pink-200 bg-pink-50 text-sm font-medium text-pink-700 transition hover:bg-pink-100">
@@ -337,7 +361,7 @@ export function ManhiaProdutosAdmin({
                     htmlFor="produto-ativo"
                     className="text-sm leading-6 text-slate-600"
                   >
-                    Deixar este produto visivel no cardapio publico.
+                    Deixar este produto visível no cardápio público.
                   </label>
                 </div>
 
@@ -384,7 +408,7 @@ export function ManhiaProdutosAdmin({
                       onClick={resetForm}
                       className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
                     >
-                      Cancelar edicao
+                      Cancelar edição
                     </Button>
                   )}
                 </div>
@@ -431,6 +455,11 @@ export function ManhiaProdutosAdmin({
                               }
                             >
                               {produto.ativo ? "Ativo" : "Oculto"}
+                            </Badge>
+                            <Badge className="border border-pink-200 bg-pink-50 text-pink-700">
+                              {produto.categoria === "CENTO"
+                                ? "Cardápio de cento"
+                                : "Cardápio da lanchonete"}
                             </Badge>
                           </div>
                           <p className="text-sm leading-6 text-slate-500">
