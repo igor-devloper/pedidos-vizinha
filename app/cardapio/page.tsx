@@ -10,6 +10,12 @@ import { Separator } from "@/components/ui/separator";
 
 export const dynamic = "force-dynamic";
 
+type ProdutoWithPromocao = Awaited<
+  ReturnType<typeof prisma.produto.findMany>
+>[number] & {
+  emPromocao?: boolean;
+};
+
 export const metadata: Metadata = {
   title: "Cardápio | Vizinha Salgateria",
   description: "Conheça o cardápio da Vizinha Salgateria.",
@@ -17,15 +23,18 @@ export const metadata: Metadata = {
 
 async function getProdutos() {
   try {
-    const produtos = await prisma.produto.findMany({
+    const produtos = (await prisma.produto.findMany({
       where: { ativo: true },
       orderBy: [{ categoria: "asc" }, { createdAt: "desc" }],
-    });
+    })) as ProdutoWithPromocao[];
 
-    return produtos.map((produto) => ({
-      ...produto,
-      preco: Number(produto.preco),
-    }));
+    return produtos
+      .map((produto) => ({
+        ...produto,
+        preco: Number(produto.preco),
+        emPromocao: Boolean(produto.emPromocao),
+      }))
+      .sort((a, b) => Number(b.emPromocao) - Number(a.emPromocao));
   } catch (error) {
     console.error("GET produtos cardapio page error", error);
     return [];
@@ -60,8 +69,21 @@ function ProductGrid({
 
           <div className="space-y-3 p-5">
             <div className="flex items-start justify-between gap-4">
-              <h2 className="text-lg font-semibold text-slate-900">{produto.nome}</h2>
-              <Badge className="shrink-0 rounded-full border border-pink-200 bg-white text-pink-700">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold text-slate-900">{produto.nome}</h2>
+                {produto.emPromocao && (
+                  <Badge className="rounded-full border border-amber-200 bg-amber-50 text-amber-700">
+                    Promoção
+                  </Badge>
+                )}
+              </div>
+              <Badge
+                className={
+                  produto.emPromocao
+                    ? "shrink-0 rounded-full border border-amber-200 bg-amber-100 text-amber-800"
+                    : "shrink-0 rounded-full border border-pink-200 bg-white text-pink-700"
+                }
+              >
                 {Number(produto.preco).toLocaleString("pt-BR", {
                   style: "currency",
                   currency: "BRL",

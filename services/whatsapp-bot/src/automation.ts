@@ -34,26 +34,10 @@ function isGreeting(text: string) {
   return ["oi", "ola", "olá", "menu", "cardapio", "cardapio por favor"].includes(text);
 }
 
-function parseMenuCategory(text: string) {
-  if (text === "1" || text.includes("cento")) {
-    return "CENTO" as const;
-  }
-
-  if (text === "2" || text.includes("lanchonete") || text.includes("lanche")) {
-    return "LANCHONETE" as const;
-  }
-
-  return null;
-}
-
 function indicatesPayment(text: string) {
   return ["paguei", "pagamento", "pix", "comprovante", "pago"].some((term) =>
     text.includes(term)
   );
-}
-
-function formatMenuCategory(category: "CENTO" | "LANCHONETE") {
-  return category === "CENTO" ? "Cardápio de cento" : "Cardápio da lanchonete";
 }
 
 async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: string) {
@@ -85,52 +69,43 @@ async function sendIntro(job: InboundMessageJob, lead: BotLead | null) {
     [
       "*Oi! Seja bem-vinda(o) à Vizinha Salgateria.*",
       "",
-      `*Bot de atendimento:* ${config.botPhoneNumber}`,
-      `*Cardápio:* ${config.cardapioUrl}`,
+      "Posso te ajudar com cardápio, dúvidas e encomendas por aqui.",
       "",
       "Me responda com uma opção:",
       "*1* - Quero fazer uma encomenda",
-      "*2* - Quero ver os cardápios",
-      "*3* - Quero saber endereço e como funciona",
+      "*2* - Quero ver o cardápio",
+      "*3* - Quero tirar uma dúvida",
     ].join("\n")
   );
 }
 
 async function sendCatalogOverview(job: InboundMessageJob, lead: BotLead | null) {
   const products = await listActiveProducts();
-  const cento = products.filter((product) => product.categoria === "CENTO");
-  const lanchonete = products.filter((product) => product.categoria === "LANCHONETE");
 
-  const formatList = (items: typeof products) =>
-    items.length === 0
-      ? "Sem itens publicados no momento."
-      : items
-          .slice(0, 6)
-          .map((item) => `- ${item.nome} | R$ ${item.preco}`)
-          .join("\n");
+  const message =
+    products.length === 0
+      ? [
+          "*Cardápio da Vizinha*",
+          "",
+          "Ainda não encontrei produtos publicados no momento.",
+          "Se quiser, me diga o que procura e eu sigo te ajudando por aqui.",
+        ].join("\n")
+      : [
+          "*Cardápio da Vizinha*",
+          "",
+          ...products.map(
+            (item) =>
+              `- ${item.emPromocao ? "*PROMOÇÃO* " : ""}*${item.nome}* | R$ ${item.preco}\n${item.descricao}`
+          ),
+          "",
+          "Se quiser, me diga qual item chamou sua atenção e eu sigo com você por aqui.",
+        ].join("\n");
 
-  await sendAndTrack(
-    job,
-    lead,
-    [
-      `*Cardápio completo:* ${config.cardapioUrl}`,
-      "",
-      "*Cento*",
-      formatList(cento),
-      "",
-      "*Lanchonete*",
-      formatList(lanchonete),
-      "",
-      "Se quiser encomendar, me diga:",
-      "*1* - Cardápio de cento",
-      "*2* - Cardápio da lanchonete",
-    ].join("\n")
-  );
+  await sendAndTrack(job, lead, message);
 }
 
 function buildCustomerSummary(lead: BotLead) {
   return [
-    `*Tipo de cardápio:* ${formatMenuCategory(lead.menuCategoria || "CENTO")}`,
     `*Nome:* ${lead.nome || "Não informado"}`,
     `*Pedido:* ${lead.eventoDetalhes || "Não informado"}`,
     `*Horário pedido pelo cliente:* ${lead.horarioEntrega || "Não informado"}`,
@@ -320,7 +295,7 @@ async function createOrderAndRequestOwnerApproval(job: InboundMessageJob, lead: 
     customerRemoteJid: job.remoteJid,
     customerPhoneNumber: lead.phoneNumber,
     customerName: lead.nome,
-    menuCategoria: lead.menuCategoria || "CENTO",
+    menuCategoria: "CENTO",
     eventoDetalhes: lead.eventoDetalhes || "",
     horarioEntrega: lead.horarioEntrega || "",
     observacoes: lead.observacoes,
@@ -413,14 +388,14 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
   if (lead.stage === "awaiting_intent") {
     if (text === "1") {
       await updateLead(lead.id, {
-        stage: "awaiting_menu_category",
+        stage: "awaiting_event_details",
         intent: "encomenda",
         lastInboundText: job.text,
       });
       await sendAndTrack(
         job,
         lead,
-        "Qual cardápio você quer pedir?\n*1* - Cardápio de cento\n*2* - Cardápio da lanchonete"
+        "Perfeito. Me diga com calma o que você quer pedir: quantidade, sabores, data e qualquer detalhe importante."
       );
       return true;
     }
@@ -436,59 +411,15 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
         job,
         lead,
         [
-          `*Cardápio:* ${config.cardapioUrl}`,
-          "",
-          "O horário da entrega deve ser informado por você durante o pedido.",
-          "A confirmação depende do aceite da Vizinha e depois do pagamento total ou da metade.",
-          "A tolerância de atraso é de 15 minutos para ambas as partes.",
+          "Pode me perguntar por aqui.",
+          "Eu posso te ajudar com sabores, valores, disponibilidade, horário e encomendas.",
         ].join("\n")
       );
       await updateLead(lead.id, { lastInboundText: job.text });
       return true;
     }
 
-    const category = parseMenuCategory(text);
-    if (category) {
-      await updateLead(lead.id, {
-        stage: "awaiting_event_details",
-        intent: "encomenda",
-        menuCategoria: category,
-        lastInboundText: job.text,
-      });
-      await sendAndTrack(
-        job,
-        lead,
-        `Perfeito. Me diga os detalhes do seu pedido de ${formatMenuCategory(category).toLowerCase()}: quantidade, sabores e para qual dia.`
-      );
-      return true;
-    }
-
     await sendIntro(job, lead);
-    return true;
-  }
-
-  if (lead.stage === "awaiting_menu_category") {
-    const category = parseMenuCategory(text);
-
-    if (!category) {
-      await sendAndTrack(
-        job,
-        lead,
-        "Me responda com:\n*1* - Cardápio de cento\n*2* - Cardápio da lanchonete"
-      );
-      return true;
-    }
-
-    await updateLead(lead.id, {
-      stage: "awaiting_event_details",
-      menuCategoria: category,
-      lastInboundText: job.text,
-    });
-    await sendAndTrack(
-      job,
-      lead,
-      `Perfeito. Me diga os detalhes do seu pedido de ${formatMenuCategory(category).toLowerCase()}: quantidade, sabores e para qual dia.`
-    );
     return true;
   }
 
@@ -596,14 +527,6 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
-  const matchedFlow = await findMatchingFlow(job.instanceId, job.text);
-
-  if (matchedFlow) {
-    await sendAndTrack(job, lead, matchedFlow.resposta);
-    await updateLead(lead.id, { lastInboundText: job.text });
-    return;
-  }
-
   if (config.geminiApiKey) {
     const agentResult = await runSalesAgent(job, lead);
 
@@ -623,6 +546,14 @@ export async function processInboundMessage(job: InboundMessageJob) {
     }
   }
 
+  const matchedFlow = await findMatchingFlow(job.instanceId, job.text);
+
+  if (matchedFlow) {
+    await sendAndTrack(job, lead, matchedFlow.resposta);
+    await updateLead(lead.id, { lastInboundText: job.text });
+    return;
+  }
+
   if (isGreeting(normalized)) {
     await updateLead(lead.id, {
       stage: "awaiting_intent",
@@ -637,8 +568,8 @@ export async function processInboundMessage(job: InboundMessageJob) {
     lead,
     [
       "Posso te ajudar com isso, sim.",
-      `Se quiser ver o cardápio: ${config.cardapioUrl}`,
-      "Se for encomenda, me responda com *1* para eu organizar seu pedido.",
+      "Se quiser, eu posso te mostrar o cardápio aqui mesmo ou organizar sua encomenda por mensagem.",
+      "Se for encomenda, me responda com *1* para eu começar.",
     ].join("\n\n")
   );
 

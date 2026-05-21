@@ -21,6 +21,7 @@ export type ProdutoAdmin = {
   preco: string | number;
   imagemBase64: string;
   categoria: "CENTO" | "LANCHONETE";
+  emPromocao: boolean;
   ativo: boolean;
   createdAt: string;
 };
@@ -31,6 +32,7 @@ type ProdutoFormState = {
   preco: string;
   imagemBase64: string;
   categoria: "CENTO" | "LANCHONETE";
+  emPromocao: boolean;
   ativo: boolean;
 };
 
@@ -40,6 +42,7 @@ const EMPTY_FORM: ProdutoFormState = {
   preco: "",
   imagemBase64: "",
   categoria: "CENTO",
+  emPromocao: false,
   ativo: true,
 };
 
@@ -122,6 +125,7 @@ export function ManhiaProdutosAdmin({
             preco: form.preco,
             imagemBase64: form.imagemBase64,
             categoria: form.categoria,
+            emPromocao: form.emPromocao,
             ativo: form.ativo,
           }),
         }
@@ -167,6 +171,7 @@ export function ManhiaProdutosAdmin({
       preco: Number(produto.preco).toFixed(2),
       imagemBase64: produto.imagemBase64,
       categoria: produto.categoria,
+      emPromocao: produto.emPromocao,
       ativo: produto.ativo,
     });
   };
@@ -348,7 +353,28 @@ export function ManhiaProdutosAdmin({
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3 rounded-2xl border border-pink-100 bg-pink-50/60 px-4 py-3">
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 rounded-2xl border border-pink-100 bg-pink-50/60 px-4 py-3">
+                    <Checkbox
+                      id="produto-promocao"
+                      checked={form.emPromocao}
+                      onCheckedChange={(checked) =>
+                        setForm((current) => ({
+                          ...current,
+                          emPromocao: Boolean(checked),
+                        }))
+                      }
+                      className="mt-0.5 border-pink-300 data-[state=checked]:bg-pink-500"
+                    />
+                    <label
+                      htmlFor="produto-promocao"
+                      className="text-sm leading-6 text-slate-600"
+                    >
+                      Marcar este produto como promoção para deixá-lo em destaque no site e no bot.
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-2xl border border-pink-100 bg-pink-50/60 px-4 py-3">
                   <Checkbox
                     id="produto-ativo"
                     checked={form.ativo}
@@ -363,6 +389,7 @@ export function ManhiaProdutosAdmin({
                   >
                     Deixar este produto visível no cardápio público.
                   </label>
+                  </div>
                 </div>
 
                 {form.imagemBase64 && (
@@ -461,6 +488,11 @@ export function ManhiaProdutosAdmin({
                                 ? "Cardápio de cento"
                                 : "Cardápio da lanchonete"}
                             </Badge>
+                            {produto.emPromocao && (
+                              <Badge className="border border-amber-200 bg-amber-50 text-amber-700">
+                                Promoção
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-sm leading-6 text-slate-500">
                             {produto.descricao}

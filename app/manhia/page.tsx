@@ -6,11 +6,17 @@ import {
   type ProdutoAdmin,
 } from "@/components/manhia-produtos-admin";
 
+type ProdutoWithPromocao = Awaited<
+  ReturnType<typeof prisma.produto.findMany>
+>[number] & {
+  emPromocao?: boolean;
+};
+
 async function getProdutos(): Promise<ProdutoAdmin[]> {
   try {
-    const produtos = await prisma.produto.findMany({
+    const produtos = (await prisma.produto.findMany({
       orderBy: { createdAt: "desc" },
-    });
+    })) as ProdutoWithPromocao[];
 
     return produtos.map((produto) => ({
       id: produto.id,
@@ -19,6 +25,7 @@ async function getProdutos(): Promise<ProdutoAdmin[]> {
       preco: Number(produto.preco),
       imagemBase64: produto.imagemBase64,
       categoria: produto.categoria,
+      emPromocao: Boolean(produto.emPromocao),
       ativo: produto.ativo,
       createdAt: produto.createdAt.toISOString(),
     }));

@@ -7,6 +7,7 @@ export type ProductRecord = {
   descricao: string;
   preco: string;
   categoria: "CENTO" | "LANCHONETE";
+  emPromocao: boolean;
 };
 
 export async function listActiveProducts() {
@@ -18,10 +19,10 @@ export async function listActiveProducts() {
   try {
     const result = await db.query<ProductRecord>(
       `
-        SELECT id, nome, descricao, preco::text AS preco, categoria
+        SELECT id, nome, descricao, preco::text AS preco, categoria, "emPromocao"
         FROM "Produto"
         WHERE ativo = true
-        ORDER BY categoria ASC, "createdAt" DESC
+        ORDER BY "emPromocao" DESC, categoria ASC, "createdAt" DESC
       `
     );
 

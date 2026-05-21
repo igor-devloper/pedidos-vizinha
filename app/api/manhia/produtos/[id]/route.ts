@@ -9,6 +9,7 @@ type ProdutoPayload = {
   preco?: number | string;
   imagemBase64?: string;
   categoria?: "CENTO" | "LANCHONETE";
+  emPromocao?: boolean;
   ativo?: boolean;
 };
 
@@ -33,6 +34,7 @@ function validateProdutoPayload(body: ProdutoPayload) {
   const imagemBase64 = body.imagemBase64?.trim() || "";
   const categoria: "CENTO" | "LANCHONETE" =
     body.categoria === "LANCHONETE" ? "LANCHONETE" : "CENTO";
+  const emPromocao = body.emPromocao ?? false;
   const ativo = body.ativo ?? true;
 
   if (!nome) {
@@ -62,6 +64,7 @@ function validateProdutoPayload(body: ProdutoPayload) {
       preco: Number(preco.toFixed(2)),
       imagemBase64,
       categoria,
+      emPromocao,
       ativo,
     },
   };

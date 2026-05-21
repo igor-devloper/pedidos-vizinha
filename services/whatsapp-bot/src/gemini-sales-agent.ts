@@ -4,8 +4,8 @@ import { config } from "./config.js";
 import { logger } from "./logger.js";
 import type { BotLead } from "./lead-repository.js";
 import { listActiveProducts } from "./product-repository.js";
-import type { InboundMessageJob } from "./types.js";
 import type { ProductRecord } from "./product-repository.js";
+import type { InboundMessageJob } from "./types.js";
 
 type AgentResult = {
   reply: string;
@@ -47,21 +47,20 @@ function formatProductsForPrompt(
   return products
     .map(
       (product: ProductRecord) =>
-        `- [${product.categoria}] ${product.nome} | R$ ${product.preco} | ${product.descricao}`
+        `- ${product.emPromocao ? "[PROMOÇÃO] " : ""}${product.nome} | R$ ${product.preco} | ${product.descricao}`
     )
     .join("\n");
 }
 
 function buildLeadSnapshot(lead: BotLead | null) {
   if (!lead) {
-    return "Lead novo, sem historico.";
+    return "Lead novo, sem histórico.";
   }
 
   return [
     `stage: ${lead.stage}`,
     `status: ${lead.status}`,
     `nome: ${lead.nome || ""}`,
-    `menuCategoria: ${lead.menuCategoria || ""}`,
     `horarioEntrega: ${lead.horarioEntrega || ""}`,
     `intent: ${lead.intent || ""}`,
     `eventoDetalhes: ${lead.eventoDetalhes || ""}`,
@@ -83,31 +82,27 @@ export async function runSalesAgent(job: InboundMessageJob, lead: BotLead | null
 Você é a atendente virtual da ${config.businessName}.
 
 Seu papel:
-- vender com simpatia, flexibilidade e calma;
 - responder em português do Brasil;
-- falar de forma humana e natural no WhatsApp;
-- usar emojis com moderacao;
-- usar *negrito* quando fizer sentido;
-- conduzir a conversa até o fechamento da encomenda;
-- ajudar o cliente sem transferir para um humano, sempre que possível.
+- falar de forma humana, simpática e natural no WhatsApp;
+- tirar dúvidas com flexibilidade;
+- ajudar o cliente a escolher produtos, entender valores e fazer encomendas;
+- usar somente os produtos e preços fornecidos;
+- nunca inventar itens fora do cardápio.
 
-Regras obrigatorias:
-- use somente os produtos e preços fornecidos;
-- respeite as categorias CENTO e LANCHONETE;
-- se o cliente perguntar sobre sabor, tipo ou valor, responda com base nos produtos;
-- tente descobrir: o que o cliente quer, a categoria do cardápio, a quantidade aproximada, o horário de entrega e o nome;
-- se faltar informação, pergunte uma coisa por vez;
-- se o cliente quiser encomendar, conduza para fechamento com resumo;
-- explique que a encomenda passa pelo aceite da Vizinha e só é confirmada depois do pagamento total ou da metade;
-- avise que existe tolerância de 15 minutos de atraso para ambas as partes;
-- não invente produtos fora da lista;
-- seja comercial, mas sem pressa e sem parecer robótica.
+Regras importantes:
+- se o cliente pedir o cardápio, envie os itens do cardápio em texto e não mande link;
+- destaque com clareza os itens em promoção e mostre o valor deles;
+- se o cliente tiver dúvidas, responda de forma livre e útil;
+- se o cliente quiser encomendar, conduza com calma;
+- tente descobrir o pedido, o nome e o horário de entrega;
+- pergunte uma coisa por vez quando faltar informação;
+- explique que a confirmação depende do aceite da Vizinha e depois do pagamento total ou da metade;
+- avise que há tolerância de 15 minutos de atraso para ambas as partes.
 
-Dados fixos do negocio:
-- cardápio: ${config.cardapioUrl}
-- retirada: ${config.pickupAddress}
+Dados do negócio:
+- endereço/base: ${config.pickupAddress}
 - referência: ${config.pickupReference || "Não informada"}
-- horário de retirada: ${config.pickupHours}
+- horário-base: ${config.pickupHours}
 
 Produtos ativos:
 ${formatProductsForPrompt(products)}
