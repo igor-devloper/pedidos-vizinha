@@ -535,6 +535,20 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
     return createOrderAndRequestOwnerApproval(job, effectiveLead);
   }
 
+  if (agentResult.stage === "ready_for_review") {
+    logger.warn(
+      {
+        instanceId: job.instanceId,
+        remoteJid: job.remoteJid,
+        leadId: lead.id,
+        nome: effectiveLead.nome,
+        eventoDetalhes: effectiveLead.eventoDetalhes,
+        horarioEntrega: effectiveLead.horarioEntrega,
+      },
+      "Sales agent reached ready_for_review without enough data to request owner approval"
+    );
+  }
+
   await sendAndTrack(job, effectiveLead, agentResult.reply);
   return true;
 }

@@ -21,6 +21,39 @@ type AgentResult = {
   shouldRespond: boolean;
 };
 
+function normalizeOptionalText(value: unknown) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function sanitizeAgentResult(raw: AgentResult) {
+  const menuCategoria = raw.menuCategoria === "CENTO" || raw.menuCategoria === "LANCHONETE"
+    ? raw.menuCategoria
+    : undefined;
+
+  const status = ["open", "qualified", "closed", "handoff"].includes(raw.status || "")
+    ? raw.status
+    : undefined;
+
+  return {
+    shouldRespond: raw.shouldRespond !== false,
+    reply: normalizeOptionalText(raw.reply) || "",
+    stage: normalizeOptionalText(raw.stage),
+    status,
+    intent: normalizeOptionalText(raw.intent),
+    nome: normalizeOptionalText(raw.nome),
+    eventoDetalhes: normalizeOptionalText(raw.eventoDetalhes),
+    horarioEntrega: normalizeOptionalText(raw.horarioEntrega),
+    menuCategoria,
+    bairroRetirada: normalizeOptionalText(raw.bairroRetirada),
+    observacoes: normalizeOptionalText(raw.observacoes),
+  } satisfies AgentResult;
+}
+
 const ai = config.geminiApiKey
   ? new GoogleGenAI({ apiKey: config.geminiApiKey })
   : null;
@@ -144,8 +177,9 @@ Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
 
     const text = response.text || "";
     const parsed = parseJsonObject(text);
+    const sanitized = parsed ? sanitizeAgentResult(parsed) : null;
 
-    if (!parsed?.reply || parsed.shouldRespond === false) {
+    if (!sanitized?.reply || sanitized.shouldRespond === false) {
       logger.warn(
         {
           instanceId: job.instanceId,
@@ -161,14 +195,14 @@ Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
       {
         instanceId: job.instanceId,
         remoteJid: job.remoteJid,
-        stage: parsed.stage,
-        status: parsed.status,
-        intent: parsed.intent,
+        stage: sanitized.stage,
+        status: sanitized.status,
+        intent: sanitized.intent,
       },
       "Gemini sales agent produced a response"
     );
 
-    return parsed;
+    return sanitized;
   } catch (error) {
     logger.error({ error }, "Gemini sales agent failed");
     return null;
