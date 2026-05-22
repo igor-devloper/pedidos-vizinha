@@ -4,7 +4,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, LogOut, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import {
+  BadgePercent,
+  LoaderCircle,
+  LogOut,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -219,9 +227,7 @@ export function ManhiaProdutosAdmin({
             <Badge className="border border-pink-200 bg-pink-100 text-pink-700">
               Área protegida
             </Badge>
-            <h1 className="text-3xl font-semibold text-pink-800">
-              Gestão do cardápio
-            </h1>
+            <h1 className="text-3xl font-semibold text-pink-800">Gestão do cardápio</h1>
             <p className="max-w-2xl text-sm leading-6 text-slate-500">
               Cadastre os produtos que devem aparecer no cardápio público.
             </p>
@@ -264,6 +270,11 @@ export function ManhiaProdutosAdmin({
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={handleSubmit}>
+                <div className="rounded-2xl border border-pink-100 bg-pink-50/70 px-4 py-3 text-sm text-slate-600">
+                  A indicação de promoção é feita neste formulário e aparece no
+                  cardápio público quando a opção de promoção estiver ativada.
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">
                     Nome do produto
@@ -279,9 +290,7 @@ export function ManhiaProdutosAdmin({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    Descrição
-                  </label>
+                  <label className="text-sm font-medium text-slate-700">Descrição</label>
                   <Textarea
                     value={form.descricao}
                     onChange={(event) =>
@@ -290,16 +299,14 @@ export function ManhiaProdutosAdmin({
                         descricao: event.target.value,
                       }))
                     }
-                    placeholder="Descreva o recheio, o diferencial ou o estilo do produto."
+                    placeholder="Descreva o produto."
                     className="min-h-28 border-pink-100 bg-white focus-visible:ring-pink-400"
                   />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">
-                      Valor
-                    </label>
+                    <label className="text-sm font-medium text-slate-700">Valor</label>
                     <Input
                       type="number"
                       min="0"
@@ -314,9 +321,7 @@ export function ManhiaProdutosAdmin({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">
-                      Cardápio
-                    </label>
+                    <label className="text-sm font-medium text-slate-700">Cardápio</label>
                     <select
                       value={form.categoria}
                       onChange={(event) =>
@@ -370,35 +375,52 @@ export function ManhiaProdutosAdmin({
                       htmlFor="produto-promocao"
                       className="text-sm leading-6 text-slate-600"
                     >
-                      Marcar este produto como promoção para deixá-lo em destaque no site e no bot.
+                      Marcar este produto como promoção para deixá-lo em destaque no
+                      cardápio.
                     </label>
                   </div>
 
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <BadgePercent className="h-4 w-4" />
+                      {form.emPromocao
+                        ? "Este produto será exibido como promoção."
+                        : "Ative a opção acima se este item for promoção."}
+                    </div>
+                  </div>
+
                   <div className="flex items-start gap-3 rounded-2xl border border-pink-100 bg-pink-50/60 px-4 py-3">
-                  <Checkbox
-                    id="produto-ativo"
-                    checked={form.ativo}
-                    onCheckedChange={(checked) =>
-                      setForm((current) => ({ ...current, ativo: Boolean(checked) }))
-                    }
-                    className="mt-0.5 border-pink-300 data-[state=checked]:bg-pink-500"
-                  />
-                  <label
-                    htmlFor="produto-ativo"
-                    className="text-sm leading-6 text-slate-600"
-                  >
-                    Deixar este produto visível no cardápio público.
-                  </label>
+                    <Checkbox
+                      id="produto-ativo"
+                      checked={form.ativo}
+                      onCheckedChange={(checked) =>
+                        setForm((current) => ({ ...current, ativo: Boolean(checked) }))
+                      }
+                      className="mt-0.5 border-pink-300 data-[state=checked]:bg-pink-500"
+                    />
+                    <label
+                      htmlFor="produto-ativo"
+                      className="text-sm leading-6 text-slate-600"
+                    >
+                      Deixar este produto visível no cardápio público.
+                    </label>
                   </div>
                 </div>
 
                 {form.imagemBase64 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-slate-700">Preview</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-slate-700">Prévia</p>
+                      {form.emPromocao && (
+                        <Badge className="border border-amber-200 bg-amber-50 text-amber-700">
+                          Promoção
+                        </Badge>
+                      )}
+                    </div>
                     <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-pink-100 bg-pink-50">
                       <Image
                         src={form.imagemBase64}
-                        alt={form.nome || "Preview do produto"}
+                        alt={form.nome || "Prévia do produto"}
                         fill
                         unoptimized
                         className="object-cover"

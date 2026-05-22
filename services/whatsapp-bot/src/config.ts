@@ -23,7 +23,11 @@ export const config = {
   geminiApiKey: process.env.GEMINI_API_KEY?.trim() || undefined,
   geminiModel: readOptional("GEMINI_MODEL", "gemini-2.5-flash"),
   businessName: readOptional("BUSINESS_NAME", "Vizinha Salgateria"),
-  cardapioUrl: readOptional("CARDAPIO_URL", "https://vizinhasalgateria.site/cardapio"),
+  cardapioUrl: readOptional(
+    "CARDAPIO_URL",
+    "https://pedido.anota.ai/loja/dawn-burguer?f=msa&utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAdGRleAR9Z0xleHRuA2FlbQIxMQBzcnRjBmFwcF9pZA8xMjQwMjQ1NzQyODc0MTQAAadlHk_f5xmXN_jqFpVlKU1kY21iVXdzAtA3L1-A42MSXG8VLgZvNhGmIUk3gQ_aem_YWdncwD7MYUn2JV_NcjJwnL5KUsm&brid=YWdncwFkmaDBiRdwHoyXfL5BI4PY&utm_id=97760_v0_s00_e0_tv3"
+  ),
+  pixKey: readOptional("PIX_KEY", "00980322405"),
   botPhoneNumber: readOptional("BOT_PHONE_NUMBER", "5583993760485"),
   ownerApprovalNumber: readOptional("OWNER_APPROVAL_NUMBER", "5583987137721"),
   pickupAddress: readOptional("PICKUP_ADDRESS", "Endereço de retirada não configurado"),

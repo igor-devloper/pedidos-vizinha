@@ -1,29 +1,27 @@
-// components/pix-payment.tsx
 "use client";
-import {
-  useRef,
-  useState,
-  useMemo,
-  ChangeEvent,
-  DragEvent,
-} from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Copy, Check, Download, UploadCloud, Image as ImageIcon, FileText } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+
+import Image from "next/image";
+import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import {
+  Check,
+  Copy,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  UploadCloud,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 interface PixPaymentProps {
   amount: number;
-  orderId: string;   // txid
+  orderId: string;
   pixPayload: string;
 }
 
@@ -31,14 +29,14 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
   const [copied, setCopied] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [isSending, setIsSending] = useState(false);
-
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const router = useRouter();
 
-  const PIX_KEY = "11398391441";
+  const PIX_KEY = "00980322405";
   const ACCOUNT_HOLDER = "IGOR WAGNER";
   const BANK_NAME = "Banco Inter";
 
@@ -68,8 +66,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
 
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(svg);
-
-    const img = new Image();
+    const img = new window.Image();
     const blob = new Blob([svgString], {
       type: "image/svg+xml;charset=utf-8",
     });
@@ -120,18 +117,16 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
   };
 
   const onInputChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) handleFileChoose(f);
+    const file = e.target.files?.[0];
+    if (file) handleFileChoose(file);
   };
 
   const onDrop = async (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFileChoose(f);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileChoose(file);
   };
-
-  const router = useRouter();
 
   const handleSendProof = async () => {
     if (!proofFile) {
@@ -154,7 +149,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
       });
 
       if (!res.ok) {
-        toast.error("Erro ao enviar comprovante. Tente novamente.");
+        toast.error("Erro ao enviar o comprovante. Tente novamente.");
         return;
       }
 
@@ -169,49 +164,43 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="mx-auto w-full max-w-2xl">
       <Card className="border-pink-200 bg-white/95 shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-pink-700">
             Pagamento via PIX
           </CardTitle>
-          <p className="text-sm text-slate-500">
-            Pedido #{orderId}
-          </p>
+          <p className="text-sm text-slate-500">Pedido #{orderId}</p>
         </CardHeader>
+
         <CardContent className="space-y-6">
-          {/* Valor */}
           <div className="text-center">
-            <p className="text-sm text-slate-500 mb-1">
-              Valor a pagar agora
-            </p>
-            <p className="text-4xl font-bold text-pink-700">
-              R$ {amount.toFixed(2)}
+            <p className="mb-1 text-sm text-slate-500">Valor a pagar agora</p>
+            <p className="text-4xl font-bold text-pink-700">R$ {amount.toFixed(2)}</p>
+            <p className="mt-2 text-xs font-medium text-pink-700">
+              A encomenda só é confirmada mediante pagamento mínimo de 50% do valor.
             </p>
           </div>
 
           <Separator className="bg-pink-100" />
 
-          {/* Dados bancários */}
           <div className="space-y-4">
-            <h3 className="text-base font-semibold text-slate-800">
-              Dados Bancários
-            </h3>
+            <h3 className="text-base font-semibold text-slate-800">Dados bancários</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="bg-pink-50 border border-pink-100 rounded-lg p-3">
+              <div className="rounded-lg border border-pink-100 bg-pink-50 p-3">
                 <Label className="text-xs text-slate-500">Banco</Label>
                 <p className="font-medium text-slate-900">{BANK_NAME}</p>
               </div>
-              <div className="bg-pink-50 border border-pink-100 rounded-lg p-3">
+
+              <div className="rounded-lg border border-pink-100 bg-pink-50 p-3">
                 <Label className="text-xs text-slate-500">Titular</Label>
                 <p className="font-medium text-slate-900">{ACCOUNT_HOLDER}</p>
               </div>
-              <div className="sm:col-span-2 bg-pink-50 border border-pink-100 rounded-lg p-3">
+
+              <div className="rounded-lg border border-pink-100 bg-pink-50 p-3 sm:col-span-2">
                 <Label className="text-xs text-slate-500">Chave PIX</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="break-all font-medium text-slate-900 flex-1">
-                    {PIX_KEY}
-                  </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="flex-1 break-all font-medium text-slate-900">{PIX_KEY}</p>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -231,19 +220,14 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
 
           <Separator className="bg-pink-100" />
 
-          {/* PIX copia e cola + QR */}
           <div className="space-y-4">
-            <h3 className="text-base font-semibold text-slate-800">
-              PIX
-            </h3>
+            <h3 className="text-base font-semibold text-slate-800">PIX</h3>
             <div className="flex flex-col gap-6 sm:flex-row">
               <div className="flex-1 space-y-2">
-                <Label className="text-xs text-slate-500">
-                  Copia e Cola
-                </Label>
-                <div className="bg-pink-50 border border-pink-100 rounded-lg p-3">
+                <Label className="text-xs text-slate-500">Copia e cola</Label>
+                <div className="rounded-lg border border-pink-100 bg-pink-50 p-3">
                   <div className="flex items-start gap-2">
-                    <p className="break-all font-mono text-xs text-slate-800 flex-1">
+                    <p className="flex-1 break-all font-mono text-xs text-slate-800">
                       {pixPayload}
                     </p>
                     <Button
@@ -263,7 +247,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
               </div>
 
               <div className="flex flex-col items-center gap-2">
-                <div className="bg-white p-3 rounded-lg border border-pink-100">
+                <div className="rounded-lg border border-pink-100 bg-white p-3">
                   <QRCodeSVG
                     value={pixPayload}
                     size={160}
@@ -275,7 +259,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full text-xs sm:text-sm border-pink-200 text-pink-700 hover:bg-pink-50"
+                  className="w-full border-pink-200 text-xs text-pink-700 hover:bg-pink-50 sm:text-sm"
                   onClick={downloadQRCode}
                 >
                   <Download className="mr-2 h-4 w-4" />
@@ -287,10 +271,9 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
 
           <Separator className="bg-pink-100" />
 
-          {/* Upload comprovante */}
           <div className="space-y-3">
             <Label className="text-xs text-slate-500">
-              Comprovante de Pagamento (obrigatório)
+              Comprovante de pagamento (obrigatório)
             </Label>
 
             <label
@@ -316,18 +299,18 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
                   )}
                 </div>
                 <div>
-                  <p className="text-sm text-slate-800 font-medium">
+                  <p className="text-sm font-medium text-slate-800">
                     Arraste e solte o arquivo aqui ou clique para selecionar
                   </p>
-                  <p className="text-xs text-slate-500">
-                    PNG, JPG ou PDF — até ~10MB
-                  </p>
+                  <p className="text-xs text-slate-500">PNG, JPG ou PDF - até cerca de 10 MB</p>
                 </div>
               </div>
+
               <div className="shrink-0 rounded-md bg-pink-600/10 px-3 py-2 text-xs font-medium text-pink-700">
                 <UploadCloud className="mr-1 inline-block h-4 w-4" />
                 Upload
               </div>
+
               <input
                 type="file"
                 accept="image/*,application/pdf"
@@ -347,21 +330,25 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
                         <ImageIcon className="h-5 w-5 text-pink-600" />
                       )}
                     </div>
+
                     <div className="min-w-0">
-                      <p className="truncate text-sm text-slate-800">
-                        {proofFile.name}
-                      </p>
+                      <p className="truncate text-sm text-slate-800">{proofFile.name}</p>
                       <p className="text-xs text-slate-500">
                         {(proofFile.size / 1024 / 1024).toFixed(2)} MB
                       </p>
                     </div>
                   </div>
+
                   {!isPDF && proofPreview && (
-                    <img
-                      src={proofPreview}
-                      alt="Prévia do comprovante"
-                      className="h-16 w-16 rounded-md object-cover ring-1 ring-pink-200"
-                    />
+                    <div className="relative h-16 w-16 overflow-hidden rounded-md ring-1 ring-pink-200">
+                      <Image
+                        src={proofPreview}
+                        alt="Prévia do comprovante"
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    </div>
                   )}
                 </div>
               </div>
@@ -370,7 +357,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
             <Button
               onClick={handleSendProof}
               disabled={!proofFile || isSending}
-              className="w-full bg-pink-600 hover:bg-pink-700 text-white"
+              className="w-full bg-pink-600 text-white hover:bg-pink-700"
             >
               {isSending
                 ? "Enviando comprovante..."
@@ -378,11 +365,11 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
             </Button>
           </div>
 
-          <div className="bg-pink-50 border border-pink-100 rounded-lg p-4 space-y-2">
+          <div className="space-y-2 rounded-lg border border-pink-100 bg-pink-50 p-4">
             <p className="font-semibold text-pink-700">Instruções:</p>
-            <ol className="text-sm space-y-1 list-decimal list-inside text-slate-700">
-              <li>Abra o app do seu banco.</li>
-              <li>Escolha pagar com PIX (QR Code ou Copia e Cola).</li>
+            <ol className="list-inside list-decimal space-y-1 text-sm text-slate-700">
+              <li>Abra o aplicativo do seu banco.</li>
+              <li>Escolha pagar com PIX por QR Code ou copia e cola.</li>
               <li>Escaneie o código ou cole o código copiado.</li>
               <li>Depois do pagamento, envie o comprovante acima.</li>
             </ol>

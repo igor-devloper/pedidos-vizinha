@@ -1,24 +1,15 @@
 /* eslint-disable prefer-const */
 interface PixData {
-  amount: number;               // valor (ex.: 25)
-  pixKey?: string;              // opcional – default 11398391441
-  merchantName?: string;        // opcional – default "IGOR WAGNER"
-  city?: string;                // opcional – default "BRASIL"
+  amount: number;
+  pixKey?: string;
+  merchantName?: string;
+  city?: string;
 }
 
-/**
- * Gera BR Code exatamente como o banco aceitou:
- * - GUI: br.gov.bcb.pix (minúsculo)
- * - Chave: 11398391441 (default)
- * - Nome: IGOR WAGNER (default)
- * - Cidade: BRASIL (default)
- * - TXID: sempre "***"
- * - Campos e comprimentos idênticos ao exemplo
- */
 export function generatePixQRCode({
   amount,
-  pixKey = "51801311000190",
-  merchantName = "IGOR WAGNER",
+  pixKey = "00980322405",
+  merchantName = "CLAUDENIVA GOMES",
   city = "BRASIL",
 }: PixData): string {
   const formattedAmount = Number(amount).toFixed(2);
@@ -39,25 +30,25 @@ export function generatePixQRCode({
     .trim()
     .toUpperCase();
 
-  const pixDomain = "br.gov.bcb.pix";   // minúsculo
-  const txid = "***";                   // fixo, igual ao seu exemplo
+  const pixDomain = "br.gov.bcb.pix";
+  const txid = "***";
 
   function pad2(n: number | string) {
     return String(n).padStart(2, "0");
   }
 
-  // 26 (Merchant Account Information): 00 GUI + 01 CHAVE
   const merchantAccInfo = [
-    "00", pad2(pixDomain.length), pixDomain,
-    "01", pad2(pixKey.length),    pixKey,
+    "00",
+    pad2(pixDomain.length),
+    pixDomain,
+    "01",
+    pad2(pixKey.length),
+    pixKey,
   ].join("");
   const merchantField = `26${pad2(merchantAccInfo.length)}${merchantAccInfo}`;
 
-  // 62 (Additional Data): 05 + len(txid) + txid
-  // no seu exemplo: 62 07 0503 ***
   const txidField = `62${pad2(txid.length + 4)}0503${txid}`;
 
-  // payload no mesmo layout do exemplo
   let payload = [
     "000201",
     merchantField,
@@ -88,5 +79,5 @@ function calculateCRC16(str: string): string {
 }
 
 export function generateTxId(): string {
-  return Math.random().toString(36).substring(2, 14).toUpperCase()
+  return Math.random().toString(36).substring(2, 14).toUpperCase();
 }

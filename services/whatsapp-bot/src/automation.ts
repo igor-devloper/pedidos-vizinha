@@ -31,13 +31,38 @@ function isOwnerChat(remoteJid: string) {
 }
 
 function isGreeting(text: string) {
-  return ["oi", "ola", "olá", "menu", "cardapio", "cardapio por favor"].includes(text);
+  return ["oi", "ola", "menu", "cardapio", "cardapio por favor"].includes(text);
+}
+
+function isMenuRequest(text: string) {
+  return ["cardapio", "menu", "catalogo", "promocao", "promocoes"].some((term) =>
+    text.includes(term)
+  );
 }
 
 function indicatesPayment(text: string) {
   return ["paguei", "pagamento", "pix", "comprovante", "pago"].some((term) =>
     text.includes(term)
   );
+}
+
+function canUseSalesAgent(lead: BotLead) {
+  return [
+    "new",
+    "awaiting_intent",
+    "awaiting_event_details",
+    "awaiting_name",
+    "awaiting_delivery_time",
+    "awaiting_notes",
+    "ready_for_review",
+  ].includes(lead.stage);
+}
+
+function buildPixInstructions() {
+  return [
+    `Chave PIX: *${config.pixKey}*`,
+    "A encomenda só é confirmada mediante pagamento mínimo de 50% do valor.",
+  ].join("\n");
 }
 
 async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: string) {
@@ -69,9 +94,10 @@ async function sendIntro(job: InboundMessageJob, lead: BotLead | null) {
     [
       "*Oi! Seja bem-vinda(o) à Vizinha Salgateria.*",
       "",
-      "Posso te ajudar com cardápio, dúvidas e encomendas por aqui.",
+      "Eu posso te ajudar com cardápio, dúvidas e encomendas por aqui.",
+      `Se preferir ver o cardápio direto, aqui está o link: ${config.cardapioUrl}`,
       "",
-      "Me responda com uma opção:",
+      "Se quiser, me responda com uma opção:",
       "*1* - Quero fazer uma encomenda",
       "*2* - Quero ver o cardápio",
       "*3* - Quero tirar uma dúvida",
@@ -81,25 +107,32 @@ async function sendIntro(job: InboundMessageJob, lead: BotLead | null) {
 
 async function sendCatalogOverview(job: InboundMessageJob, lead: BotLead | null) {
   const products = await listActiveProducts();
+  const promoHighlights = products
+    .filter((item) => item.emPromocao)
+    .slice(0, 3)
+    .map((item) => `- *${item.nome}* por *R$ ${item.preco}*`)
+    .join("\n");
 
   const message =
     products.length === 0
       ? [
           "*Cardápio da Vizinha*",
           "",
-          "Ainda não encontrei produtos publicados no momento.",
+          `Você pode ver o cardápio completo aqui: ${config.cardapioUrl}`,
           "Se quiser, me diga o que procura e eu sigo te ajudando por aqui.",
         ].join("\n")
       : [
           "*Cardápio da Vizinha*",
           "",
-          ...products.map(
-            (item) =>
-              `- ${item.emPromocao ? "*PROMOÇÃO* " : ""}*${item.nome}* | R$ ${item.preco}\n${item.descricao}`
-          ),
+          `Segue o link do cardápio para você ver tudo direitinho: ${config.cardapioUrl}`,
+          promoHighlights ? "" : null,
+          promoHighlights ? "*Promoções em destaque:*" : null,
+          promoHighlights || null,
           "",
-          "Se quiser, me diga qual item chamou sua atenção e eu sigo com você por aqui.",
-        ].join("\n");
+          "Se quiser, eu também posso montar seu pedido por aqui mesmo.",
+        ]
+          .filter(Boolean)
+          .join("\n");
 
   await sendAndTrack(job, lead, message);
 }
@@ -112,7 +145,8 @@ function buildCustomerSummary(lead: BotLead) {
     `*Observações:* ${lead.observacoes || "Nenhuma"}`,
     "",
     "*Regras*",
-    "- Confirmação só com aceite da Vizinha e pagamento total ou metade.",
+    `- Chave PIX: ${config.pixKey}`,
+    "- Confirmação só com aceite da Vizinha e pagamento mínimo de 50% do valor.",
     "- Tolerância de atraso de 15 minutos para ambas as partes.",
   ].join("\n");
 }
@@ -153,7 +187,8 @@ async function notifyCustomerAwaitingPayment(instanceId: string, order: BotOrder
     [
       `Sua encomenda #${order.code} foi aceita pela Vizinha.`,
       "",
-      "Para confirmar de vez, falta o pagamento de tudo ou da metade.",
+      "Para confirmar de vez, falta o pagamento mínimo de 50% do valor.",
+      buildPixInstructions(),
       "Quando pagar, me avise por aqui para eu pedir a validação.",
       "A tolerância de atraso é de 15 minutos para ambas as partes.",
     ].join("\n")
@@ -161,7 +196,7 @@ async function notifyCustomerAwaitingPayment(instanceId: string, order: BotOrder
 }
 
 async function notifyCustomerOrderConfirmed(instanceId: string, order: BotOrder) {
-  const paymentText = order.paymentStatus === "FULL" ? "pagamento total" : "pagamento de metade";
+  const paymentText = order.paymentStatus === "FULL" ? "pagamento total" : "pagamento de 50%";
   await sendTextToNumber(
     instanceId,
     order.customerRemoteJid,
@@ -295,7 +330,7 @@ async function createOrderAndRequestOwnerApproval(job: InboundMessageJob, lead: 
     customerRemoteJid: job.remoteJid,
     customerPhoneNumber: lead.phoneNumber,
     customerName: lead.nome,
-    menuCategoria: "CENTO",
+    menuCategoria: lead.menuCategoria || "CENTO",
     eventoDetalhes: lead.eventoDetalhes || "",
     horarioEntrega: lead.horarioEntrega || "",
     observacoes: lead.observacoes,
@@ -329,9 +364,49 @@ async function createOrderAndRequestOwnerApproval(job: InboundMessageJob, lead: 
     [
       `Seu resumo foi enviado para análise da Vizinha com o código #${order.code}.`,
       "Assim que ela aceitar ou recusar, eu te aviso por aqui.",
-      "A confirmação final só acontece depois do aceite e do pagamento de tudo ou da metade.",
+      "Depois do aceite, a encomenda só é confirmada mediante pagamento mínimo de 50% do valor.",
+      buildPixInstructions(),
     ].join("\n")
   );
+
+  return true;
+}
+
+async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
+  if (!config.geminiApiKey || !canUseSalesAgent(lead)) {
+    return false;
+  }
+
+  const agentResult = await runSalesAgent(job, lead);
+
+  if (!agentResult?.reply) {
+    return false;
+  }
+
+  const nextLead = await updateLead(lead.id, {
+    lastInboundText: job.text,
+    stage: agentResult.stage || lead.stage,
+    status: agentResult.status || lead.status,
+    intent: agentResult.intent ?? lead.intent,
+    nome: agentResult.nome ?? lead.nome,
+    eventoDetalhes: agentResult.eventoDetalhes ?? lead.eventoDetalhes,
+    horarioEntrega: agentResult.horarioEntrega ?? lead.horarioEntrega,
+    menuCategoria: agentResult.menuCategoria ?? lead.menuCategoria,
+    bairroRetirada: agentResult.bairroRetirada ?? lead.bairroRetirada,
+    observacoes: agentResult.observacoes ?? lead.observacoes,
+  });
+
+  const effectiveLead = nextLead || lead;
+  await sendAndTrack(job, effectiveLead, agentResult.reply);
+
+  if (
+    effectiveLead.stage === "ready_for_review" &&
+    effectiveLead.nome &&
+    effectiveLead.eventoDetalhes &&
+    effectiveLead.horarioEntrega
+  ) {
+    await createOrderAndRequestOwnerApproval(job, effectiveLead);
+  }
 
   return true;
 }
@@ -370,7 +445,11 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
     await sendAndTrack(
       job,
       lead,
-      `A encomenda #${openOrder.code} já foi aceita e está aguardando pagamento. Quando pagar tudo ou a metade, me avise por aqui.`
+      [
+        `A encomenda #${openOrder.code} já foi aceita e está aguardando pagamento.`,
+        buildPixInstructions(),
+        "Quando pagar, me avise por aqui e, se puder, envie o comprovante.",
+      ].join("\n")
     );
     return true;
   }
@@ -400,7 +479,7 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
       return true;
     }
 
-    if (text === "2") {
+    if (text === "2" || isMenuRequest(text)) {
       await sendCatalogOverview(job, lead);
       await updateLead(lead.id, { lastInboundText: job.text });
       return true;
@@ -439,11 +518,7 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
       nome: job.text,
       lastInboundText: job.text,
     });
-    await sendAndTrack(
-      job,
-      lead,
-      "Qual horário de entrega você quer? Pode me dizer do seu jeito."
-    );
+    await sendAndTrack(job, lead, "Qual horário de entrega você quer? Pode me dizer do seu jeito.");
     return true;
   }
 
@@ -462,7 +537,7 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
   }
 
   if (lead.stage === "awaiting_notes") {
-    const notes = text === "nao" || text === "não" ? "Sem observações adicionais" : job.text;
+    const notes = text === "nao" ? "Sem observações adicionais" : job.text;
     const updatedLead = await updateLead(lead.id, {
       observacoes: notes,
       lastInboundText: job.text,
@@ -521,8 +596,11 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
-  const handledByFunnel = await handleLeadFunnel(job, lead);
+  if (await maybeHandleSalesAgent(job, lead)) {
+    return;
+  }
 
+  const handledByFunnel = await handleLeadFunnel(job, lead);
   if (handledByFunnel) {
     return;
   }
@@ -539,6 +617,8 @@ export async function processInboundMessage(job: InboundMessageJob) {
         intent: agentResult.intent ?? lead.intent,
         nome: agentResult.nome ?? lead.nome,
         eventoDetalhes: agentResult.eventoDetalhes ?? lead.eventoDetalhes,
+        horarioEntrega: agentResult.horarioEntrega ?? lead.horarioEntrega,
+        menuCategoria: agentResult.menuCategoria ?? lead.menuCategoria,
         bairroRetirada: agentResult.bairroRetirada ?? lead.bairroRetirada,
         observacoes: agentResult.observacoes ?? lead.observacoes,
       });
@@ -547,10 +627,15 @@ export async function processInboundMessage(job: InboundMessageJob) {
   }
 
   const matchedFlow = await findMatchingFlow(job.instanceId, job.text);
-
   if (matchedFlow) {
     await sendAndTrack(job, lead, matchedFlow.resposta);
     await updateLead(lead.id, { lastInboundText: job.text });
+    return;
+  }
+
+  if (isMenuRequest(normalized)) {
+    await updateLead(lead.id, { lastInboundText: job.text });
+    await sendCatalogOverview(job, lead);
     return;
   }
 
@@ -568,7 +653,7 @@ export async function processInboundMessage(job: InboundMessageJob) {
     lead,
     [
       "Posso te ajudar com isso, sim.",
-      "Se quiser, eu posso te mostrar o cardápio aqui mesmo ou organizar sua encomenda por mensagem.",
+      `Se quiser, eu posso te mandar o link do cardápio (${config.cardapioUrl}) ou organizar sua encomenda por mensagem.`,
       "Se for encomenda, me responda com *1* para eu começar.",
     ].join("\n\n")
   );

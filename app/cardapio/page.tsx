@@ -1,12 +1,10 @@
 import Image from "next/image";
 import type { Metadata } from "next";
-import { Clock3, MapPin, MessageCircleMore, Sparkles } from "lucide-react";
+import { BadgePercent, Flame, Star } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 
 export const dynamic = "force-dynamic";
 
@@ -41,151 +39,99 @@ async function getProdutos() {
   }
 }
 
-function ProductGrid({
-  items,
-}: {
-  items: Awaited<ReturnType<typeof getProdutos>>;
-}) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {items.map((produto) => (
-        <article
-          key={produto.id}
-          className="overflow-hidden rounded-[2rem] border border-pink-200/70 bg-white/95 shadow-lg shadow-pink-100/40"
-        >
-          <div className="relative aspect-[4/3] bg-pink-50">
-            <Image
-              src={produto.imagemBase64}
-              alt={produto.nome}
-              fill
-              unoptimized
-              className="object-cover"
-            />
-          </div>
-
-          <div className="space-y-3 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-slate-900">{produto.nome}</h2>
-                {produto.emPromocao && (
-                  <Badge className="rounded-full border border-amber-200 bg-amber-50 text-amber-700">
-                    Promoção
-                  </Badge>
-                )}
-              </div>
-              <Badge
-                className={
-                  produto.emPromocao
-                    ? "shrink-0 rounded-full border border-amber-200 bg-amber-100 text-amber-800"
-                    : "shrink-0 rounded-full border border-pink-200 bg-white text-pink-700"
-                }
-              >
-                {Number(produto.preco).toLocaleString("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                })}
-              </Badge>
-            </div>
-            <p className="text-sm leading-6 text-slate-500">{produto.descricao}</p>
-          </div>
-        </article>
-      ))}
-    </div>
-  );
+function formatCurrency(value: number) {
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }
 
-function ProductSection({
-  title,
-  description,
-  emptyMessage,
-  items,
+function ProductShowcaseCard({
+  produto,
 }: {
-  title: string;
-  description: string;
-  emptyMessage: string;
-  items: Awaited<ReturnType<typeof getProdutos>>;
+  produto: Awaited<ReturnType<typeof getProdutos>>[number];
 }) {
   return (
-    <section className="space-y-5">
-      <div className="rounded-[2rem] border border-pink-200/70 bg-white/90 p-6 shadow-lg shadow-pink-100/40">
-        <h2 className="text-2xl font-semibold text-pink-800">{title}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          {description}
-        </p>
+    <article
+      className={[
+        "group overflow-hidden rounded-[2rem] border bg-white shadow-[0_20px_60px_rgba(190,24,93,0.12)] transition duration-300 hover:-translate-y-1",
+        produto.emPromocao ? "border-[#f9c2d7]" : "border-[#f6dbe6]",
+      ].join(" ")}
+    >
+      <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(135deg,#fff5f7,#ffe4ec_45%,#fff3d6)]">
+        <Image
+          src={produto.imagemBase64}
+          alt={produto.nome}
+          fill
+          unoptimized
+          className="object-cover transition duration-500 group-hover:scale-105"
+        />
+
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+          <div className="flex flex-col gap-2">
+            {produto.emPromocao && (
+              <span className="rounded-full bg-[#ff4d8d] px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-white shadow-lg">
+                Promoção
+              </span>
+            )}
+            <span className="w-fit rounded-full bg-white/88 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#a11756] backdrop-blur">
+              Cardápio
+            </span>
+          </div>
+
+          <div className="rounded-[1.4rem] bg-[#2e0d1d]/88 px-4 py-2 text-right text-white shadow-xl backdrop-blur">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/70">
+              Preço
+            </p>
+            <p className="text-xl font-black">{formatCurrency(produto.preco)}</p>
+          </div>
+        </div>
+
+        {produto.emPromocao && (
+          <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(90deg,#ff4d8d,#ff7a59)] px-4 py-2 text-sm font-bold uppercase tracking-[0.16em] text-white">
+            Promoção em destaque
+          </div>
+        )}
       </div>
 
-      {items.length === 0 ? (
-        <div className="rounded-[2rem] border border-pink-200/70 bg-white/90 p-8 text-center shadow-lg shadow-pink-100/40">
-          <p className="text-lg font-semibold text-pink-800">{emptyMessage}</p>
+      <div className="space-y-4 p-5">
+        <div className="space-y-2">
+          <h2 className="text-xl font-black tracking-tight text-[#31121f]">{produto.nome}</h2>
+          <p className="text-sm leading-6 text-[#6f5560]">{produto.descricao}</p>
         </div>
-      ) : (
-        <ProductGrid items={items} />
-      )}
-    </section>
+
+        <div className="flex items-center justify-between gap-3">
+          <Badge className="border-[#f9d4e3] bg-[#fff6fa] text-[#b31b61]">
+            {produto.emPromocao ? "Em promoção" : "No cardápio"}
+          </Badge>
+          {produto.emPromocao && (
+            <div className="flex items-center gap-1 text-sm font-bold text-[#ff7a59]">
+              <Flame className="h-4 w-4" />
+              Destaque
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
 export default async function CardapioPage() {
   const produtos = await getProdutos();
-  const produtosCento = produtos.filter((produto) => produto.categoria === "CENTO");
-  const produtosLanchonete = produtos.filter(
-    (produto) => produto.categoria === "LANCHONETE"
-  );
+  const promocoes = produtos.filter((produto) => produto.emPromocao);
+  const heroProduto = promocoes[0] || produtos[0] || null;
 
   return (
-    <main className="px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <section className="overflow-hidden rounded-[2rem] border border-pink-200/80 bg-white/90 shadow-xl shadow-pink-100/60">
-          <div className="grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[1.3fr_0.7fr] lg:px-10 lg:py-10">
-            <div className="space-y-5">
-              <Badge className="border border-pink-200 bg-pink-100 text-pink-700">
-                Cardápio da Vizinha
-              </Badge>
+    <main className="px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <section className="overflow-hidden rounded-[2.3rem] bg-[#170a11] text-white shadow-[0_30px_100px_rgba(23,10,17,0.32)]">
+          <div className="relative">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,#ff4d8d40_0,transparent_30%),radial-gradient(circle_at_bottom_right,#ffb34726_0,transparent_30%),linear-gradient(135deg,#170a11_0%,#2b1020_45%,#12080e_100%)]" />
 
-              <div className="space-y-3">
-                <h1 className="max-w-xl text-3xl font-semibold tracking-tight text-pink-800 sm:text-4xl">
-                  Salgados com jeitinho caseiro e a cara da Vizinha.
-                </h1>
-                <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                  Veja os produtos da casa, escolha entre o cardápio de cento e o da
-                  lanchonete e fale direto no WhatsApp para combinar disponibilidade,
-                  horário da entrega e pagamento.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button
-                  asChild
-                  className="rounded-full bg-pink-600 px-6 text-white hover:bg-pink-700"
-                >
-                  <a
-                    href="https://wa.me/5583993760485"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <MessageCircleMore className="mr-2 h-4 w-4" />
-                    Falar no WhatsApp
-                  </a>
-                </Button>
-
-                <Button
-                  asChild
-                  variant="outline"
-                  className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50 hover:text-pink-800"
-                >
-                  <a href="#itens">Ver menu</a>
-                </Button>
-              </div>
-            </div>
-
-            <Card className="border-pink-200 bg-gradient-to-br from-pink-50 via-white to-pink-100 shadow-none">
-              <CardContent className="space-y-5 p-6">
-                <div className="flex items-center gap-3">
-                  <div className="relative h-16 w-16 overflow-hidden rounded-full border-4 border-pink-200 bg-white shadow-md shadow-pink-100">
+            <div className="relative grid gap-8 px-6 py-8 lg:grid-cols-[1.1fr_0.9fr] lg:px-10 lg:py-10">
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full border-4 border-white/15 bg-white shadow-xl">
                     <Image
                       src="/vizinha-logo.png"
                       alt="Logo Vizinha Salgateria"
@@ -194,66 +140,126 @@ export default async function CardapioPage() {
                     />
                   </div>
                   <div>
-                    <p className="text-lg font-semibold text-pink-800">
+                    <p className="text-sm font-black uppercase tracking-[0.24em] text-[#ff9fc1]">
                       Vizinha Salgateria
                     </p>
-                    <p className="text-sm text-slate-500">
-                      Sabor, carinho e praticidade.
-                    </p>
+                    <p className="text-sm text-white/70">Cardápio</p>
                   </div>
                 </div>
 
-                <Separator className="bg-pink-100" />
+                <div className="space-y-4">
+                  <Badge className="w-fit border-white/10 bg-[#ff4d8d] text-white">
+                    Cardápio
+                  </Badge>
 
-                <div className="space-y-4 text-sm text-slate-600">
-                  <div className="flex items-start gap-3">
-                    <Sparkles className="mt-0.5 h-4 w-4 text-pink-500" />
-                    <p>Produtos com foto, descrição e valor visíveis no cardápio.</p>
+                  <h1 className="max-w-2xl text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
+                    Cardápio da Vizinha
+                  </h1>
+
+                  <p className="max-w-2xl text-sm leading-7 text-white/72 sm:text-base">
+                    Produtos com foto, descrição, preço e promoções em destaque.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
+                    <BadgePercent className="h-5 w-5 text-[#ff9fc1]" />
+                    <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
+                      Promoções
+                    </p>
+                    <p className="mt-2 text-sm text-white/68">
+                      Itens marcados como promoção aparecem com mais destaque.
+                    </p>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <Clock3 className="mt-0.5 h-4 w-4 text-pink-500" />
-                    <p>O horário da entrega é informado pelo cliente no atendimento.</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <MapPin className="mt-0.5 h-4 w-4 text-pink-500" />
-                    <p>
-                      Encomendas confirmadas com aceite da Vizinha e pagamento total
-                      ou metade.
+
+                  <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
+                    <Star className="h-5 w-5 text-[#ff9fc1]" />
+                    <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
+                      Preços
+                    </p>
+                    <p className="mt-2 text-sm text-white/68">
+                      Valores visíveis para facilitar a consulta do cardápio.
                     </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              <div className="grid gap-4">
+                {heroProduto ? (
+                  <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/6 p-3 backdrop-blur">
+                    <ProductShowcaseCard produto={heroProduto} />
+                  </div>
+                ) : (
+                  <Card className="border-white/10 bg-white/8 text-white shadow-none">
+                    <CardContent className="p-8">
+                      <p className="text-lg font-bold">Estamos montando o cardápio.</p>
+                      <p className="mt-2 text-sm text-white/68">
+                        Em breve os produtos da Vizinha aparecerão aqui.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
-        <section id="itens" className="space-y-8">
-          {produtos.length === 0 ? (
-            <div className="rounded-[2rem] border border-pink-200/70 bg-white/90 p-8 text-center shadow-lg shadow-pink-100/40">
-              <p className="text-lg font-semibold text-pink-800">
-                O cardápio ainda está sendo montado.
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                Em breve, novos produtos aparecerão aqui.
-              </p>
+        {promocoes.length > 0 && (
+          <section className="overflow-hidden rounded-[2.3rem] bg-[linear-gradient(135deg,#fff8fb_0%,#fff3f7_52%,#fff7e8_100%)] p-6 shadow-[0_22px_80px_rgba(214,99,146,0.12)] sm:p-8">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.26em] text-[#c31f69]">
+                  Destaques
+                </p>
+                <h2 className="mt-2 text-3xl font-black tracking-tight text-[#31121f] sm:text-4xl">
+                  Promoções
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f5560]">
+                  Itens marcados como promoção no cadastro.
+                </p>
+              </div>
+              <Badge className="w-fit border-[#ffd0e2] bg-white text-[#c31f69]">
+                {promocoes.length} promoção{promocoes.length === 1 ? "" : "ões"}
+              </Badge>
             </div>
-          ) : (
-            <>
-              <ProductSection
-                title="Cardápio de cento"
-                description="Ideal para encomendas maiores, festas e eventos."
-                items={produtosCento}
-                emptyMessage="Nenhum item de cento foi publicado ainda."
-              />
-              <ProductSection
-                title="Cardápio da lanchonete"
-                description="Opções separadas para o atendimento da lanchonete, sem misturar com os produtos de cento."
-                items={produtosLanchonete}
-                emptyMessage="Nenhum item da lanchonete foi publicado ainda."
-              />
-            </>
-          )}
-        </section>
+
+            <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {promocoes.map((produto) => (
+                <ProductShowcaseCard key={produto.id} produto={produto} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {produtos.length === 0 ? (
+          <section className="rounded-[2rem] border border-[#f4d8e4] bg-white/90 p-10 text-center shadow-[0_18px_60px_rgba(190,24,93,0.1)]">
+            <p className="text-lg font-bold text-[#9a1f55]">O cardápio ainda está sendo montado.</p>
+            <p className="mt-2 text-sm text-[#6f5560]">
+              Em breve, novos produtos aparecerão aqui.
+            </p>
+          </section>
+        ) : (
+          <section className="space-y-5">
+            <div className="flex flex-col gap-3 rounded-[2rem] bg-[#1f0e17] px-6 py-6 text-white shadow-[0_24px_80px_rgba(31,14,23,0.28)]">
+              <div className="flex items-center gap-2 text-[#ff9fc1]">
+                <Star className="h-4 w-4 fill-current" />
+                <p className="text-xs font-black uppercase tracking-[0.24em]">Cardápio</p>
+              </div>
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">Produtos</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-white/72">
+                  Todos os itens publicados no cardápio.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {produtos.map((produto) => (
+                <ProductShowcaseCard key={produto.id} produto={produto} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );

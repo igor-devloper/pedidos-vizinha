@@ -14,6 +14,8 @@ type AgentResult = {
   intent?: string;
   nome?: string;
   eventoDetalhes?: string;
+  horarioEntrega?: string;
+  menuCategoria?: "CENTO" | "LANCHONETE";
   bairroRetirada?: string;
   observacoes?: string;
   shouldRespond: boolean;
@@ -62,6 +64,7 @@ function buildLeadSnapshot(lead: BotLead | null) {
     `status: ${lead.status}`,
     `nome: ${lead.nome || ""}`,
     `horarioEntrega: ${lead.horarioEntrega || ""}`,
+    `menuCategoria: ${lead.menuCategoria || ""}`,
     `intent: ${lead.intent || ""}`,
     `eventoDetalhes: ${lead.eventoDetalhes || ""}`,
     `bairroRetirada: ${lead.bairroRetirada || ""}`,
@@ -90,14 +93,18 @@ Seu papel:
 - nunca inventar itens fora do cardápio.
 
 Regras importantes:
-- se o cliente pedir o cardápio, envie os itens do cardápio em texto e não mande link;
+- se o cliente pedir o cardápio, mande primeiro o link oficial do cardápio: ${config.cardapioUrl};
+- junto com o link, você pode destacar poucas promoções em texto com preço, sem despejar o cardápio inteiro no WhatsApp;
 - destaque com clareza os itens em promoção e mostre o valor deles;
 - se o cliente tiver dúvidas, responda de forma livre e útil;
 - se o cliente quiser encomendar, conduza com calma;
 - tente descobrir o pedido, o nome e o horário de entrega;
 - pergunte uma coisa por vez quando faltar informação;
-- explique que a confirmação depende do aceite da Vizinha e depois do pagamento total ou da metade;
+- se o cliente fizer uma pergunta no meio do pedido, responda a dúvida primeiro e só depois retome o atendimento sem tratar a pergunta como resposta de etapa;
+- quando falar de pagamento, informe a chave PIX ${config.pixKey};
+- explique claramente que a encomenda só é confirmada mediante pagamento mínimo de 50% do valor após o aceite da Vizinha;
 - avise que há tolerância de 15 minutos de atraso para ambas as partes.
+- quando já tiver pedido, nome e horário de entrega, use o stage "ready_for_review" se faltar apenas confirmação final ou observação.
 
 Dados do negócio:
 - endereço/base: ${config.pickupAddress}
@@ -122,6 +129,8 @@ Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
   "intent": "encomenda|valores|duvida|...",
   "nome": "nome se descobriu",
   "eventoDetalhes": "detalhes se descobriu",
+  "horarioEntrega": "horario se descobriu",
+  "menuCategoria": "CENTO|LANCHONETE se ficar claro",
   "bairroRetirada": "bairro ou retirada se descobriu",
   "observacoes": "observacoes extras se necessario"
 }

@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Vizinha Salgateria",
@@ -17,12 +23,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body
-        className="
-          min-h-screen
-          bg-gradient-to-b from-pink-50 via-white to-pink-100
-          text-slate-900
-          antialiased
-        "
+        className={`${inter.variable} min-h-screen bg-gradient-to-b from-pink-50 via-white to-pink-100 text-slate-900 antialiased`}
       >
         <div
           className="pointer-events-none fixed inset-0 -z-10 opacity-50"
