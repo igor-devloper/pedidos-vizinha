@@ -93,6 +93,18 @@ async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: 
   }
 }
 
+function getOrderDescription(lead: BotLead) {
+  return (
+    lead.eventoDetalhes ||
+    lead.lastInboundText ||
+    (lead.menuCategoria === "CENTO"
+      ? "Pedido de cento tradicional"
+      : lead.menuCategoria === "LANCHONETE"
+        ? "Pedido de lanchonete"
+        : null)
+  );
+}
+
 async function sendTextToNumber(instanceId: string, number: string, text: string) {
   await instanceManager.sendText(instanceId, normalizeOutboundNumber(number), text);
 }
@@ -150,7 +162,7 @@ async function sendCatalogOverview(job: InboundMessageJob, lead: BotLead | null)
 function buildCustomerSummary(lead: BotLead) {
   return [
     `*Nome:* ${lead.nome || "Não informado"}`,
-    `*Pedido:* ${lead.eventoDetalhes || "Não informado"}`,
+    `*Pedido:* ${getOrderDescription(lead) || "Não informado"}`,
     `*Horário pedido pelo cliente:* ${lead.horarioEntrega || "Não informado"}`,
     `*Observações:* ${lead.observacoes || "Nenhuma"}`,
     "",
@@ -383,6 +395,7 @@ async function createOrderAndRequestOwnerApproval(job: InboundMessageJob, lead: 
   }
 
   const summary = buildCustomerSummary(lead);
+  const orderDescription = getOrderDescription(lead) || "";
   const order = await createBotOrder({
     instanceId: job.instanceId,
     leadId: lead.id,
@@ -390,7 +403,7 @@ async function createOrderAndRequestOwnerApproval(job: InboundMessageJob, lead: 
     customerPhoneNumber: lead.phoneNumber,
     customerName: lead.nome,
     menuCategoria: lead.menuCategoria || "CENTO",
-    eventoDetalhes: lead.eventoDetalhes || "",
+    eventoDetalhes: orderDescription,
     horarioEntrega: lead.horarioEntrega || "",
     observacoes: lead.observacoes,
     summary,
@@ -525,13 +538,9 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
   });
 
   const effectiveLead = nextLead || lead;
+  const hasOrderDetails = Boolean(getOrderDescription(effectiveLead));
 
-  if (
-    effectiveLead.stage === "ready_for_review" &&
-    effectiveLead.nome &&
-    effectiveLead.eventoDetalhes &&
-    effectiveLead.horarioEntrega
-  ) {
+  if (effectiveLead.stage === "ready_for_review" && effectiveLead.nome && hasOrderDetails) {
     return createOrderAndRequestOwnerApproval(job, effectiveLead);
   }
 
@@ -544,6 +553,8 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
         nome: effectiveLead.nome,
         eventoDetalhes: effectiveLead.eventoDetalhes,
         horarioEntrega: effectiveLead.horarioEntrega,
+        lastInboundText: effectiveLead.lastInboundText,
+        menuCategoria: effectiveLead.menuCategoria,
       },
       "Sales agent reached ready_for_review without enough data to request owner approval"
     );
