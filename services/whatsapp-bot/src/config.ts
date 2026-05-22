@@ -29,7 +29,7 @@ export const config = {
   ),
   pixKey: readOptional("PIX_KEY", "00980322405"),
   botPhoneNumber: readOptional("BOT_PHONE_NUMBER", "5583993760485"),
-  ownerApprovalNumber: readOptional("OWNER_APPROVAL_NUMBER", "5583987137721"),
+  ownerApprovalNumber: readOptional("OWNER_APPROVAL_NUMBER", "558387137721"),
   pickupAddress: readOptional("PICKUP_ADDRESS", "Endereço de retirada não configurado"),
   pickupReference: process.env.PICKUP_REFERENCE?.trim() || undefined,
   pickupHours: readOptional("PICKUP_HOURS", "Retirada a combinar"),

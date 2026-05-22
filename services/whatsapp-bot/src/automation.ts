@@ -335,6 +335,53 @@ async function handleOwnerMessage(job: InboundMessageJob) {
 }
 
 async function createOrderAndRequestOwnerApproval(job: InboundMessageJob, lead: BotLead) {
+  const existingOrder = await findLatestOpenOrderByCustomer(job.instanceId, job.remoteJid);
+
+  if (existingOrder?.status === "PENDING_OWNER_APPROVAL") {
+    await updateLead(lead.id, {
+      stage: "awaiting_owner_approval",
+      status: "pending_owner_approval",
+      lastInboundText: job.text,
+    });
+
+    await sendAndTrack(
+      job,
+      lead,
+      [
+        `Seu pedido #${existingOrder.code} ja foi enviado para analise da Vizinha.`,
+        "Assim que ela aceitar ou recusar, eu te aviso por aqui.",
+      ].join("\n")
+    );
+
+    return true;
+  }
+
+  if (
+    existingOrder?.status === "AWAITING_PAYMENT" ||
+    existingOrder?.status === "PAYMENT_REPORTED"
+  ) {
+    await updateLead(lead.id, {
+      stage: "awaiting_payment_validation",
+      status:
+        existingOrder.status === "PAYMENT_REPORTED"
+          ? "awaiting_payment_validation"
+          : "awaiting_payment",
+      lastInboundText: job.text,
+    });
+
+    await sendAndTrack(
+      job,
+      lead,
+      [
+        `A encomenda #${existingOrder.code} ja foi aceita e esta aguardando pagamento.`,
+        buildPixInstructions(),
+        "Quando pagar, me avise por aqui e, se puder, envie o comprovante.",
+      ].join("\n")
+    );
+
+    return true;
+  }
+
   const summary = buildCustomerSummary(lead);
   const order = await createBotOrder({
     instanceId: job.instanceId,
@@ -384,6 +431,75 @@ async function createOrderAndRequestOwnerApproval(job: InboundMessageJob, lead: 
   return true;
 }
 
+async function handleExistingOpenOrder(job: InboundMessageJob, lead: BotLead) {
+  const text = normalizeText(job.text);
+  const openOrder = await findLatestOpenOrderByCustomer(job.instanceId, job.remoteJid);
+
+  if (!openOrder) {
+    return false;
+  }
+
+  if (openOrder.status === "PENDING_OWNER_APPROVAL") {
+    await updateLead(lead.id, {
+      stage: "awaiting_owner_approval",
+      status: "pending_owner_approval",
+      lastInboundText: job.text,
+    });
+
+    await sendAndTrack(
+      job,
+      lead,
+      [
+        `Seu pedido #${openOrder.code} ja foi enviado para analise da Vizinha.`,
+        "Assim que ela aceitar ou recusar, eu te aviso por aqui.",
+      ].join("\n")
+    );
+
+    return true;
+  }
+
+  if (openOrder.status === "AWAITING_PAYMENT" || openOrder.status === "PAYMENT_REPORTED") {
+    if (indicatesPayment(text)) {
+      const updated = await updateBotOrder(openOrder.id, { status: "PAYMENT_REPORTED" });
+      await sendTextToNumber(
+        job.instanceId,
+        config.ownerApprovalNumber,
+        [
+          `Cliente avisou sobre o pagamento da encomenda #${openOrder.code}.`,
+          `Cliente: ${openOrder.customerName || openOrder.customerPhoneNumber || openOrder.customerRemoteJid}`,
+          "Se estiver tudo certo, responda:",
+          `- PAGO METADE ${openOrder.code}`,
+          `- PAGO TOTAL ${openOrder.code}`,
+        ].join("\n")
+      );
+      await updateLead(lead.id, {
+        stage: "awaiting_payment_validation",
+        status: "awaiting_payment_validation",
+        lastInboundText: job.text,
+      });
+      await sendAndTrack(
+        job,
+        lead,
+        `Perfeito. Avisei a Vizinha sobre o pagamento da encomenda #${(updated || openOrder).code}. Assim que ela validar, eu confirmo por aqui.`
+      );
+      return true;
+    }
+
+    await sendAndTrack(
+      job,
+      lead,
+      [
+        `A encomenda #${openOrder.code} ja foi aceita e esta aguardando pagamento.`,
+        buildPixInstructions(),
+        "Quando pagar, me avise por aqui e, se puder, envie o comprovante.",
+      ].join("\n")
+    );
+    return true;
+  }
+
+  return false;
+}
+
 async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
   if (!config.geminiApiKey || !canUseSalesAgent(lead)) {
     return false;
@@ -409,7 +525,6 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
   });
 
   const effectiveLead = nextLead || lead;
-  await sendAndTrack(job, effectiveLead, agentResult.reply);
 
   if (
     effectiveLead.stage === "ready_for_review" &&
@@ -417,9 +532,10 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
     effectiveLead.eventoDetalhes &&
     effectiveLead.horarioEntrega
   ) {
-    await createOrderAndRequestOwnerApproval(job, effectiveLead);
+    return createOrderAndRequestOwnerApproval(job, effectiveLead);
   }
 
+  await sendAndTrack(job, effectiveLead, agentResult.reply);
   return true;
 }
 
@@ -605,6 +721,10 @@ export async function processInboundMessage(job: InboundMessageJob) {
 
   if (!lead) {
     await sendIntro(job, null);
+    return;
+  }
+
+  if (await handleExistingOpenOrder(job, lead)) {
     return;
   }
 
