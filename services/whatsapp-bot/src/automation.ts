@@ -26,6 +26,16 @@ function normalizePhone(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function normalizeOutboundNumber(value: string) {
+  const digits = normalizePhone(value);
+
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`;
+  }
+
+  return digits;
+}
+
 function isOwnerChat(remoteJid: string) {
   return normalizePhone(remoteJid) === normalizePhone(config.ownerApprovalNumber);
 }
@@ -84,7 +94,7 @@ async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: 
 }
 
 async function sendTextToNumber(instanceId: string, number: string, text: string) {
-  await instanceManager.sendText(instanceId, number, text);
+  await instanceManager.sendText(instanceId, normalizeOutboundNumber(number), text);
 }
 
 async function sendIntro(job: InboundMessageJob, lead: BotLead | null) {
@@ -159,9 +169,11 @@ function buildOwnerApprovalMessage(order: BotOrder) {
     "",
     "Responda assim para seguir:",
     `- APROVAR ${order.code}`,
+    `- RECUSAR ${order.code} motivo da recusa`,
+    "",
+    "Depois que o cliente avisar o pagamento, responda com:",
     `- PAGO METADE ${order.code}`,
     `- PAGO TOTAL ${order.code}`,
-    `- RECUSAR ${order.code} motivo`,
   ].join("\n");
 }
 
