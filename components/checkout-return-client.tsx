@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CheckCircle2, LoaderCircle } from "lucide-react";
+import { CheckCircle2, Clock3, LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +25,7 @@ export function CheckoutReturnClient({
 }) {
   const [pedido, setPedido] = useState<PedidoResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(externalReference));
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!externalReference) {
@@ -32,25 +33,56 @@ export function CheckoutReturnClient({
       return;
     }
 
-    const load = async () => {
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const load = async (silent = false) => {
       try {
+        if (silent) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+
         const response = await fetch(`/api/pedidos/${externalReference}`, {
           cache: "no-store",
         });
 
-        if (!response.ok) {
+        if (!response.ok || cancelled) {
           return;
         }
 
         const data = (await response.json()) as PedidoResponse;
         setPedido(data);
+
+        if (["PAGO", "EM_PREPARO", "ENTREGUE", "CANCELADO"].includes(data.status) && intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     };
 
     void load();
+
+    intervalId = setInterval(() => {
+      void load(true);
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [externalReference]);
+
+  const isConfirmed =
+    pedido?.status === "PAGO" || pedido?.status === "EM_PREPARO" || pedido?.status === "ENTREGUE";
 
   if (loading) {
     return (
@@ -71,16 +103,26 @@ export function CheckoutReturnClient({
         <Card className="border-pink-200 bg-white/95 shadow-lg shadow-pink-100/30">
           <CardContent className="space-y-5 p-8 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+              {isConfirmed ? (
+                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+              ) : (
+                <Clock3 className="h-8 w-8 text-emerald-600" />
+              )}
             </div>
             <div>
               <h1 className="text-3xl font-black tracking-tight text-slate-900">
-                Pedido em processamento
+                {isConfirmed ? "Pedido confirmado" : "Pedido em processamento"}
               </h1>
               <p className="mt-3 text-sm leading-6 text-slate-500">
-                Seu pedido voltou para a etapa final de confirmação. Em instantes, o
-                pagamento é validado e você recebe a confirmação no WhatsApp.
+                {isConfirmed
+                  ? "Seu pagamento ja foi validado. A confirmacao do pedido tambem segue para o WhatsApp."
+                  : "Estamos acompanhando a validacao do pagamento. Assim que a confirmacao cair, esta tela atualiza sozinha."}
               </p>
+              {!isConfirmed && refreshing ? (
+                <p className="mt-2 text-xs font-medium text-pink-600">
+                  Atualizando status automaticamente...
+                </p>
+              ) : null}
             </div>
 
             {pedido ? (
@@ -100,20 +142,20 @@ export function CheckoutReturnClient({
             ) : (
               <div className="rounded-[1.6rem] bg-[#fff7fb] p-5 text-sm text-slate-600">
                 O retorno foi recebido, mas ainda estamos aguardando localizar os dados do
-                pedido. Se necessário, volte em instantes.
+                pedido. Se necessario, volte em instantes.
               </div>
             )}
 
             <div className="flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild className="rounded-full bg-pink-600 text-white hover:bg-pink-700">
-                <Link href="/cardapio">Voltar ao cardápio</Link>
+                <Link href="/cardapio">Voltar ao cardapio</Link>
               </Button>
               <Button
                 asChild
                 variant="outline"
                 className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
               >
-                <Link href="/">Início</Link>
+                <Link href="/">Inicio</Link>
               </Button>
             </div>
           </CardContent>

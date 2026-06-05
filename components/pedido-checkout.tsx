@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { LoaderCircle, Minus, Plus, ShieldCheck } from "lucide-react";
 import { MetodoPagamento } from "@prisma/client";
 import { toast } from "sonner";
@@ -68,7 +67,6 @@ export function PedidoCheckout({
   produto: ProdutoCheckout;
   paymentMethods: PaymentMethodOption[];
 }) {
-  const router = useRouter();
   const [clienteNome, setClienteNome] = useState("");
   const [clienteTelefone, setClienteTelefone] = useState("");
   const [clienteEmail, setClienteEmail] = useState("");
@@ -169,7 +167,7 @@ export function PedidoCheckout({
         throw new Error(data?.error || "Não foi possível iniciar o pagamento.");
       }
 
-      router.push(data.redirectUrl);
+      window.location.assign(data.redirectUrl);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao criar o pedido.");
     } finally {

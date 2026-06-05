@@ -157,9 +157,9 @@ export async function createMercadoPagoPreference({
       process.env.MP_WEBHOOK_URL?.trim() ||
       `${BUSINESS_INFO.appUrl}/api/mercadopago/webhook`,
     back_urls: {
-      success: `${BUSINESS_INFO.appUrl}/checkout/retorno`,
-      pending: `${BUSINESS_INFO.appUrl}/checkout/retorno`,
-      failure: `${BUSINESS_INFO.appUrl}/checkout/retorno`,
+      success: `${BUSINESS_INFO.appUrl}/checkout/retorno?ref=${encodeURIComponent(pedido.mpExternalReference)}`,
+      pending: `${BUSINESS_INFO.appUrl}/checkout/retorno?ref=${encodeURIComponent(pedido.mpExternalReference)}`,
+      failure: `${BUSINESS_INFO.appUrl}/checkout/retorno?ref=${encodeURIComponent(pedido.mpExternalReference)}`,
     },
     auto_return: "approved",
     statement_descriptor: BUSINESS_INFO.name.slice(0, 13),

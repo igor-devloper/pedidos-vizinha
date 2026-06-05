@@ -16,8 +16,8 @@ export const pedidoItemSchema = z.object({
 export const createPedidoSchema = z.object({
   produtoId: z.string().trim().min(1),
   clienteNome: z.string().trim().min(2, "Informe o nome do cliente."),
-  clienteTelefone: z.string().trim().min(10, "Informe um telefone válido."),
-  clienteEmail: z.string().trim().email("Informe um e-mail válido.").optional().or(z.literal("")),
+  clienteTelefone: z.string().trim().min(10, "Informe um telefone valido."),
+  clienteEmail: z.string().trim().email("Informe um e-mail valido.").optional().or(z.literal("")),
   observacoes: z.string().trim().max(500).optional().or(z.literal("")),
   dataEntrega: z.string().trim().min(1, "Escolha a data e hora de entrega."),
   percentualPagamento: z.union([z.literal(50), z.literal(100)]),
@@ -102,7 +102,7 @@ export function calculatePaymentAmounts(subtotal: number, paymentPercentage: 50 
   const methodConfig = getPaymentMethodConfig(method);
 
   if (!methodConfig) {
-    throw new Error("Método de pagamento não suportado.");
+    throw new Error("Metodo de pagamento nao suportado.");
   }
 
   const baseAmount = Number(((subtotal * paymentPercentage) / 100).toFixed(2));
@@ -124,7 +124,7 @@ export function parseDeliveryDate(input: string) {
   const date = new Date(hasExplicitZone ? trimmed : `${trimmed}${BUSINESS_UTC_OFFSET}`);
 
   if (Number.isNaN(date.getTime())) {
-    throw new Error("Data de entrega inválida.");
+    throw new Error("Data de entrega invalida.");
   }
 
   return date;
@@ -135,22 +135,22 @@ export function validateDeliveryDate(input: Date, now = new Date()) {
   const businessTime = getBusinessTimeParts(input);
 
   if (input.getTime() < minDate.getTime()) {
-    throw new Error(`Escolha um horário com pelo menos ${BUSINESS_RULES.minimumLeadHours} horas de antecedência.`);
+    throw new Error(`Escolha um horario com pelo menos ${BUSINESS_RULES.minimumLeadHours} horas de antecedencia.`);
   }
 
   const hour = businessTime.hour;
   const minutes = businessTime.minute;
 
   if (hour < BUSINESS_RULES.openingHour || hour > BUSINESS_RULES.closingHour) {
-    throw new Error("O horário precisa ficar dentro do atendimento das 09h às 17h.");
+    throw new Error("O horario precisa ficar dentro do atendimento das 09h as 17h.");
   }
 
   if (hour === BUSINESS_RULES.closingHour && minutes > 0) {
-    throw new Error("O último horário disponível é às 17h.");
+    throw new Error("O ultimo horario disponivel e as 17h.");
   }
 
   if (minutes % BUSINESS_RULES.slotMinutes !== 0) {
-    throw new Error(`Escolha um horário em intervalos de ${BUSINESS_RULES.slotMinutes} minutos.`);
+    throw new Error(`Escolha um horario em intervalos de ${BUSINESS_RULES.slotMinutes} minutos.`);
   }
 }
 
@@ -172,7 +172,7 @@ export function validatePedidoAgainstProduto(produto: Produto, items: ReturnType
   }
 
   if (totalTipos > produto.maxTiposSalgado) {
-    throw new Error(`Esse produto permite no máximo ${produto.maxTiposSalgado} tipos diferentes.`);
+    throw new Error(`Esse produto permite no maximo ${produto.maxTiposSalgado} tipos diferentes.`);
   }
 
   return { totalUnidades, totalTipos };
@@ -209,11 +209,11 @@ export function buildPedidoSummary(pedido: PedidoSummaryShape) {
     `Entrega: ${formatDateTime(pedido.dataEntrega)}`,
     `Pagamento agora: ${pedido.percentualPagamento}% via ${pedido.metodoPagamentoLabel}`,
     `Subtotal: ${formatCurrency(Number(pedido.subtotal))}`,
-    `Taxa de serviço: ${formatCurrency(Number(pedido.taxaValor))}`,
+    `Taxa de servico: ${formatCurrency(Number(pedido.taxaValor))}`,
     `Total cobrado: ${formatCurrency(Number(pedido.totalCobrado))}`,
     "Itens:",
     itens,
-    pedido.observacoes ? `Observações: ${pedido.observacoes}` : null,
+    pedido.observacoes ? `Observacoes: ${pedido.observacoes}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -221,19 +221,19 @@ export function buildPedidoSummary(pedido: PedidoSummaryShape) {
 
 export function buildWhatsappMessageForClient(pedido: PedidoSummaryShape) {
   return [
-    `Oi, ${pedido.clienteNome}!`,
+    `*Oi, ${pedido.clienteNome}!*`,
     "",
-    `Seu pagamento do pedido ${pedido.codigo} foi confirmado com sucesso.`,
-    `Entrega agendada para ${formatDateTime(pedido.dataEntrega)}.`,
-    `Produto: ${pedido.produtoNomeSnapshot}.`,
-    `Valor confirmado: ${formatCurrency(Number(pedido.totalCobrado))}.`,
+    `Seu pagamento do pedido *${pedido.codigo}* foi confirmado com sucesso.`,
+    `Entrega agendada para *${formatDateTime(pedido.dataEntrega)}*.`,
+    `Produto: *${pedido.produtoNomeSnapshot}*.`,
+    `Valor confirmado: *${formatCurrency(Number(pedido.totalCobrado))}*.`,
     "",
-    "Resumo do pedido:",
+    "*Resumo do pedido:*",
     ...pedido.itens.map((item) => `- ${item.tipo}: ${item.quantidade} un`),
     pedido.observacoes ? "" : null,
-    pedido.observacoes ? `Observações: ${pedido.observacoes}` : null,
+    pedido.observacoes ? `Observacoes: ${pedido.observacoes}` : null,
     "",
-    `Tolerância combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,
+    `Tolerancia combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,
     `Qualquer ajuste, fale com a ${BUSINESS_INFO.name}.`,
   ]
     .filter(Boolean)
@@ -255,7 +255,7 @@ export function buildWhatsappMessageForOwner(pedido: PedidoSummaryShape) {
     `Total cobrado: ${formatCurrency(Number(pedido.totalCobrado))}`,
     "Itens:",
     ...pedido.itens.map((item) => `- ${item.tipo}: ${item.quantidade} un`),
-    pedido.observacoes ? `Observações: ${pedido.observacoes}` : null,
+    pedido.observacoes ? `Observacoes: ${pedido.observacoes}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -276,7 +276,7 @@ export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
     ...pedido.itens.map((item) => `${item.tipo} x ${item.quantidade}`),
     "------------------------------",
     `Subtotal: ${formatCurrency(Number(pedido.subtotal))}`,
-    `Taxa de serviço: ${formatCurrency(Number(pedido.taxaValor))}`,
+    `Taxa de servico: ${formatCurrency(Number(pedido.taxaValor))}`,
     `Total: ${formatCurrency(Number(pedido.totalCobrado))}`,
     pedido.observacoes ? "------------------------------" : null,
     pedido.observacoes ? `Obs: ${pedido.observacoes}` : null,
