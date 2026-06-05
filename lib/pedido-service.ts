@@ -47,13 +47,29 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
   let notificadoVizinhaAt = pedido.notificadoVizinhaAt;
 
   if (!pedido.notificadoClienteAt) {
-    await sendWhatsappText(pedido.clienteTelefone, clientMessage);
-    notificadoClienteAt = new Date();
+    try {
+      await sendWhatsappText(pedido.clienteTelefone, clientMessage);
+      notificadoClienteAt = new Date();
+    } catch (error) {
+      console.error("Falha ao notificar cliente via WhatsApp", {
+        pedidoId: pedido.id,
+        codigo: pedido.codigo,
+        error,
+      });
+    }
   }
 
   if (!pedido.notificadoVizinhaAt && BUSINESS_INFO.ownerPhone) {
-    await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
-    notificadoVizinhaAt = new Date();
+    try {
+      await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
+      notificadoVizinhaAt = new Date();
+    } catch (error) {
+      console.error("Falha ao notificar vizinha via WhatsApp", {
+        pedidoId: pedido.id,
+        codigo: pedido.codigo,
+        error,
+      });
+    }
   }
 
   if (notificadoClienteAt || notificadoVizinhaAt) {
