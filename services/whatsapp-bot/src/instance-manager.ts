@@ -33,6 +33,7 @@ type MediaPayload = {
 
 class InstanceManager {
   private readonly sockets = new Map<string, RuntimeInstance>();
+  private readonly openInstances = new Set<string>();
 
   async start(instanceId: string) {
     if (this.sockets.has(instanceId)) {
@@ -44,6 +45,7 @@ class InstanceManager {
       throw new Error("Instance not found");
     }
 
+    this.openInstances.delete(instanceId);
     await instanceStore.update(instanceId, { status: "connecting" });
 
     const authPath = getInstanceAuthPath(instanceId);
@@ -69,6 +71,7 @@ class InstanceManager {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        this.openInstances.delete(instanceId);
         const dataUrl = await QRCode.toDataURL(qr, { margin: 1, width: 320 });
         qrStore.set({
           instanceId,
@@ -81,6 +84,7 @@ class InstanceManager {
       }
 
       if (connection === "open") {
+        this.openInstances.add(instanceId);
         const connectedJid = socket.user?.id || undefined;
         const connectedNumber = connectedJid
           ? connectedJid.split(":")[0]?.replace(/\D/g, "") || undefined
@@ -101,6 +105,7 @@ class InstanceManager {
       }
 
       if (connection === "close") {
+        this.openInstances.delete(instanceId);
         const disconnectCode = (lastDisconnect?.error as Boom | undefined)?.output
           ?.statusCode;
 
@@ -230,6 +235,7 @@ class InstanceManager {
       this.sockets.delete(instanceId);
     }
 
+    this.openInstances.delete(instanceId);
     await instanceStore.update(instanceId, { status: "idle" });
     qrStore.remove(instanceId);
   }
@@ -377,7 +383,7 @@ class InstanceManager {
   }
 
   private async waitForSocketReady(instanceId: string, socket: WASocket, timeoutMs = 15000) {
-    if (socket.user?.id) {
+    if (this.openInstances.has(instanceId)) {
       return;
     }
 
