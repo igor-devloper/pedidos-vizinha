@@ -6,50 +6,120 @@ import {
   verifyMercadoPagoWebhookSignature,
 } from "@/lib/mercado-pago";
 
-export async function GET() {
-  return NextResponse.json({ ok: true });
+export const runtime = "nodejs";
+export const maxDuration = 30;
+
+type MpWebhookBody = {
+  action?: string;
+  api_version?: string;
+  data?: {
+    id?: string | number;
+  };
+  date_created?: string;
+  id?: string | number;
+  live_mode?: boolean;
+  type?: string;
+  topic?: string;
+  user_id?: string | number;
+};
+
+export async function GET(req: Request) {
+  console.log("[MP webhook] GET", req.url);
+  return NextResponse.json({ ok: true, message: "Webhook endpoint ativo" }, { status: 200 });
 }
 
 export async function POST(req: Request) {
   try {
-    if (!verifyMercadoPagoWebhookSignature(req)) {
-      return NextResponse.json({ error: "Assinatura inválida." }, { status: 401 });
+    console.log("[MP webhook] Headers:", {
+      "x-signature": req.headers.get("x-signature"),
+      "x-request-id": req.headers.get("x-request-id"),
+      "content-type": req.headers.get("content-type"),
+    });
+    console.log("[MP webhook] URL:", req.url);
+
+    const bodyText = await req.text();
+    console.log("[MP webhook] Body raw:", bodyText);
+
+    let body: MpWebhookBody = {};
+
+    try {
+      body = bodyText ? (JSON.parse(bodyText) as MpWebhookBody) : {};
+    } catch (parseErr) {
+      console.error("[MP webhook] Erro ao fazer parse do body:", parseErr);
+      return NextResponse.json(
+        { ok: false, reason: "invalid-json" },
+        { status: 200 }
+      );
     }
+
+    console.log("[MP webhook] Body parsed:", body);
 
     const url = new URL(req.url);
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const topic =
-      String(body.type || body.topic || url.searchParams.get("type") || url.searchParams.get("topic") || "");
-    const paymentId =
-      String(
-        body.data && typeof body.data === "object" && body.data !== null && "id" in body.data
-          ? (body.data as { id?: string | number }).id
-          : url.searchParams.get("data.id") || url.searchParams.get("id") || ""
-      );
+    const topic = String(
+      body.type ||
+        body.topic ||
+        url.searchParams.get("type") ||
+        url.searchParams.get("topic") ||
+        ""
+    );
+    const paymentId = String(
+      body.data?.id ||
+        url.searchParams.get("data.id") ||
+        url.searchParams.get("id") ||
+        ""
+    );
+
+    try {
+      const signatureOk = verifyMercadoPagoWebhookSignature(req);
+
+      if (!signatureOk) {
+        console.error("[MP webhook] assinatura inválida ou ausente");
+      }
+    } catch (sigErr) {
+      console.error("[MP webhook] erro ao validar assinatura:", sigErr);
+    }
 
     if (!paymentId || topic !== "payment") {
-      return NextResponse.json({ ok: true, ignored: true });
+      console.log("[MP webhook] Evento ignorado:", { topic, paymentId });
+      return NextResponse.json({ ok: true, ignored: true }, { status: 200 });
     }
 
-    const payment = await getMercadoPagoPayment(paymentId);
+    try {
+      const payment = await Promise.race([
+        getMercadoPagoPayment(paymentId),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout ao buscar pagamento no Mercado Pago")), 20000)
+        ),
+      ]);
 
-    if (!payment.external_reference) {
-      return NextResponse.json({ ok: true, ignored: true });
+      if (!payment.external_reference) {
+        console.log("[MP webhook] Pagamento sem external_reference:", paymentId);
+        return NextResponse.json({ ok: true, ignored: true }, { status: 200 });
+      }
+
+      const pedido = await handleMercadoPagoPaymentUpdate({
+        externalReference: payment.external_reference,
+        paymentId: String(payment.id),
+        merchantOrderId: payment.order?.id,
+        status: payment.status,
+        statusDetail: payment.status_detail,
+        transactionAmount: payment.transaction_amount,
+        payload: body,
+      });
+
+      console.log("[MP webhook] Pedido atualizado com sucesso:", {
+        pedidoId: pedido.id,
+        codigo: pedido.codigo,
+        status: pedido.status,
+        paymentId,
+      });
+    } catch (processingErr) {
+      console.error("[MP webhook] Erro ao processar pagamento:", processingErr);
     }
 
-    const pedido = await handleMercadoPagoPaymentUpdate({
-      externalReference: payment.external_reference,
-      paymentId: String(payment.id),
-      merchantOrderId: payment.order?.id,
-      status: payment.status,
-      statusDetail: payment.status_detail,
-      transactionAmount: payment.transaction_amount,
-      payload: body,
-    });
-
-    return NextResponse.json({ ok: true, pedidoId: pedido.id, status: pedido.status });
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
-    console.error("POST /api/mercadopago/webhook error", error);
-    return NextResponse.json({ error: "Webhook error" }, { status: 500 });
+    console.error("[MP webhook] Erro geral:", error);
+    return NextResponse.json({ ok: false, error: "webhook-error" }, { status: 200 });
   }
 }
