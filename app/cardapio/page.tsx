@@ -1,63 +1,44 @@
 import Image from "next/image";
+import Link from "next/link";
 import type { Metadata } from "next";
-import { BadgePercent, Flame, Star } from "lucide-react";
+import { ArrowRight, BadgePercent, Clock3, Flame, Star } from "lucide-react";
 
-import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { prisma } from "@/lib/db";
+import { formatCurrency } from "@/lib/pedidos";
 
 export const dynamic = "force-dynamic";
 
-type ProdutoWithPromocao = Awaited<
-  ReturnType<typeof prisma.produto.findMany>
->[number] & {
-  emPromocao?: boolean;
-};
-
 export const metadata: Metadata = {
   title: "Cardápio | Vizinha Salgateria",
-  description: "Conheça o cardápio da Vizinha Salgateria.",
+  description: "Monte seu pedido e finalize o pagamento online na Vizinha Salgateria.",
 };
 
 async function getProdutos() {
   try {
-    const produtos = (await prisma.produto.findMany({
+    const produtos = await prisma.produto.findMany({
       where: { ativo: true },
-      orderBy: [{ categoria: "asc" }, { createdAt: "desc" }],
-    })) as ProdutoWithPromocao[];
+      orderBy: [{ emPromocao: "desc" }, { createdAt: "desc" }],
+    });
 
-    return produtos
-      .map((produto) => ({
-        ...produto,
-        preco: Number(produto.preco),
-        emPromocao: Boolean(produto.emPromocao),
-      }))
-      .sort((a, b) => Number(b.emPromocao) - Number(a.emPromocao));
+    return produtos.map((produto) => ({
+      ...produto,
+      preco: Number(produto.preco),
+    }));
   } catch (error) {
     console.error("GET produtos cardapio page error", error);
     return [];
   }
 }
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
-function ProductShowcaseCard({
+function ProductCard({
   produto,
 }: {
   produto: Awaited<ReturnType<typeof getProdutos>>[number];
 }) {
   return (
-    <article
-      className={[
-        "group overflow-hidden rounded-[2rem] border bg-white shadow-[0_20px_60px_rgba(190,24,93,0.12)] transition duration-300 hover:-translate-y-1",
-        produto.emPromocao ? "border-[#f9c2d7]" : "border-[#f6dbe6]",
-      ].join(" ")}
-    >
+    <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[#f6dbe6] bg-white shadow-[0_20px_60px_rgba(190,24,93,0.12)] transition duration-300 hover:-translate-y-1">
       <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(135deg,#fff5f7,#ffe4ec_45%,#fff3d6)]">
         <Image
           src={produto.imagemBase64}
@@ -75,7 +56,7 @@ function ProductShowcaseCard({
               </span>
             )}
             <span className="w-fit rounded-full bg-white/88 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#a11756] backdrop-blur">
-              Cardápio
+              {produto.categoria === "CENTO" ? "Cento" : "Lanchonete"}
             </span>
           </div>
 
@@ -86,31 +67,41 @@ function ProductShowcaseCard({
             <p className="text-xl font-black">{formatCurrency(produto.preco)}</p>
           </div>
         </div>
-
-        {produto.emPromocao && (
-          <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(90deg,#ff4d8d,#ff7a59)] px-4 py-2 text-sm font-bold uppercase tracking-[0.16em] text-white">
-            Promoção em destaque
-          </div>
-        )}
       </div>
 
-      <div className="space-y-4 p-5">
+      <div className="flex flex-1 flex-col gap-4 p-5">
         <div className="space-y-2">
           <h2 className="text-xl font-black tracking-tight text-[#31121f]">{produto.nome}</h2>
           <p className="text-sm leading-6 text-[#6f5560]">{produto.descricao}</p>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="grid gap-2 rounded-[1.4rem] bg-[#fff7fb] p-4 text-sm text-[#6f5560]">
+          <span>{produto.totalUnidades} unidades</span>
+          <span>Até {produto.maxTiposSalgado} tipos diferentes</span>
+          <span>
+            {produto.permitePagamentoParcial ? "Pagamento de 50% ou 100%" : "Pagamento integral"}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <Badge className="border-[#f9d4e3] bg-[#fff6fa] text-[#b31b61]">
-            {produto.emPromocao ? "Em promoção" : "No cardápio"}
+            {produto.emPromocao ? "Em destaque" : "Disponível"}
           </Badge>
           {produto.emPromocao && (
             <div className="flex items-center gap-1 text-sm font-bold text-[#ff7a59]">
               <Flame className="h-4 w-4" />
-              Destaque
+              Promoção
             </div>
           )}
         </div>
+
+        <Link
+          href={`/pedido/${produto.slug}`}
+          className="mt-auto inline-flex items-center justify-center gap-2 rounded-full bg-[#ff4d8d] px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition hover:bg-[#e43b7b]"
+        >
+          Montar pedido
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
     </article>
   );
@@ -118,8 +109,7 @@ function ProductShowcaseCard({
 
 export default async function CardapioPage() {
   const produtos = await getProdutos();
-  const promocoes = produtos.filter((produto) => produto.emPromocao);
-  const heroProduto = promocoes[0] || produtos[0] || null;
+  const destaque = produtos[0] || null;
 
   return (
     <main className="px-4 py-6 sm:px-6 lg:px-8">
@@ -128,7 +118,7 @@ export default async function CardapioPage() {
           <div className="relative">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,#ff4d8d40_0,transparent_30%),radial-gradient(circle_at_bottom_right,#ffb34726_0,transparent_30%),linear-gradient(135deg,#170a11_0%,#2b1020_45%,#12080e_100%)]" />
 
-            <div className="relative grid gap-8 px-6 py-8 lg:grid-cols-[1.1fr_0.9fr] lg:px-10 lg:py-10">
+            <div className="relative grid gap-8 px-6 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-10 lg:py-10">
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
                   <div className="relative h-16 w-16 overflow-hidden rounded-full border-4 border-white/15 bg-white shadow-xl">
@@ -143,51 +133,62 @@ export default async function CardapioPage() {
                     <p className="text-sm font-black uppercase tracking-[0.24em] text-[#ff9fc1]">
                       Vizinha Salgateria
                     </p>
-                    <p className="text-sm text-white/70">Cardápio</p>
+                    <p className="text-sm text-white/70">Pedidos online</p>
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <Badge className="w-fit border-white/10 bg-[#ff4d8d] text-white">
-                    Cardápio
+                    Encomendas online
                   </Badge>
 
                   <h1 className="max-w-2xl text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
-                    Cardápio da Vizinha
+                    Monte sua encomenda com praticidade
                   </h1>
 
                   <p className="max-w-2xl text-sm leading-7 text-white/72 sm:text-base">
-                    Produtos com foto, descrição, preço e promoções em destaque.
+                    Escolha o produto, defina os tipos de salgado, agende o horário e
+                    finalize seu pedido sem sair do site.
                   </p>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
                     <BadgePercent className="h-5 w-5 text-[#ff9fc1]" />
                     <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
-                      Promoções
+                      50% ou 100%
                     </p>
                     <p className="mt-2 text-sm text-white/68">
-                      Itens marcados como promoção aparecem com mais destaque.
+                      Dependendo do produto, você pode reservar com metade ou quitar tudo.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
+                    <Clock3 className="h-5 w-5 text-[#ff9fc1]" />
+                    <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
+                      Horários
+                    </p>
+                    <p className="mt-2 text-sm text-white/68">
+                      Entregas agendadas entre 09h e 17h, com mínimo de 2 horas de antecedência.
                     </p>
                   </div>
 
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
                     <Star className="h-5 w-5 text-[#ff9fc1]" />
                     <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
-                      Preços
+                      Pedido do seu jeito
                     </p>
                     <p className="mt-2 text-sm text-white/68">
-                      Valores visíveis para facilitar a consulta do cardápio.
+                      Monte as quantidades por tipo de salgado conforme as regras de cada produto.
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-4">
-                {heroProduto ? (
+              <div>
+                {destaque ? (
                   <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/6 p-3 backdrop-blur">
-                    <ProductShowcaseCard produto={heroProduto} />
+                    <ProductCard produto={destaque} />
                   </div>
                 ) : (
                   <Card className="border-white/10 bg-white/8 text-white shadow-none">
@@ -204,33 +205,6 @@ export default async function CardapioPage() {
           </div>
         </section>
 
-        {promocoes.length > 0 && (
-          <section className="overflow-hidden rounded-[2.3rem] bg-[linear-gradient(135deg,#fff8fb_0%,#fff3f7_52%,#fff7e8_100%)] p-6 shadow-[0_22px_80px_rgba(214,99,146,0.12)] sm:p-8">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.26em] text-[#c31f69]">
-                  Destaques
-                </p>
-                <h2 className="mt-2 text-3xl font-black tracking-tight text-[#31121f] sm:text-4xl">
-                  Promoções
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f5560]">
-                  Itens marcados como promoção no cadastro.
-                </p>
-              </div>
-              <Badge className="w-fit border-[#ffd0e2] bg-white text-[#c31f69]">
-                {promocoes.length} promoção{promocoes.length === 1 ? "" : "ões"}
-              </Badge>
-            </div>
-
-            <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {promocoes.map((produto) => (
-                <ProductShowcaseCard key={produto.id} produto={produto} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {produtos.length === 0 ? (
           <section className="rounded-[2rem] border border-[#f4d8e4] bg-white/90 p-10 text-center shadow-[0_18px_60px_rgba(190,24,93,0.1)]">
             <p className="text-lg font-bold text-[#9a1f55]">O cardápio ainda está sendo montado.</p>
@@ -241,21 +215,21 @@ export default async function CardapioPage() {
         ) : (
           <section className="space-y-5">
             <div className="flex flex-col gap-3 rounded-[2rem] bg-[#1f0e17] px-6 py-6 text-white shadow-[0_24px_80px_rgba(31,14,23,0.28)]">
-              <div className="flex items-center gap-2 text-[#ff9fc1]">
-                <Star className="h-4 w-4 fill-current" />
-                <p className="text-xs font-black uppercase tracking-[0.24em]">Cardápio</p>
-              </div>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#ff9fc1]">
+                Cardápio
+              </p>
               <div>
-                <h2 className="text-3xl font-black tracking-tight">Produtos</h2>
+                <h2 className="text-3xl font-black tracking-tight">Produtos para encomenda</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-white/72">
-                  Todos os itens publicados no cardápio.
+                  Cada produto já traz suas regras de quantidade, tipos permitidos e forma
+                  de pagamento.
                 </p>
               </div>
             </div>
 
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {produtos.map((produto) => (
-                <ProductShowcaseCard key={produto.id} produto={produto} />
+                <ProductCard key={produto.id} produto={produto} />
               ))}
             </div>
           </section>

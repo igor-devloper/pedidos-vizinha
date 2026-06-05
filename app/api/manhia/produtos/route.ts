@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { isValidManhiaSessionToken, MANHIA_COOKIE_NAME } from "@/lib/admin-auth";
+import { slugify } from "@/lib/pedidos";
+import { normalizeSaboresList } from "@/lib/sabores";
 
 type ProdutoPayload = {
   nome?: string;
@@ -9,6 +11,10 @@ type ProdutoPayload = {
   preco?: number | string;
   imagemBase64?: string;
   categoria?: "CENTO" | "LANCHONETE";
+  totalUnidades?: number | string;
+  maxTiposSalgado?: number | string;
+  permitePagamentoParcial?: boolean;
+  saboresSugeridos?: string[];
   emPromocao?: boolean;
   ativo?: boolean;
 };
@@ -22,8 +28,12 @@ function validateProdutoPayload(body: ProdutoPayload) {
   const descricao = body.descricao?.trim() || "";
   const preco = Number(body.preco);
   const imagemBase64 = body.imagemBase64?.trim() || "";
+  const totalUnidades = Number(body.totalUnidades);
+  const maxTiposSalgado = Number(body.maxTiposSalgado);
   const categoria: "CENTO" | "LANCHONETE" =
     body.categoria === "LANCHONETE" ? "LANCHONETE" : "CENTO";
+  const permitePagamentoParcial = body.permitePagamentoParcial ?? true;
+  const saboresSugeridos = normalizeSaboresList(body.saboresSugeridos);
   const emPromocao = body.emPromocao ?? false;
   const ativo = body.ativo ?? true;
 
@@ -39,6 +49,14 @@ function validateProdutoPayload(body: ProdutoPayload) {
     return { error: "Informe um valor valido." };
   }
 
+  if (!Number.isInteger(totalUnidades) || totalUnidades <= 0) {
+    return { error: "Informe o total de unidades do produto." };
+  }
+
+  if (!Number.isInteger(maxTiposSalgado) || maxTiposSalgado <= 0) {
+    return { error: "Informe o limite de tipos permitidos." };
+  }
+
   if (!imagemBase64.startsWith("data:image/")) {
     return { error: "Envie uma imagem valida para o produto." };
   }
@@ -49,11 +67,16 @@ function validateProdutoPayload(body: ProdutoPayload) {
 
   return {
     data: {
+      slug: slugify(nome),
       nome,
       descricao,
       preco: Number(preco.toFixed(2)),
       imagemBase64,
       categoria,
+      totalUnidades,
+      maxTiposSalgado,
+      permitePagamentoParcial,
+      saboresSugeridos,
       emPromocao,
       ativo,
     },
@@ -107,8 +130,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const slugBase = validation.data.slug;
+    const existing = await prisma.produto.findUnique({
+      where: { slug: slugBase },
+      select: { id: true },
+    });
+
     const produto = await prisma.produto.create({
-      data: validation.data,
+      data: {
+        ...validation.data,
+        slug: existing ? `${slugBase}-${Date.now().toString(36)}` : slugBase,
+      },
     });
 
     return NextResponse.json(produto, { status: 201 });

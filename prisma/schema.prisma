@@ -10,8 +10,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
-
 model Encomenda {
   id           String        @id @default(cuid())
   txid         String        @unique
@@ -35,15 +33,22 @@ model Encomenda {
 
 model Produto {
   id           String   @id @default(cuid())
+  slug         String   @unique
   nome         String
   descricao    String
   preco        Decimal  @db.Decimal(10, 2)
   imagemBase64 String
   categoria    CategoriaProduto @default(CENTO)
+  totalUnidades Int     @default(100)
+  maxTiposSalgado Int   @default(5)
+  permitePagamentoParcial Boolean @default(true)
+  saboresSugeridos String[] @default([])
   emPromocao   Boolean  @default(false)
   ativo        Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  pedidos      Pedido[]
 }
 
 model BotFlow {
@@ -111,6 +116,56 @@ model EncomendaItem {
   encomenda   Encomenda  @relation(fields: [encomendaId], references: [id], onDelete: Cascade)
 }
 
+model Pedido {
+  id                    String             @id @default(cuid())
+  codigo                String             @unique
+  clienteNome           String
+  clienteTelefone       String
+  clienteEmail          String?
+  observacoes           String?
+  dataEntrega           DateTime
+  percentualPagamento   Int
+  metodoPagamento       MetodoPagamento
+  metodoPagamentoLabel  String
+  taxaPercentual        Decimal            @db.Decimal(5, 2)
+  taxaValor             Decimal            @db.Decimal(10, 2)
+  subtotal              Decimal            @db.Decimal(10, 2)
+  totalCobrado          Decimal            @db.Decimal(10, 2)
+  valorPago             Decimal?           @db.Decimal(10, 2)
+  totalUnidades         Int
+  totalTipos            Int
+  status                PedidoStatus       @default(PENDENTE_PAGAMENTO)
+  produtoNomeSnapshot   String
+  produtoPrecoSnapshot  Decimal            @db.Decimal(10, 2)
+  mpPreferenceId        String?
+  mpPaymentId           String?
+  mpMerchantOrderId     String?
+  mpExternalReference   String             @unique
+  mpInitPoint           String?
+  mpStatus              String?
+  mpStatusDetail        String?
+  mpWebhookPayload      Json?
+  notificadoClienteAt   DateTime?
+  notificadoVizinhaAt   DateTime?
+  impressoAutomaticamenteAt DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  produtoId             String
+  produto               Produto            @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  itens                 PedidoItem[]
+}
+
+model PedidoItem {
+  id         String @id @default(cuid())
+  tipo       String
+  quantidade Int
+  createdAt  DateTime @default(now())
+
+  pedidoId   String
+  pedido     Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+}
+
 enum StatusEncomenda {
   AGUARDANDO_PAGAMENTO
   AGUARDANDO_VALIDACAO
@@ -122,4 +177,19 @@ enum StatusEncomenda {
 enum CategoriaProduto {
   CENTO
   LANCHONETE
+}
+
+enum MetodoPagamento {
+  PIX
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  BOLETO
+}
+
+enum PedidoStatus {
+  PENDENTE_PAGAMENTO
+  PAGO
+  EM_PREPARO
+  ENTREGUE
+  CANCELADO
 }

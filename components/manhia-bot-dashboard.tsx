@@ -28,6 +28,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -743,23 +750,27 @@ export function ManhiaBotDashboard({
                       <label className="text-sm font-medium text-slate-700">
                         Instancia
                       </label>
-                      <select
-                        value={flowForm.instanceId}
-                        onChange={(event) =>
+                      <Select
+                        value={flowForm.instanceId || "__global__"}
+                        onValueChange={(value) =>
                           setFlowForm((current) => ({
                             ...current,
-                            instanceId: event.target.value,
+                            instanceId: value === "__global__" ? "" : value,
                           }))
                         }
-                        className="h-9 w-full rounded-md border border-pink-100 bg-white px-3 text-sm text-slate-700 outline-none focus:border-pink-300"
                       >
-                        <option value="">Todas / global</option>
-                        {instances.map((instance) => (
-                          <option key={instance.id} value={instance.id}>
-                            {instance.name}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-9 w-full border-pink-100 bg-white text-sm text-slate-700">
+                          <SelectValue placeholder="Todas / global" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__global__">Todas / global</SelectItem>
+                          {instances.map((instance) => (
+                            <SelectItem key={instance.id} value={instance.id}>
+                              {instance.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
