@@ -31,6 +31,13 @@ type MediaPayload = {
   base64: string;
 };
 
+type SendTextResult = {
+  jid: string;
+  verifiedJid: string | null;
+  attemptedJids: string[];
+  messageId: string;
+};
+
 class InstanceManager {
   private readonly sockets = new Map<string, RuntimeInstance>();
   private readonly openInstances = new Set<string>();
@@ -249,8 +256,21 @@ class InstanceManager {
   async sendText(instanceId: string, number: string, text: string) {
     const socket = await this.start(instanceId);
     await this.waitForSocketReady(instanceId, socket);
-    const jid = this.normalizeJid(number);
-    return socket.sendMessage(jid, { text });
+    const attemptedJids = this.buildCandidateJids(number);
+    const { jid, verifiedJid } = await this.resolveDeliveryTarget(socket, attemptedJids);
+    const result = await socket.sendMessage(jid, { text });
+    const messageId = result?.key?.id;
+
+    if (!messageId) {
+      throw new Error("WhatsApp send did not return a message id.");
+    }
+
+    return {
+      jid,
+      verifiedJid,
+      attemptedJids,
+      messageId,
+    } satisfies SendTextResult;
   }
 
   getQr(instanceId: string) {
@@ -282,6 +302,101 @@ class InstanceManager {
 
     const digits = number.replace(/\D/g, "");
     return `${digits}@s.whatsapp.net`;
+  }
+
+  private buildCandidateJids(number: string) {
+    if (number.includes("@")) {
+      return [number];
+    }
+
+    const digits = number.replace(/\D/g, "");
+    const candidates = new Set<string>();
+
+    const addCandidate = (value: string) => {
+      if (!value) {
+        return;
+      }
+
+      candidates.add(this.normalizeJid(value));
+    };
+
+    addCandidate(digits);
+
+    if (digits.startsWith("55") && digits.length === 13 && digits[4] === "9") {
+      addCandidate(`${digits.slice(0, 4)}${digits.slice(5)}`);
+    }
+
+    if (digits.length === 11 && digits[2] === "9") {
+      addCandidate(`55${digits.slice(0, 2)}${digits.slice(3)}`);
+    }
+
+    if (digits.length === 10) {
+      addCandidate(`55${digits}`);
+    }
+
+    return [...candidates];
+  }
+
+  private async resolveDeliveryTarget(socket: WASocket, candidateJids: string[]) {
+    const verifiedJids = await this.findRegisteredJids(socket, candidateJids);
+
+    if (verifiedJids.length > 0) {
+      return {
+        jid: verifiedJids[0],
+        verifiedJid: verifiedJids[0],
+      };
+    }
+
+    logger.warn(
+      {
+        candidateJids,
+      },
+      "Could not verify WhatsApp registration for destination; using first candidate"
+    );
+
+    return {
+      jid: candidateJids[0],
+      verifiedJid: null,
+    };
+  }
+
+  private async findRegisteredJids(socket: WASocket, candidateJids: string[]) {
+    const candidates = candidateJids.map((jid) => jid.replace(/@s\.whatsapp\.net$/, ""));
+    const onWhatsApp = (socket as WASocket & {
+      onWhatsApp?: (...numbers: string[]) => Promise<Array<{ jid?: string; exists?: boolean }>>;
+    }).onWhatsApp;
+
+    if (!onWhatsApp || candidates.length === 0) {
+      return [];
+    }
+
+    try {
+      const results = (await onWhatsApp(...candidates)) || [];
+      const verified = results
+        .filter((entry) => entry?.exists && entry.jid)
+        .map((entry) => entry.jid as string);
+
+      if (verified.length > 0) {
+        logger.info(
+          {
+            candidateJids,
+            verified,
+          },
+          "Verified WhatsApp recipient candidates"
+        );
+      }
+
+      return verified;
+    } catch (error) {
+      logger.warn(
+        {
+          error,
+          candidateJids,
+        },
+        "Failed to verify WhatsApp recipient candidates"
+      );
+      return [];
+    }
   }
 
   private extractText(message: unknown) {
