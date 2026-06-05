@@ -191,11 +191,15 @@ class InstanceManager {
         const media = await this.extractMediaPayload(socket, message);
 
         if (!text && !media) {
+          const payload = this.unwrapMessageContent(
+            (message as { message?: Record<string, unknown> } | undefined)?.message
+          );
           logger.info(
             {
               instanceId,
               remoteJid: message.key.remoteJid,
               messageId: message.key.id,
+              messageKeys: payload ? Object.keys(payload) : [],
             },
             "Skipping message because no text or supported media payload was found"
           );
@@ -427,13 +431,14 @@ class InstanceManager {
   }
 
   private extractText(message: unknown) {
+    const rawContent = message as Record<string, unknown> | undefined;
     const wrapper = message as
       | {
           message?: Record<string, unknown>;
         }
       | undefined;
 
-    const content = this.unwrapMessageContent(wrapper?.message);
+    const content = this.unwrapMessageContent(rawContent?.message ? wrapper?.message : rawContent);
 
     return (
       (content?.conversation as string | undefined) ||
