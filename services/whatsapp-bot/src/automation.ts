@@ -190,9 +190,12 @@ async function notifyCustomerOrderConfirmed(instanceId: string, order: BotOrder)
     instanceId,
     order.customerRemoteJid,
     [
-      `Pedido #${order.code} confirmado com ${paymentText}.`,
-      `Horário combinado pelo cliente: ${order.horarioEntrega}.`,
-      "A tolerância de atraso é de 15 minutos para ambas as partes.",
+      `*Pedido #${order.code} confirmado*`,
+      "",
+      `Pagamento confirmado: ${paymentText}.`,
+      `Horario combinado: ${order.horarioEntrega}.`,
+      "",
+      "A tolerancia de atraso e de 15 minutos para ambas as partes.",
     ].join("\n")
   );
 }

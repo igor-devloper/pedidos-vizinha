@@ -399,33 +399,48 @@ class InstanceManager {
     }
   }
 
+  private unwrapMessageContent(content: Record<string, unknown> | undefined): Record<string, unknown> | null {
+    if (!content) {
+      return null;
+    }
+
+    const nestedKeys = [
+      "ephemeralMessage",
+      "viewOnceMessage",
+      "viewOnceMessageV2",
+      "viewOnceMessageV2Extension",
+      "documentWithCaptionMessage",
+      "editedMessage",
+    ] as const;
+
+    for (const key of nestedKeys) {
+      const nested = content[key] as { message?: Record<string, unknown> } | undefined;
+      if (nested?.message) {
+        const unwrapped = this.unwrapMessageContent(nested.message);
+        if (unwrapped) {
+          return unwrapped;
+        }
+      }
+    }
+
+    return content;
+  }
+
   private extractText(message: unknown) {
     const wrapper = message as
       | {
-          message?: {
-            conversation?: string;
-            extendedTextMessage?: { text?: string };
-            imageMessage?: { caption?: string };
-            videoMessage?: { caption?: string };
-            documentWithCaptionMessage?: {
-              message?: {
-                documentMessage?: { caption?: string };
-              };
-            };
-            documentMessage?: { caption?: string };
-          };
+          message?: Record<string, unknown>;
         }
       | undefined;
 
-    const content = wrapper?.message;
+    const content = this.unwrapMessageContent(wrapper?.message);
 
     return (
-      content?.conversation ||
-      content?.extendedTextMessage?.text ||
-      content?.imageMessage?.caption ||
-      content?.videoMessage?.caption ||
-      content?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
-      content?.documentMessage?.caption ||
+      (content?.conversation as string | undefined) ||
+      ((content?.extendedTextMessage as { text?: string } | undefined)?.text ?? "") ||
+      ((content?.imageMessage as { caption?: string } | undefined)?.caption ?? "") ||
+      ((content?.videoMessage as { caption?: string } | undefined)?.caption ?? "") ||
+      ((content?.documentMessage as { caption?: string } | undefined)?.caption ?? "") ||
       ""
     );
   }
@@ -433,15 +448,13 @@ class InstanceManager {
   private async extractMediaPayload(socket: WASocket, message: unknown): Promise<MediaPayload | null> {
     const content = message as
       | {
-          message?: {
-            audioMessage?: { mimetype?: string };
-            imageMessage?: { mimetype?: string };
-          };
+          message?: Record<string, unknown>;
         }
       | undefined;
 
-    const audio = content?.message?.audioMessage;
-    const image = content?.message?.imageMessage;
+    const payload = this.unwrapMessageContent(content?.message);
+    const audio = payload?.audioMessage as { mimetype?: string } | undefined;
+    const image = payload?.imageMessage as { mimetype?: string } | undefined;
 
     if (!audio && !image) {
       return null;
