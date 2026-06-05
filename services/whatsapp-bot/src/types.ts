@@ -37,6 +37,10 @@ export type InboundMessageJob = {
   remoteJid: string;
   pushName?: string;
   text: string;
+  originalText?: string;
+  mediaKind?: "audio" | "image";
+  mediaMimeType?: string;
+  mediaBase64?: string;
   messageId: string;
   receivedAt: string;
 };

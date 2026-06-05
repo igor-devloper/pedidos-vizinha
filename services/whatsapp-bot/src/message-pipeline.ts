@@ -1,44 +1,47 @@
 import { processInboundMessage } from "./automation.js";
+import { enrichInboundMedia } from "./media-understanding.js";
 import { emitWebhook } from "./webhook.js";
 import { logger } from "./logger.js";
 import type { InboundMessageJob } from "./types.js";
 
 export async function handleInboundMessage(job: InboundMessageJob) {
+  const enrichedJob = await enrichInboundMedia(job);
+
   logger.info(
     {
-      instanceId: job.instanceId,
-      remoteJid: job.remoteJid,
-      messageId: job.messageId,
-      text: job.text,
+      instanceId: enrichedJob.instanceId,
+      remoteJid: enrichedJob.remoteJid,
+      messageId: enrichedJob.messageId,
+      text: enrichedJob.text,
     },
     "Inbound pipeline started"
   );
 
   try {
-    await emitWebhook(job);
+    await emitWebhook(enrichedJob);
     logger.info(
       {
-        instanceId: job.instanceId,
-        remoteJid: job.remoteJid,
-        messageId: job.messageId,
+        instanceId: enrichedJob.instanceId,
+        remoteJid: enrichedJob.remoteJid,
+        messageId: enrichedJob.messageId,
       },
       "Webhook pipeline completed"
     );
   } catch (error) {
-    logger.error({ error, instanceId: job.instanceId }, "Webhook pipeline failed");
+    logger.error({ error, instanceId: enrichedJob.instanceId }, "Webhook pipeline failed");
   }
 
   try {
-    await processInboundMessage(job);
+    await processInboundMessage(enrichedJob);
     logger.info(
       {
-        instanceId: job.instanceId,
-        remoteJid: job.remoteJid,
-        messageId: job.messageId,
+        instanceId: enrichedJob.instanceId,
+        remoteJid: enrichedJob.remoteJid,
+        messageId: enrichedJob.messageId,
       },
       "Automation pipeline completed"
     );
   } catch (error) {
-    logger.error({ error, instanceId: job.instanceId }, "Automation pipeline failed");
+    logger.error({ error, instanceId: enrichedJob.instanceId }, "Automation pipeline failed");
   }
 }

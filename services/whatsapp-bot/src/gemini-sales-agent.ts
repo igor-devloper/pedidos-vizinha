@@ -31,9 +31,10 @@ function normalizeOptionalText(value: unknown) {
 }
 
 function sanitizeAgentResult(raw: AgentResult) {
-  const menuCategoria = raw.menuCategoria === "CENTO" || raw.menuCategoria === "LANCHONETE"
-    ? raw.menuCategoria
-    : undefined;
+  const menuCategoria =
+    raw.menuCategoria === "CENTO" || raw.menuCategoria === "LANCHONETE"
+      ? raw.menuCategoria
+      : undefined;
 
   const status = ["open", "qualified", "closed", "handoff"].includes(raw.status || "")
     ? raw.status
@@ -72,9 +73,7 @@ function parseJsonObject(text: string) {
   }
 }
 
-function formatProductsForPrompt(
-  products: Awaited<ReturnType<typeof listActiveProducts>>
-) {
+function formatProductsForPrompt(products: Awaited<ReturnType<typeof listActiveProducts>>) {
   if (products.length === 0) {
     return "Nenhum produto encontrado no banco.";
   }
@@ -107,37 +106,29 @@ function buildLeadSnapshot(lead: BotLead | null) {
   ].join("\n");
 }
 
-export async function runSalesAgent(job: InboundMessageJob, lead: BotLead | null) {
-  if (!ai) {
-    return null;
-  }
-
-  const products = await listActiveProducts();
-
-  const prompt = `
+function buildPrompt(job: InboundMessageJob, lead: BotLead | null, products: ProductRecord[]) {
+  return `
 Você é a atendente virtual da ${config.businessName}.
 
 Seu papel:
 - responder em português do Brasil;
 - falar de forma humana, simpática e natural no WhatsApp;
 - tirar dúvidas com flexibilidade;
-- ajudar o cliente a escolher produtos, entender valores e fazer encomendas;
+- ajudar o cliente a entender produtos, preços, promoções e horários;
+- orientar o cliente a fazer o pedido exclusivamente no site ${config.cardapioUrl};
 - usar somente os produtos e preços fornecidos;
 - nunca inventar itens fora do cardápio.
 
 Regras importantes:
 - se o cliente pedir o cardápio, mande primeiro o link oficial do cardápio: ${config.cardapioUrl};
 - junto com o link, você pode destacar poucas promoções em texto com preço, sem despejar o cardápio inteiro no WhatsApp;
-- destaque com clareza os itens em promoção e mostre o valor deles;
+- se o cliente quiser encomendar, deixe claro que o pedido deve ser feito no site;
+- nunca monte o pedido por mensagem, nunca colete o pedido completo por WhatsApp e nunca diga que vai fechar a encomenda por aqui;
 - se o cliente tiver dúvidas, responda de forma livre e útil;
-- se o cliente quiser encomendar, conduza com calma;
-- tente descobrir o pedido, o nome e o horário de entrega;
-- pergunte uma coisa por vez quando faltar informação;
-- se o cliente fizer uma pergunta no meio do pedido, responda a dúvida primeiro e só depois retome o atendimento sem tratar a pergunta como resposta de etapa;
-- quando falar de pagamento, informe a chave PIX ${config.pixKey};
-- explique claramente que a encomenda só é confirmada mediante pagamento mínimo de 50% do valor após o aceite da Vizinha;
-- avise que há tolerância de 15 minutos de atraso para ambas as partes.
-- quando já tiver pedido, nome e horário de entrega, use o stage "ready_for_review" se faltar apenas confirmação final ou observação.
+- se o cliente mandar comprovante, Pix, imagem ou áudio falando de pagamento, reconheça o contexto e explique que a confirmação chega no WhatsApp após a validação;
+- avise que há tolerância de 15 minutos de atraso para ambas as partes;
+- prefira manter o stage como "awaiting_intent" ou "site_order_guided" quando o cliente estiver em fase de compra;
+- use "qualified" quando a conversa estiver avançada e "open" no restante.
 
 Dados do negócio:
 - endereço/base: ${config.pickupAddress}
@@ -157,17 +148,26 @@ Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
 {
   "shouldRespond": true,
   "reply": "texto da resposta para o cliente",
-  "stage": "novo-stage-ou-string-atual",
+  "stage": "awaiting_intent|site_order_guided|outro-stage-atual",
   "status": "open|qualified|closed|handoff",
-  "intent": "encomenda|valores|duvida|...",
-  "nome": "nome se descobriu",
-  "eventoDetalhes": "detalhes se descobriu",
-  "horarioEntrega": "horario se descobriu",
+  "intent": "encomenda|valores|duvida|pagamento",
+  "nome": "nome se apareceu de forma útil",
+  "eventoDetalhes": "detalhes se for útil guardar",
+  "horarioEntrega": "horario se for útil guardar",
   "menuCategoria": "CENTO|LANCHONETE se ficar claro",
-  "bairroRetirada": "bairro ou retirada se descobriu",
-  "observacoes": "observacoes extras se necessario"
+  "bairroRetirada": "bairro ou retirada se fizer sentido",
+  "observacoes": "observacoes extras se necessário"
 }
 `;
+}
+
+export async function runSalesAgent(job: InboundMessageJob, lead: BotLead | null) {
+  if (!ai) {
+    return null;
+  }
+
+  const products = await listActiveProducts();
+  const prompt = buildPrompt(job, lead, products);
 
   try {
     const response = await ai.models.generateContent({

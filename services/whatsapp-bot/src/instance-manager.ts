@@ -1,6 +1,7 @@
 import makeWASocket, {
   Browsers,
   DisconnectReason,
+  downloadMediaMessage,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
   type WASocket,
@@ -21,6 +22,12 @@ const loadMultiFileAuthState = useMultiFileAuthState;
 type RuntimeInstance = {
   id: string;
   socket: WASocket;
+};
+
+type MediaPayload = {
+  kind: "audio" | "image";
+  mimeType: string;
+  base64: string;
 };
 
 class InstanceManager {
@@ -167,19 +174,17 @@ class InstanceManager {
           continue;
         }
 
-        const text =
-          message.message?.conversation ||
-          message.message?.extendedTextMessage?.text ||
-          "";
+        const text = this.extractText(message.message);
+        const media = await this.extractMediaPayload(socket, message);
 
-        if (!text) {
+        if (!text && !media) {
           logger.info(
             {
               instanceId,
               remoteJid: message.key.remoteJid,
               messageId: message.key.id,
             },
-            "Skipping message because no text payload was found"
+            "Skipping message because no text or supported media payload was found"
           );
           continue;
         }
@@ -190,6 +195,7 @@ class InstanceManager {
             remoteJid: message.key.remoteJid,
             messageId: message.key.id,
             text,
+            mediaKind: media?.kind,
           },
           "Inbound text extracted"
         );
@@ -198,7 +204,11 @@ class InstanceManager {
           instanceId,
           remoteJid: message.key.remoteJid,
           pushName: message.pushName || undefined,
-          text,
+          text: text || `[${media?.kind || "mensagem"} recebida]`,
+          originalText: text || undefined,
+          mediaKind: media?.kind,
+          mediaMimeType: media?.mimeType,
+          mediaBase64: media?.base64,
           messageId: message.key.id || "",
           receivedAt: new Date().toISOString(),
         });
@@ -264,6 +274,104 @@ class InstanceManager {
 
     const digits = number.replace(/\D/g, "");
     return `${digits}@s.whatsapp.net`;
+  }
+
+  private extractText(message: unknown) {
+    const wrapper = message as
+      | {
+          message?: {
+            conversation?: string;
+            extendedTextMessage?: { text?: string };
+            imageMessage?: { caption?: string };
+            videoMessage?: { caption?: string };
+            documentWithCaptionMessage?: {
+              message?: {
+                documentMessage?: { caption?: string };
+              };
+            };
+            documentMessage?: { caption?: string };
+          };
+        }
+      | undefined;
+
+    const content = wrapper?.message;
+
+    return (
+      content?.conversation ||
+      content?.extendedTextMessage?.text ||
+      content?.imageMessage?.caption ||
+      content?.videoMessage?.caption ||
+      content?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
+      content?.documentMessage?.caption ||
+      ""
+    );
+  }
+
+  private async extractMediaPayload(socket: WASocket, message: unknown): Promise<MediaPayload | null> {
+    const content = message as
+      | {
+          message?: {
+            audioMessage?: { mimetype?: string };
+            imageMessage?: { mimetype?: string };
+          };
+        }
+      | undefined;
+
+    const audio = content?.message?.audioMessage;
+    const image = content?.message?.imageMessage;
+
+    if (!audio && !image) {
+      return null;
+    }
+
+    const kind = audio ? "audio" : "image";
+    const mimeType = audio?.mimetype || image?.mimetype || (kind === "audio" ? "audio/ogg" : "image/jpeg");
+
+    try {
+      const data = await downloadMediaMessage(
+        message as never,
+        "buffer",
+        {},
+        {
+          logger,
+          reuploadRequest: socket.updateMediaMessage,
+        }
+      );
+
+      const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
+
+      if (!buffer.length) {
+        return null;
+      }
+
+      return {
+        kind,
+        mimeType,
+        base64: buffer.toString("base64"),
+      };
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          instanceId: this.findInstanceIdBySocket(socket),
+          mediaKind: kind,
+          mimeType,
+        },
+        "Failed to download inbound media"
+      );
+
+      return null;
+    }
+  }
+
+  private findInstanceIdBySocket(socket: WASocket) {
+    for (const [instanceId, runtime] of this.sockets.entries()) {
+      if (runtime.socket === socket) {
+        return instanceId;
+      }
+    }
+
+    return undefined;
   }
 }
 

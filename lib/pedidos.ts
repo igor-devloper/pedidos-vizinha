@@ -5,6 +5,9 @@ import { z } from "zod";
 
 import { BUSINESS_INFO, BUSINESS_RULES, PEDIDO_STATUS_META, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
 
+const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
+const BUSINESS_UTC_OFFSET = "-03:00";
+
 export const pedidoItemSchema = z.object({
   tipo: z.string().trim().min(1, "Informe o tipo de salgado."),
   quantidade: z.coerce.number().int().positive("A quantidade precisa ser maior que zero."),
@@ -50,7 +53,32 @@ export function formatDateTime(value: string | Date) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: BUSINESS_TIME_ZONE,
   }).format(typeof value === "string" ? new Date(value) : value);
+}
+
+function getBusinessTimeParts(input: Date) {
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(input);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value || "";
+
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+  };
 }
 
 export function normalizePhone(phone: string) {
@@ -91,7 +119,9 @@ export function calculatePaymentAmounts(subtotal: number, paymentPercentage: 50 
 }
 
 export function parseDeliveryDate(input: string) {
-  const date = new Date(input);
+  const trimmed = input.trim();
+  const hasExplicitZone = /(?:Z|[+-]\d{2}:\d{2})$/.test(trimmed);
+  const date = new Date(hasExplicitZone ? trimmed : `${trimmed}${BUSINESS_UTC_OFFSET}`);
 
   if (Number.isNaN(date.getTime())) {
     throw new Error("Data de entrega inválida.");
@@ -102,13 +132,14 @@ export function parseDeliveryDate(input: string) {
 
 export function validateDeliveryDate(input: Date, now = new Date()) {
   const minDate = new Date(now.getTime() + BUSINESS_RULES.minimumLeadHours * 60 * 60 * 1000);
+  const businessTime = getBusinessTimeParts(input);
 
   if (input.getTime() < minDate.getTime()) {
     throw new Error(`Escolha um horário com pelo menos ${BUSINESS_RULES.minimumLeadHours} horas de antecedência.`);
   }
 
-  const hour = input.getHours();
-  const minutes = input.getMinutes();
+  const hour = businessTime.hour;
+  const minutes = businessTime.minute;
 
   if (hour < BUSINESS_RULES.openingHour || hour > BUSINESS_RULES.closingHour) {
     throw new Error("O horário precisa ficar dentro do atendimento das 09h às 17h.");
