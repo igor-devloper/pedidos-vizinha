@@ -1,5 +1,6 @@
 import makeWASocket, {
   Browsers,
+  type ConnectionState,
   DisconnectReason,
   downloadMediaMessage,
   fetchLatestBaileysVersion,
@@ -241,6 +242,7 @@ class InstanceManager {
 
   async sendText(instanceId: string, number: string, text: string) {
     const socket = await this.start(instanceId);
+    await this.waitForSocketReady(instanceId, socket);
     const jid = this.normalizeJid(number);
     return socket.sendMessage(jid, { text });
   }
@@ -372,6 +374,39 @@ class InstanceManager {
     }
 
     return undefined;
+  }
+
+  private async waitForSocketReady(instanceId: string, socket: WASocket, timeoutMs = 15000) {
+    if (socket.user?.id) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error(`WhatsApp instance ${instanceId} did not connect in time.`));
+      }, timeoutMs);
+
+      const onConnectionUpdate = (update: Partial<ConnectionState>) => {
+        if (update.connection === "open") {
+          cleanup();
+          resolve();
+          return;
+        }
+
+        if (update.connection === "close") {
+          cleanup();
+          reject(new Error(`WhatsApp instance ${instanceId} connection closed before sending.`));
+        }
+      };
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        socket.ev.off("connection.update", onConnectionUpdate);
+      };
+
+      socket.ev.on("connection.update", onConnectionUpdate);
+    });
   }
 }
 
