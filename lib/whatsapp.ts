@@ -26,6 +26,10 @@ type BotInstanceRecord = {
   name?: string;
 };
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function resolveBotInstanceId(baseUrl: string, apiKey: string, preferredInstanceId: string) {
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/instances`, {
@@ -87,23 +91,41 @@ export async function sendWhatsappText(number: string, text: string) {
     return { ok: false, skipped: true };
   }
 
-  const instanceId = await resolveBotInstanceId(baseUrl, apiKey, preferredInstanceId);
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/instances/${instanceId}/send-text`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey.replace(/^Bearer\s+/i, "")}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      number: normalized,
-      text,
-    }),
-  });
+  let lastError = "";
 
-  if (!response.ok) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const instanceId = await resolveBotInstanceId(baseUrl, apiKey, preferredInstanceId);
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/instances/${instanceId}/send-text`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey.replace(/^Bearer\s+/i, "")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        number: normalized,
+        text,
+      }),
+    });
+
+    if (response.ok) {
+      return response.json().catch(() => ({ ok: true }));
+    }
+
     const data = await response.text().catch(() => "");
-    throw new Error(`Falha ao enviar WhatsApp: ${response.status} ${data}`);
+    lastError = `Falha ao enviar WhatsApp: ${response.status} ${data}`;
+
+    if (!/Connection Closed/i.test(data) || attempt === 2) {
+      throw new Error(lastError);
+    }
+
+    console.warn("WhatsApp send retry after closed connection.", {
+      attempt: attempt + 1,
+      instanceId,
+      number: normalized,
+    });
+
+    await delay(2000);
   }
 
-  return response.json().catch(() => ({ ok: true }));
+  throw new Error(lastError || "Falha ao enviar WhatsApp.");
 }
