@@ -7,8 +7,15 @@ function parseFee(value: string | undefined, fallback: number) {
 
 export const BUSINESS_RULES = {
   minimumLeadHours: 2,
-  openingHour: 9,
-  closingHour: 17,
+  scheduleByWeekday: {
+    0: { openHour: 9, closeHour: 13 },
+    1: null,
+    2: { openHour: 10, closeHour: 17 },
+    3: { openHour: 10, closeHour: 17 },
+    4: { openHour: 10, closeHour: 17 },
+    5: { openHour: 10, closeHour: 17 },
+    6: { openHour: 10, closeHour: 17 },
+  },
   slotMinutes: 15,
   toleranceMinutes: 15,
 } as const;
@@ -17,7 +24,7 @@ export const BUSINESS_INFO = {
   name: process.env.BUSINESS_NAME?.trim() || "Vizinha Salgateria",
   appUrl: process.env.APP_URL?.trim() || "http://localhost:3000",
   supportPhone: process.env.BUSINESS_WHATSAPP?.trim() || "(83) 99376-0485",
-  ownerPhone: process.env.VIZINHA_OWNER_PHONE?.trim() || process.env.BUSINESS_WHATSAPP?.trim() || "",
+  ownerPhone: process.env.VIZINHA_OWNER_PHONE?.trim() || process.env.BUSINESS_WHATSAPP?.trim() || "839",
 } as const;
 
 export type SupportedPaymentMethod = {

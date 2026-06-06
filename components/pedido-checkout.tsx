@@ -453,7 +453,10 @@ export function PedidoCheckout({
                 Tipos ativos: {activeTypes} de {produto.maxTiposSalgado}
               </p>
               <p className="mt-1">
-                Atendimento: 09h às 17h, tolerância de {BUSINESS_RULES.toleranceMinutes} minutos.
+                Atendimento: terça a sábado, das 10h às 17h. Domingo, das 9h às 13h. Segunda fechado.
+              </p>
+              <p className="mt-1">
+                Tolerância de {BUSINESS_RULES.toleranceMinutes} minutos.
               </p>
             </div>
 

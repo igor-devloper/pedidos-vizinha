@@ -169,7 +169,7 @@ export default async function CardapioPage() {
                       Horários
                     </p>
                     <p className="mt-2 text-sm text-white/68">
-                      Entregas agendadas entre 09h e 17h, com mínimo de 2 horas de antecedência.
+                      Terça a sábado, das 10h às 17h. Domingo, das 9h às 13h. Segunda fechado.
                     </p>
                   </div>
 

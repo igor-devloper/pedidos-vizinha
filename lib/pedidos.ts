@@ -86,6 +86,15 @@ function getBusinessTimeParts(input: Date) {
   };
 }
 
+function getBusinessWeekday(input: Date) {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TIME_ZONE,
+    weekday: "short",
+  }).format(input);
+
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
+}
+
 export function normalizePhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
   if (!digits) {
@@ -138,20 +147,34 @@ export function parseDeliveryDate(input: string) {
 export function validateDeliveryDate(input: Date, now = new Date()) {
   const minDate = new Date(now.getTime() + BUSINESS_RULES.minimumLeadHours * 60 * 60 * 1000);
   const businessTime = getBusinessTimeParts(input);
+  const weekday = getBusinessWeekday(input);
+  const schedule = BUSINESS_RULES.scheduleByWeekday[weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday];
 
   if (input.getTime() < minDate.getTime()) {
     throw new Error(`Escolha um horario com pelo menos ${BUSINESS_RULES.minimumLeadHours} horas de antecedencia.`);
   }
 
+  if (!schedule) {
+    throw new Error("Nao atendemos nas segundas-feiras. Escolha de terca a sabado, das 10h as 17h, ou domingo, das 9h as 13h.");
+  }
+
   const hour = businessTime.hour;
   const minutes = businessTime.minute;
 
-  if (hour < BUSINESS_RULES.openingHour || hour > BUSINESS_RULES.closingHour) {
-    throw new Error("O horario precisa ficar dentro do atendimento das 09h as 17h.");
+  if (hour < schedule.openHour || hour > schedule.closeHour) {
+    if (weekday === 0) {
+      throw new Error("Aos domingos, os pedidos precisam ficar entre 9h e 13h.");
+    }
+
+    throw new Error("De terca a sabado, os pedidos precisam ficar entre 10h e 17h.");
   }
 
-  if (hour === BUSINESS_RULES.closingHour && minutes > 0) {
-    throw new Error("O ultimo horario disponivel e as 17h.");
+  if (hour === schedule.closeHour && minutes > 0) {
+    if (weekday === 0) {
+      throw new Error("No domingo, o ultimo horario disponivel e as 13h.");
+    }
+
+    throw new Error("O ultimo horario disponivel de terca a sabado e as 17h.");
   }
 
   if (minutes % BUSINESS_RULES.slotMinutes !== 0) {
