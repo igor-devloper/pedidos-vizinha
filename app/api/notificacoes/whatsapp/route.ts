@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { isManhiaRequestAuthenticated } from "@/lib/admin-auth";
 import { sendWhatsappText } from "@/lib/whatsapp";
+import { formatWhatsAppText } from "@/lib/whatsapp-message";
 
 const bodySchema = z.object({
   number: z.string().min(8),
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
 
   try {
     const body = bodySchema.parse(await req.json());
-    const result = await sendWhatsappText(body.number, body.text);
+    const result = await sendWhatsappText(body.number, formatWhatsAppText(body.text));
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     console.error("POST /api/notificacoes/whatsapp error", error);

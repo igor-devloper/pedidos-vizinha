@@ -1,4 +1,5 @@
 import { normalizePhone } from "@/lib/pedidos";
+import { formatWhatsAppText } from "@/lib/whatsapp-message";
 
 function getBotServiceUrl() {
   return (
@@ -86,6 +87,7 @@ export async function sendWhatsappText(number: string, text: string) {
   }
 
   const normalized = normalizePhone(number);
+  const formattedText = formatWhatsAppText(text);
   if (!normalized) {
     console.warn("WhatsApp notification skipped: invalid phone.");
     return { ok: false, skipped: true };
@@ -103,7 +105,7 @@ export async function sendWhatsappText(number: string, text: string) {
       },
       body: JSON.stringify({
         number: normalized,
-        text,
+        text: formattedText,
       }),
     });
 

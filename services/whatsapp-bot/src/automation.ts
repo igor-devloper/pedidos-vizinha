@@ -12,6 +12,29 @@ import { getOrCreateLead, updateLead, type BotLead } from "./lead-repository.js"
 import { logger } from "./logger.js";
 import { listActiveProducts } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
+import {
+  buildAwaitingAnalysisMessage,
+  buildAwaitingPaymentReminderMessage,
+  buildCatalogOverviewMessage,
+  buildConfirmedFollowUpMessage,
+  buildCustomerAwaitingPaymentMessage,
+  buildCustomerOrderConfirmedMessage,
+  buildCustomerOrderRejectedMessage,
+  buildFallbackHelpMessage,
+  buildOwnerApprovedAckMessage,
+  buildOwnerCommandHelpMessage,
+  buildOwnerOrderNotFoundMessage,
+  buildOwnerPaidAckMessage,
+  buildOwnerPaymentReportedMessage,
+  buildOwnerRejectReasonMessage,
+  buildOwnerRejectedAckMessage,
+  buildPaymentProofGuidanceMessage,
+  buildPaymentReportedAckMessage,
+  buildPendingApprovalMessage,
+  buildSiteOrderInstructionsMessage,
+  buildSupportPromptMessage,
+  buildWelcomeMessage,
+} from "./whatsapp-format.js";
 
 function normalizeText(value: string) {
   return value
@@ -59,29 +82,6 @@ function canUseSalesAgent(lead: BotLead) {
   return ["new", "awaiting_intent", "site_order_guided"].includes(lead.stage);
 }
 
-function buildPixInstructions() {
-  return [
-    `Chave PIX: *${config.pixKey}*`,
-    "A encomenda só é confirmada mediante pagamento mínimo de 50% do valor.",
-  ].join("\n");
-}
-
-function buildSiteOrderInstructions() {
-  return [
-    `Para montar e finalizar sua encomenda, faça o pedido pelo site: ${config.cardapioUrl}`,
-    "Lá você escolhe os salgados, informa o horário e conclui o pagamento com mais praticidade.",
-    "Depois da confirmação, o resumo chega aqui no WhatsApp.",
-  ].join("\n");
-}
-
-function buildPaymentProofGuidance() {
-  return [
-    "Recebi sua mensagem sobre pagamento.",
-    "Se esse pagamento é de um pedido feito no site, a confirmação chega aqui no WhatsApp assim que a validação for concluída.",
-    `Se ainda faltou criar a encomenda, faça direto no site: ${config.cardapioUrl}`,
-  ].join("\n");
-}
-
 async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: string) {
   logger.info(
     {
@@ -105,21 +105,7 @@ async function sendTextToNumber(instanceId: string, number: string, text: string
 }
 
 async function sendIntro(job: InboundMessageJob, lead: BotLead | null) {
-  await sendAndTrack(
-    job,
-    lead,
-    [
-      "*Oi! Seja bem-vinda(o) à Vizinha Salgateria.*",
-      "",
-      "Eu posso te ajudar com cardápio, dúvidas e status do seu atendimento.",
-      `Se quiser montar sua encomenda agora, use o site: ${config.cardapioUrl}`,
-      "",
-      "Se quiser, me responda com uma opção:",
-      "*1* - Quero fazer uma encomenda",
-      "*2* - Quero ver o cardápio",
-      "*3* - Quero tirar uma dúvida",
-    ].join("\n")
-  );
+  await sendAndTrack(job, lead, buildWelcomeMessage(config.cardapioUrl));
 }
 
 async function sendCatalogOverview(job: InboundMessageJob, lead: BotLead | null) {
@@ -127,45 +113,16 @@ async function sendCatalogOverview(job: InboundMessageJob, lead: BotLead | null)
   const promoHighlights = products
     .filter((item) => item.emPromocao)
     .slice(0, 3)
-    .map((item) => `- *${item.nome}* por *R$ ${item.preco}*`)
-    .join("\n");
+    .map((item) => ({ nome: item.nome, preco: item.preco }));
 
-  const message =
-    products.length === 0
-      ? [
-          "*Cardápio da Vizinha*",
-          "",
-          `Você pode ver o cardápio completo aqui: ${config.cardapioUrl}`,
-          "Se quiser, eu também posso tirar dúvidas sobre os produtos por aqui.",
-        ].join("\n")
-      : [
-          "*Cardápio da Vizinha*",
-          "",
-          `Segue o link do cardápio para você ver tudo direitinho: ${config.cardapioUrl}`,
-          promoHighlights ? "" : null,
-          promoHighlights ? "*Promoções em destaque:*" : null,
-          promoHighlights || null,
-          "",
-          "Quando decidir, faça a encomenda direto pelo site para escolher tudo certinho.",
-        ]
-          .filter(Boolean)
-          .join("\n");
-
-  await sendAndTrack(job, lead, message);
+  await sendAndTrack(job, lead, buildCatalogOverviewMessage(config.cardapioUrl, promoHighlights));
 }
 
 async function notifyCustomerOrderRejected(instanceId: string, order: BotOrder) {
   await sendTextToNumber(
     instanceId,
     order.customerRemoteJid,
-    [
-      `Seu pedido #${order.code} não foi aceito pela Vizinha.`,
-      order.ownerReason ? `Motivo: ${order.ownerReason}` : "",
-      "",
-      `Se quiser tentar de novo, monte uma nova encomenda no site: ${config.cardapioUrl}`,
-    ]
-      .filter(Boolean)
-      .join("\n")
+    buildCustomerOrderRejectedMessage(order.code, config.cardapioUrl, order.ownerReason)
   );
 }
 
@@ -173,30 +130,15 @@ async function notifyCustomerAwaitingPayment(instanceId: string, order: BotOrder
   await sendTextToNumber(
     instanceId,
     order.customerRemoteJid,
-    [
-      `Sua encomenda #${order.code} foi aceita pela Vizinha.`,
-      "",
-      "Para confirmar de vez, falta o pagamento mínimo de 50% do valor.",
-      buildPixInstructions(),
-      "Quando pagar, me avise por aqui para eu pedir a validação.",
-      "A tolerância de atraso é de 15 minutos para ambas as partes.",
-    ].join("\n")
+    buildCustomerAwaitingPaymentMessage(order.code, config.pixKey)
   );
 }
 
 async function notifyCustomerOrderConfirmed(instanceId: string, order: BotOrder) {
-  const paymentText = order.paymentStatus === "FULL" ? "pagamento total" : "pagamento de 50%";
   await sendTextToNumber(
     instanceId,
     order.customerRemoteJid,
-    [
-      `*Pedido #${order.code} confirmado*`,
-      "",
-      `Pagamento confirmado: ${paymentText}.`,
-      `Horario combinado: ${order.horarioEntrega}.`,
-      "",
-      "A tolerancia de atraso e de 15 minutos para ambas as partes.",
-    ].join("\n")
+    buildCustomerOrderConfirmedMessage(order.code, order.horarioEntrega, order.paymentStatus)
   );
 }
 
@@ -234,38 +176,19 @@ async function handleOwnerMessage(job: InboundMessageJob) {
   const command = parseOwnerCommand(job.text.trim());
 
   if (!command) {
-    await sendTextToNumber(
-      job.instanceId,
-      job.remoteJid,
-      [
-        "Não entendi o comando.",
-        "Use:",
-        "- APROVAR CODIGO",
-        "- PAGO METADE CODIGO",
-        "- PAGO TOTAL CODIGO",
-        "- RECUSAR CODIGO motivo",
-      ].join("\n")
-    );
+    await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerCommandHelpMessage());
     return true;
   }
 
   const order = await findBotOrderByCode(job.instanceId, command.code);
 
   if (!order) {
-    await sendTextToNumber(
-      job.instanceId,
-      job.remoteJid,
-      `Não encontrei a encomenda #${command.code}.`
-    );
+    await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerOrderNotFoundMessage(command.code));
     return true;
   }
 
   if (command.type === "REJECT" && !command.reason) {
-    await sendTextToNumber(
-      job.instanceId,
-      job.remoteJid,
-      `Me diga o motivo da recusa no formato: RECUSAR ${command.code} motivo`
-    );
+    await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerRejectReasonMessage(command.code));
     return true;
   }
 
@@ -276,11 +199,7 @@ async function handleOwnerMessage(job: InboundMessageJob) {
     });
 
     await notifyCustomerAwaitingPayment(job.instanceId, updated || order);
-    await sendTextToNumber(
-      job.instanceId,
-      job.remoteJid,
-      `Encomenda #${command.code} aceita. O cliente foi avisado para seguir com o pagamento.`
-    );
+    await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerApprovedAckMessage(command.code));
     return true;
   }
 
@@ -292,11 +211,7 @@ async function handleOwnerMessage(job: InboundMessageJob) {
     });
 
     await notifyCustomerOrderConfirmed(job.instanceId, updated || order);
-    await sendTextToNumber(
-      job.instanceId,
-      job.remoteJid,
-      `Encomenda #${command.code} confirmada para o cliente.`
-    );
+    await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerPaidAckMessage(command.code));
     return true;
   }
 
@@ -306,12 +221,12 @@ async function handleOwnerMessage(job: InboundMessageJob) {
   });
 
   await notifyCustomerOrderRejected(job.instanceId, updated || order);
-  await sendTextToNumber(
-    job.instanceId,
-    job.remoteJid,
-    `Recusa da encomenda #${command.code} registrada e enviada ao cliente.`
-  );
+  await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerRejectedAckMessage(command.code));
   return true;
+}
+
+function getCustomerLabel(order: BotOrder) {
+  return order.customerName || order.customerPhoneNumber || order.customerRemoteJid;
 }
 
 async function handleExistingOpenOrder(job: InboundMessageJob, lead: BotLead) {
@@ -329,15 +244,7 @@ async function handleExistingOpenOrder(job: InboundMessageJob, lead: BotLead) {
       lastInboundText: job.text,
     });
 
-    await sendAndTrack(
-      job,
-      lead,
-      [
-        `Seu pedido #${openOrder.code} já foi enviado para análise da Vizinha.`,
-        "Assim que ela aceitar ou recusar, eu te aviso por aqui.",
-      ].join("\n")
-    );
-
+    await sendAndTrack(job, lead, buildPendingApprovalMessage(openOrder.code));
     return true;
   }
 
@@ -347,36 +254,18 @@ async function handleExistingOpenOrder(job: InboundMessageJob, lead: BotLead) {
       await sendTextToNumber(
         job.instanceId,
         config.ownerApprovalNumber,
-        [
-          `Cliente avisou sobre o pagamento da encomenda #${openOrder.code}.`,
-          `Cliente: ${openOrder.customerName || openOrder.customerPhoneNumber || openOrder.customerRemoteJid}`,
-          "Se estiver tudo certo, responda:",
-          `- PAGO METADE ${openOrder.code}`,
-          `- PAGO TOTAL ${openOrder.code}`,
-        ].join("\n")
+        buildOwnerPaymentReportedMessage(openOrder.code, getCustomerLabel(openOrder))
       );
       await updateLead(lead.id, {
         stage: "awaiting_payment_validation",
         status: "awaiting_payment_validation",
         lastInboundText: job.text,
       });
-      await sendAndTrack(
-        job,
-        lead,
-        `Perfeito. Avisei a Vizinha sobre o pagamento da encomenda #${(updated || openOrder).code}. Assim que ela validar, eu confirmo por aqui.`
-      );
+      await sendAndTrack(job, lead, buildPaymentReportedAckMessage((updated || openOrder).code));
       return true;
     }
 
-    await sendAndTrack(
-      job,
-      lead,
-      [
-        `A encomenda #${openOrder.code} já foi aceita e está aguardando pagamento.`,
-        buildPixInstructions(),
-        "Quando pagar, me avise por aqui e, se puder, envie o comprovante.",
-      ].join("\n")
-    );
+    await sendAndTrack(job, lead, buildAwaitingPaymentReminderMessage(openOrder.code, config.pixKey));
     return true;
   }
 
@@ -421,36 +310,18 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
       await sendTextToNumber(
         job.instanceId,
         config.ownerApprovalNumber,
-        [
-          `Cliente avisou sobre o pagamento da encomenda #${openOrder.code}.`,
-          `Cliente: ${openOrder.customerName || openOrder.customerPhoneNumber || openOrder.customerRemoteJid}`,
-          "Se estiver tudo certo, responda:",
-          `- PAGO METADE ${openOrder.code}`,
-          `- PAGO TOTAL ${openOrder.code}`,
-        ].join("\n")
+        buildOwnerPaymentReportedMessage(openOrder.code, getCustomerLabel(openOrder))
       );
       await updateLead(lead.id, {
         stage: "awaiting_payment_validation",
         status: "awaiting_payment_validation",
         lastInboundText: job.text,
       });
-      await sendAndTrack(
-        job,
-        lead,
-        `Perfeito. Avisei a Vizinha sobre o pagamento da encomenda #${(updated || openOrder).code}. Assim que ela validar, eu confirmo por aqui.`
-      );
+      await sendAndTrack(job, lead, buildPaymentReportedAckMessage((updated || openOrder).code));
       return true;
     }
 
-    await sendAndTrack(
-      job,
-      lead,
-      [
-        `A encomenda #${openOrder.code} já foi aceita e está aguardando pagamento.`,
-        buildPixInstructions(),
-        "Quando pagar, me avise por aqui e, se puder, envie o comprovante.",
-      ].join("\n")
-    );
+    await sendAndTrack(job, lead, buildAwaitingPaymentReminderMessage(openOrder.code, config.pixKey));
     return true;
   }
 
@@ -472,7 +343,7 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
         status: "qualified",
         lastInboundText: job.text,
       });
-      await sendAndTrack(job, lead, buildSiteOrderInstructions());
+      await sendAndTrack(job, lead, buildSiteOrderInstructionsMessage(config.cardapioUrl));
       return true;
     }
 
@@ -483,14 +354,7 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
     }
 
     if (text === "3") {
-      await sendAndTrack(
-        job,
-        lead,
-        [
-          "Pode me perguntar por aqui.",
-          "Eu posso te ajudar com sabores, valores, disponibilidade, horário e confirmar se seu atendimento já está em andamento.",
-        ].join("\n")
-      );
+      await sendAndTrack(job, lead, buildSupportPromptMessage());
       await updateLead(lead.id, { lastInboundText: job.text });
       return true;
     }
@@ -510,27 +374,19 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
       stage: "site_order_guided",
       lastInboundText: job.text,
     });
-    await sendAndTrack(job, lead, buildSiteOrderInstructions());
+    await sendAndTrack(job, lead, buildSiteOrderInstructionsMessage(config.cardapioUrl));
     return true;
   }
 
   if (lead.stage === "awaiting_owner_approval" || lead.stage === "awaiting_payment_validation") {
     await updateLead(lead.id, { lastInboundText: job.text });
-    await sendAndTrack(
-      job,
-      lead,
-      "Seu pedido já está em análise. Assim que eu tiver a resposta da Vizinha, te aviso por aqui."
-    );
+    await sendAndTrack(job, lead, buildAwaitingAnalysisMessage());
     return true;
   }
 
   if (lead.stage === "confirmed") {
     await updateLead(lead.id, { lastInboundText: job.text });
-    await sendAndTrack(
-      job,
-      lead,
-      `Seu pedido já está confirmado. Se quiser fazer outro, monte a nova encomenda pelo site: ${config.cardapioUrl}`
-    );
+    await sendAndTrack(job, lead, buildConfirmedFollowUpMessage(config.cardapioUrl));
     return true;
   }
 
@@ -622,20 +478,11 @@ export async function processInboundMessage(job: InboundMessageJob) {
   }
 
   if (indicatesPayment(normalized)) {
-    await sendAndTrack(job, lead, buildPaymentProofGuidance());
+    await sendAndTrack(job, lead, buildPaymentProofGuidanceMessage(config.cardapioUrl));
     await updateLead(lead.id, { lastInboundText: job.text });
     return;
   }
 
-  await sendAndTrack(
-    job,
-    lead,
-    [
-      "Posso te ajudar com isso, sim.",
-      `Se quiser montar sua encomenda, use o site: ${config.cardapioUrl}`,
-      "Se for uma dúvida sobre sabores, horário ou pagamento, pode me mandar por aqui.",
-    ].join("\n\n")
-  );
-
+  await sendAndTrack(job, lead, buildFallbackHelpMessage(config.cardapioUrl));
   await updateLead(lead.id, { lastInboundText: job.text });
 }

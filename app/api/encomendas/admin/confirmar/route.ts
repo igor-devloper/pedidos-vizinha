@@ -5,6 +5,7 @@ import {
   sendPedidoConfirmadoEmail,
   sendPedidoRecusadoEmail,
 } from "@/lib/email/resend";
+import { formatWhatsAppMessage } from "@/lib/whatsapp-message";
 
 type TipoWhatsapp = "METADE" | "TOTAL" | "CANCELADO";
 
@@ -23,64 +24,62 @@ async function enviarWhatsappConfirmacao({
 }) {
   try {
     if (!telefone) {
-      console.warn("[GZAPPY] Telefone não informado, envio de WhatsApp ignorado.");
+      console.warn("[GZAPPY] Telefone nao informado, envio de WhatsApp ignorado.");
       return;
     }
 
     const token = process.env.GZAPPY_TOKEN;
     if (!token) {
-      console.error("[GZAPPY] GZAPPY_TOKEN não configurado nas variáveis de ambiente.");
+      console.error("[GZAPPY] GZAPPY_TOKEN nao configurado nas variaveis de ambiente.");
       return;
     }
 
     const phone = telefone.replace(/\D/g, "");
     if (!phone) {
-      console.error("[GZAPPY] Telefone inválido após a normalização:", telefone);
+      console.error("[GZAPPY] Telefone invalido apos a normalizacao:", telefone);
       return;
     }
 
     let mensagem = "";
 
     if (tipo === "METADE") {
-      mensagem = `
-Oi, ${nome}! 😊
-
-Recebemos o *pagamento parcial* do seu pedido *#${txid}*.
-Seu pedido já está *confirmado*.
-
-Se precisar ajustar o horário combinado, responda esta mensagem por aqui.
-A tolerância de atraso é de 15 minutos para ambas as partes. 😊
-
-Qualquer dúvida, estou por aqui!
-
-Obrigada pela confiança! 🚀✨
-      `;
+      mensagem = formatWhatsAppMessage([
+        "✅ *Pagamento parcial confirmado!*",
+        [
+          `👋 Oi, ${nome}!`,
+          `Recebemos o pagamento parcial do seu pedido *#${txid}*.`,
+          "Seu pedido já está *confirmado*.",
+        ],
+        [
+          "⏰ Se precisar ajustar o horário combinado, responda esta mensagem por aqui.",
+          "A tolerância de atraso é de 15 minutos para ambas as partes.",
+        ],
+        "Obrigada pela confiança! 🥰",
+      ]);
     }
 
     if (tipo === "TOTAL") {
-      mensagem = `
-Oi, ${nome}! 👋😊
-
-Seu pagamento do pedido *#${txid}* foi confirmado com sucesso! 🎉
-
-Se precisar ajustar o horário combinado, responda esta mensagem por aqui.
-A tolerância de atraso é de 15 minutos para ambas as partes. 😊
-
-Qualquer dúvida, estou por aqui!
-
-Obrigada pela confiança! 🚀✨
-      `;
+      mensagem = formatWhatsAppMessage([
+        "✅ *Pagamento confirmado!*",
+        [
+          `👋 Oi, ${nome}!`,
+          `Seu pagamento do pedido *#${txid}* foi confirmado com sucesso.`,
+        ],
+        [
+          "⏰ Se precisar ajustar o horário combinado, responda esta mensagem por aqui.",
+          "A tolerância de atraso é de 15 minutos para ambas as partes.",
+        ],
+        "Obrigada pela confiança! 🥰",
+      ]);
     }
 
     if (tipo === "CANCELADO") {
-      mensagem = `
-Oi, ${nome}. Tudo bem?
-
-Seu pedido *#${txid}* foi *cancelado*.
-${motivo ? `Motivo: ${motivo}\n` : ""}
-
-Se quiser fazer um novo pedido ou tiver alguma dúvida, pode me chamar por aqui. 🙂
-      `;
+      mensagem = formatWhatsAppMessage([
+        "❌ *Pedido cancelado*",
+        [`👋 Oi, ${nome}.`, `Seu pedido *#${txid}* foi cancelado.`],
+        motivo ? `📝 *Motivo:* ${motivo}` : null,
+        "Se quiser fazer um novo pedido ou tiver alguma dúvida, pode me chamar por aqui. 🙂",
+      ]);
     }
 
     const response = await fetch("https://v2-api.gzappy.com/message/send-text", {
@@ -102,10 +101,7 @@ Se quiser fazer um novo pedido ou tiver alguma dúvida, pode me chamar por aqui.
         status: response.status,
         statusText: response.statusText,
         rawBody: data,
-        parsedMessage:
-          data?.message ??
-          data?.error ??
-          JSON.stringify(data),
+        parsedMessage: data?.message ?? data?.error ?? JSON.stringify(data),
       });
       return;
     }
@@ -133,10 +129,7 @@ export async function POST(req: Request) {
     };
 
     if (!txid) {
-      return NextResponse.json(
-        { error: "O txid é obrigatório." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "O txid e obrigatorio." }, { status: 400 });
     }
 
     if (aprovado) {
@@ -168,9 +161,7 @@ export async function POST(req: Request) {
           email: encomenda.email,
           totalItens: encomenda.totalItens,
           valorTotal: Number(encomenda.valorTotal),
-          valorPago: encomenda.valorPago
-            ? Number(encomenda.valorPago)
-            : undefined,
+          valorPago: encomenda.valorPago ? Number(encomenda.valorPago) : undefined,
         },
         tipo === "METADE" ? "METADE" : "TOTAL"
       );

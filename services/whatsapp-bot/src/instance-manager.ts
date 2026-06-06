@@ -17,6 +17,7 @@ import { instanceStore } from "./instance-store.js";
 import { logger } from "./logger.js";
 import { handleInboundMessage } from "./message-pipeline.js";
 import { qrStore } from "./qr-store.js";
+import { formatWhatsAppText } from "./whatsapp-format.js";
 
 const loadMultiFileAuthState = useMultiFileAuthState;
 
@@ -262,7 +263,7 @@ class InstanceManager {
     await this.waitForSocketReady(instanceId, socket);
     const attemptedJids = this.buildCandidateJids(number);
     const { jid, verifiedJid } = await this.resolveDeliveryTarget(socket, attemptedJids);
-    const result = await socket.sendMessage(jid, { text });
+    const result = await socket.sendMessage(jid, { text: formatWhatsAppText(text) });
     const messageId = result?.key?.id;
 
     if (!messageId) {

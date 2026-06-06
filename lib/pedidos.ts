@@ -4,6 +4,11 @@ import { MetodoPagamento, PedidoStatus, type Pedido, type PedidoItem, type Produ
 import { z } from "zod";
 
 import { BUSINESS_INFO, BUSINESS_RULES, PEDIDO_STATUS_META, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
+import {
+  formatWhatsAppList,
+  formatWhatsAppMessage,
+  WHATSAPP_SECTION_DIVIDER,
+} from "@/lib/whatsapp-message";
 
 const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 const BUSINESS_UTC_OFFSET = "-03:00";
@@ -197,69 +202,102 @@ type PedidoSummaryShape = Pick<
   itens: Pick<PedidoItem, "tipo" | "quantidade">[];
 };
 
-export function buildPedidoSummary(pedido: PedidoSummaryShape) {
-  const itens = pedido.itens
-    .map((item) => `- ${item.tipo}: ${item.quantidade} un`)
-    .join("\n");
+function calculatePedidoPaymentSummary(pedido: PedidoSummaryShape) {
+  const subtotal = Number(pedido.subtotal);
+  const paidBase = Number(((subtotal * pedido.percentualPagamento) / 100).toFixed(2));
+  const paidNow = Number(pedido.totalCobrado);
+  const remaining = Number(Math.max(subtotal - paidBase, 0).toFixed(2));
 
-  return [
-    `Pedido ${pedido.codigo}`,
-    `Cliente: ${pedido.clienteNome}`,
-    `Produto: ${pedido.produtoNomeSnapshot}`,
-    `Entrega: ${formatDateTime(pedido.dataEntrega)}`,
-    `Pagamento agora: ${pedido.percentualPagamento}% via ${pedido.metodoPagamentoLabel}`,
-    `Subtotal: ${formatCurrency(Number(pedido.subtotal))}`,
-    `Taxa de servico: ${formatCurrency(Number(pedido.taxaValor))}`,
-    `Total cobrado: ${formatCurrency(Number(pedido.totalCobrado))}`,
-    "Itens:",
-    itens,
-    pedido.observacoes ? `Observacoes: ${pedido.observacoes}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return {
+    subtotal,
+    paidBase,
+    paidNow,
+    remaining,
+  };
+}
+
+export function buildPedidoSummary(pedido: PedidoSummaryShape) {
+  const composition = formatWhatsAppList(
+    pedido.itens.map((item) => `${item.tipo} — ${item.quantidade} un`)
+  );
+  const payment = calculatePedidoPaymentSummary(pedido);
+
+  return formatWhatsAppMessage([
+    [`🛍️ *Pedido #${pedido.codigo}*`, `👤 *Cliente:* ${pedido.clienteNome}`],
+    [
+      `📦 *Produto:* ${pedido.produtoNomeSnapshot}`,
+      "🧆 *Composição:*",
+      ...composition.map((item) => `  ${item}`),
+    ],
+    [
+      `📅 *Entrega:* ${formatDateTime(pedido.dataEntrega)}`,
+      `💰 *Total do pedido:* ${formatCurrency(payment.subtotal)}`,
+      `💳 *Pagamento:* ${pedido.metodoPagamentoLabel} (${pedido.percentualPagamento}% agora)`,
+      `   Pago agora: ${formatCurrency(payment.paidNow)}`,
+      payment.remaining > 0 ? `   Restante: ${formatCurrency(payment.remaining)}` : "   Restante: R$ 0,00",
+    ],
+    pedido.observacoes ? `📝 *Observações:* ${pedido.observacoes}` : null,
+  ]);
 }
 
 export function buildWhatsappMessageForClient(pedido: PedidoSummaryShape) {
-  return [
-    `*Oi, ${pedido.clienteNome}!*`,
-    "",
-    `*Seu pagamento do pedido ${pedido.codigo} foi confirmado com sucesso.*`,
-    "",
-    `Entrega agendada para: *${formatDateTime(pedido.dataEntrega)}*`,
-    `Produto: *${pedido.produtoNomeSnapshot}*`,
-    `Valor confirmado: *${formatCurrency(Number(pedido.totalCobrado))}*`,
-    "",
-    "*Resumo do pedido:*",
-    ...pedido.itens.map((item) => `  - ${item.tipo}: ${item.quantidade} un`),
-    pedido.observacoes ? "" : null,
-    pedido.observacoes ? `Observacoes: ${pedido.observacoes}` : null,
-    "",
-    `Tolerancia combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,
-    `Qualquer ajuste, fale com a ${BUSINESS_INFO.name}.`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const composition = formatWhatsAppList(
+    pedido.itens.map((item) => `${item.tipo} — ${item.quantidade} un`)
+  );
+  const payment = calculatePedidoPaymentSummary(pedido);
+
+  return formatWhatsAppMessage([
+    "✅ *Pedido Confirmado!*",
+    [`👤 *Cliente:* ${pedido.clienteNome}`, `📞 *WhatsApp:* ${pedido.clienteTelefone}`],
+    [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${pedido.codigo}*`, WHATSAPP_SECTION_DIVIDER],
+    [
+      `📦 *Produto:* ${pedido.produtoNomeSnapshot}`,
+      "🧆 *Composição:*",
+      ...composition.map((item) => `  ${item}`),
+      `📅 *Entrega:* ${formatDateTime(pedido.dataEntrega)}`,
+      `💰 *Total do pedido:* ${formatCurrency(payment.subtotal)}`,
+      `💳 *Pagamento:* ${pedido.metodoPagamentoLabel} (${pedido.percentualPagamento}% pago)`,
+      `   Pago agora: ${formatCurrency(payment.paidNow)}`,
+      payment.remaining > 0 ? `   Restante: ${formatCurrency(payment.remaining)}` : "   Restante: R$ 0,00",
+    ],
+    pedido.observacoes ? `📝 *Observações:* ${pedido.observacoes}` : null,
+    [
+      WHATSAPP_SECTION_DIVIDER,
+      `⏰ Tolerância combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,
+      "Obrigada pela preferência! 🥰",
+      `_${BUSINESS_INFO.name}_`,
+    ],
+  ]);
 }
 
 export function buildWhatsappMessageForOwner(pedido: PedidoSummaryShape) {
   const status = getPedidoStatusMeta(pedido.status).label;
+  const composition = formatWhatsAppList(
+    pedido.itens.map((item) => `${item.tipo} — ${item.quantidade} un`)
+  );
+  const payment = calculatePedidoPaymentSummary(pedido);
 
-  return [
-    `Novo pedido pago para preparo: ${pedido.codigo}`,
-    `Status: ${status}`,
-    `Cliente: ${pedido.clienteNome}`,
-    `Telefone: ${pedido.clienteTelefone}`,
-    pedido.clienteEmail ? `E-mail: ${pedido.clienteEmail}` : null,
-    `Entrega: ${formatDateTime(pedido.dataEntrega)}`,
-    `Produto: ${pedido.produtoNomeSnapshot}`,
-    `Pagamento: ${pedido.percentualPagamento}% via ${pedido.metodoPagamentoLabel}`,
-    `Total cobrado: ${formatCurrency(Number(pedido.totalCobrado))}`,
-    "Itens:",
-    ...pedido.itens.map((item) => `- ${item.tipo}: ${item.quantidade} un`),
-    pedido.observacoes ? `Observacoes: ${pedido.observacoes}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return formatWhatsAppMessage([
+    "🔔 *Novo Pedido Pago!*",
+    [
+      `👤 *Cliente:* ${pedido.clienteNome}`,
+      `📞 *WhatsApp:* ${pedido.clienteTelefone}`,
+      pedido.clienteEmail ? `✉️ *E-mail:* ${pedido.clienteEmail}` : null,
+    ],
+    [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${pedido.codigo}*`, WHATSAPP_SECTION_DIVIDER],
+    [
+      `📌 *Status:* ${status}`,
+      `📦 *Produto:* ${pedido.produtoNomeSnapshot}`,
+      "🧆 *Composição:*",
+      ...composition.map((item) => `  ${item}`),
+      `📅 *Entrega:* ${formatDateTime(pedido.dataEntrega)}`,
+      `💰 *Total do pedido:* ${formatCurrency(payment.subtotal)}`,
+      `💳 *Pagamento:* ${pedido.metodoPagamentoLabel} (${pedido.percentualPagamento}% pago)`,
+      `   Pago agora: ${formatCurrency(payment.paidNow)}`,
+      payment.remaining > 0 ? `   Restante: ${formatCurrency(payment.remaining)}` : "   Restante: R$ 0,00",
+    ],
+    pedido.observacoes ? `📝 *Observações:* ${pedido.observacoes}` : null,
+  ]);
 }
 
 export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
