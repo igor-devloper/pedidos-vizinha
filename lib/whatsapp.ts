@@ -131,3 +131,67 @@ export async function sendWhatsappText(number: string, text: string) {
 
   throw new Error(lastError || "Falha ao enviar WhatsApp.");
 }
+
+export async function sendWhatsappImage({
+  number,
+  imageUrl,
+  caption,
+}: {
+  number: string;
+  imageUrl: string;
+  caption?: string;
+}) {
+  const baseUrl = getBotServiceUrl();
+  const apiKey = getBotApiKey();
+  const preferredInstanceId = getBotInstanceId();
+
+  if (!baseUrl || !apiKey || !preferredInstanceId) {
+    console.warn("WhatsApp image notification skipped: bot service not configured.");
+    return { ok: false, skipped: true };
+  }
+
+  const normalized = normalizePhone(number);
+  if (!normalized) {
+    console.warn("WhatsApp image notification skipped: invalid phone.");
+    return { ok: false, skipped: true };
+  }
+
+  let lastError = "";
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const instanceId = await resolveBotInstanceId(baseUrl, apiKey, preferredInstanceId);
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/instances/${instanceId}/send-image`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey.replace(/^Bearer\s+/i, "")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        number: normalized,
+        imageUrl,
+        caption: caption ? formatWhatsAppText(caption) : undefined,
+      }),
+    });
+
+    if (response.ok) {
+      return response.json().catch(() => ({ ok: true }));
+    }
+
+    const data = await response.text().catch(() => "");
+    lastError = `Falha ao enviar imagem no WhatsApp: ${response.status} ${data}`;
+
+    if (!/Connection Closed/i.test(data) || attempt === 2) {
+      throw new Error(lastError);
+    }
+
+    console.warn("WhatsApp image send retry after closed connection.", {
+      attempt: attempt + 1,
+      instanceId,
+      number: normalized,
+    });
+
+    await delay(2000);
+  }
+
+  throw new Error(lastError || "Falha ao enviar imagem no WhatsApp.");
+}

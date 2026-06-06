@@ -1,16 +1,34 @@
 import { PedidoStatus, Prisma, type Pedido, type PedidoItem } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { createMercadoPagoPreference } from "@/lib/mercado-pago";
 import {
+  buildWhatsappBalanceCardImageUrl,
   buildPrintableReceipt,
+  buildWhatsappMessageForReady,
+  buildWhatsappMessageForReadyWithBalance,
+  buildWhatsappReadyToleranceReminder,
   buildWhatsappMessageForClient,
   buildWhatsappMessageForOwner,
+  calculatePaymentAmounts,
 } from "@/lib/pedidos";
-import { BUSINESS_INFO } from "@/lib/site-config";
-import { sendWhatsappText } from "@/lib/whatsapp";
+import { BUSINESS_INFO, BUSINESS_RULES } from "@/lib/site-config";
+import { sendWhatsappImage, sendWhatsappText } from "@/lib/whatsapp";
 
 type PedidoWithItens = Pedido & {
   itens: PedidoItem[];
+};
+
+type PedidoWithReadyFields = PedidoWithItens & {
+  prontoAt?: Date | null;
+  notificadoProntoClienteAt?: Date | null;
+  notificadoToleranciaAt?: Date | null;
+  saldoExternalReference?: string | null;
+  saldoPreferenceId?: string | null;
+  saldoInitPoint?: string | null;
+  saldoTotalCobrado?: Prisma.Decimal | number | null;
+  saldoPagoAt?: Date | null;
+  saldoCobrancaEnviadaAt?: Date | null;
 };
 
 async function loadPedidoById(id: string) {
@@ -21,8 +39,13 @@ async function loadPedidoById(id: string) {
 }
 
 async function loadPedidoByReference(externalReference: string) {
-  return prisma.pedido.findUnique({
-    where: { mpExternalReference: externalReference },
+  return prisma.pedido.findFirst({
+    where: {
+      OR: [
+        { mpExternalReference: externalReference },
+        { saldoExternalReference: externalReference } as never,
+      ],
+    },
     include: { itens: true },
   });
 }
@@ -37,6 +60,141 @@ export async function getPedidoForView(idOrCode: string) {
       produto: true,
     },
   });
+}
+
+async function notifyPedidoReady(pedido: PedidoWithReadyFields) {
+  try {
+    const hasPendingBalance =
+      pedido.percentualPagamento === 50 &&
+      !pedido.saldoPagoAt &&
+      pedido.saldoInitPoint &&
+      pedido.saldoTotalCobrado != null;
+
+    if (hasPendingBalance) {
+      await sendWhatsappImage({
+        number: pedido.clienteTelefone,
+        imageUrl: buildWhatsappBalanceCardImageUrl({
+          clienteNome: pedido.clienteNome,
+          codigo: pedido.codigo,
+          valor: Number(pedido.saldoTotalCobrado),
+          metodoPagamentoLabel: pedido.metodoPagamentoLabel,
+          appUrl: BUSINESS_INFO.appUrl,
+        }),
+        caption: buildWhatsappMessageForReadyWithBalance({
+          pedido,
+          amount: Number(pedido.saldoTotalCobrado),
+          paymentLabel: pedido.metodoPagamentoLabel,
+          paymentUrl: pedido.saldoInitPoint!,
+        }),
+      });
+    } else {
+      await sendWhatsappText(pedido.clienteTelefone, buildWhatsappMessageForReady(pedido));
+    }
+
+    return new Date();
+  } catch (error) {
+    console.error("Falha ao notificar pedido pronto via WhatsApp", {
+      pedidoId: pedido.id,
+      codigo: pedido.codigo,
+      error,
+    });
+    return null;
+  }
+}
+
+async function ensurePedidoBalanceCharge(pedido: PedidoWithReadyFields) {
+  if (pedido.percentualPagamento !== 50 || pedido.saldoPagoAt) {
+    return {
+      saldoExternalReference: pedido.saldoExternalReference,
+      saldoPreferenceId: pedido.saldoPreferenceId,
+      saldoInitPoint: pedido.saldoInitPoint,
+      saldoTotalCobrado:
+        pedido.saldoTotalCobrado == null ? null : Number(pedido.saldoTotalCobrado),
+    };
+  }
+
+  if (pedido.saldoExternalReference && pedido.saldoPreferenceId && pedido.saldoInitPoint) {
+    return {
+      saldoExternalReference: pedido.saldoExternalReference,
+      saldoPreferenceId: pedido.saldoPreferenceId,
+      saldoInitPoint: pedido.saldoInitPoint,
+      saldoTotalCobrado:
+        pedido.saldoTotalCobrado == null ? null : Number(pedido.saldoTotalCobrado),
+    };
+  }
+
+  const charge = calculatePaymentAmounts(
+    Number(pedido.subtotal),
+    50,
+    pedido.metodoPagamento
+  );
+  const saldoExternalReference = `${pedido.mpExternalReference}-saldo`;
+  const preference = await createMercadoPagoPreference({
+    pedido: {
+      codigo: `${pedido.codigo}-SALDO`,
+      mpExternalReference: saldoExternalReference,
+      produtoNomeSnapshot: `${pedido.produtoNomeSnapshot} - saldo final`,
+      totalCobrado: charge.totalToCharge,
+      clienteNome: pedido.clienteNome,
+      clienteEmail: pedido.clienteEmail,
+      clienteTelefone: pedido.clienteTelefone,
+      metodoPagamento: pedido.metodoPagamento,
+    },
+    payer: {
+      name: pedido.clienteNome,
+      email: pedido.clienteEmail,
+      phone: pedido.clienteTelefone,
+    },
+  });
+
+  return {
+    saldoExternalReference,
+    saldoPreferenceId: preference.id,
+    saldoInitPoint: preference.init_point,
+    saldoTotalCobrado: charge.totalToCharge,
+  };
+}
+
+export async function processReadyPedidoToleranceReminders(now = new Date()) {
+  const toleranceThreshold = new Date(now.getTime() - BUSINESS_RULES.toleranceMinutes * 60 * 1000);
+  const pedidos = (await (prisma.pedido as never as {
+    findMany: (args: Prisma.PedidoFindManyArgs) => Promise<PedidoWithReadyFields[]>;
+  }).findMany({
+    where: {
+      status: "PRONTO" as never,
+      prontoAt: {
+        lte: toleranceThreshold,
+      },
+      notificadoToleranciaAt: null,
+    },
+    include: {
+      itens: true,
+    },
+  } as never)) as PedidoWithReadyFields[];
+
+  for (const pedido of pedidos) {
+    try {
+      await sendWhatsappText(
+        pedido.clienteTelefone,
+        buildWhatsappReadyToleranceReminder(pedido)
+      );
+
+      await (prisma.pedido as never as {
+        update: (args: Prisma.PedidoUpdateArgs) => Promise<Pedido>;
+      }).update({
+        where: { id: pedido.id },
+        data: {
+          notificadoToleranciaAt: new Date(),
+        } as never,
+      } as never);
+    } catch (error) {
+      console.error("Falha ao enviar lembrete de tolerancia do pedido pronto", {
+        pedidoId: pedido.id,
+        codigo: pedido.codigo,
+        error,
+      });
+    }
+  }
 }
 
 async function notifyPaidPedido(pedido: PedidoWithItens) {
@@ -100,18 +258,21 @@ export async function handleMercadoPagoPaymentUpdate({
   transactionAmount?: number;
   payload?: unknown;
 }) {
-  const pedido = await loadPedidoByReference(externalReference);
+  const pedido = (await loadPedidoByReference(externalReference)) as PedidoWithReadyFields | null;
 
   if (!pedido) {
     throw new Error(`Pedido não encontrado para a referência ${externalReference}.`);
   }
 
+  const isBalancePayment = pedido.saldoExternalReference === externalReference;
   const nextStatus =
-    status === "approved"
-      ? PedidoStatus.PAGO
-      : ["cancelled", "rejected", "refunded", "charged_back"].includes(status)
-        ? PedidoStatus.CANCELADO
-        : pedido.status;
+    isBalancePayment
+      ? pedido.status
+      : status === "approved"
+        ? PedidoStatus.PAGO
+        : ["cancelled", "rejected", "refunded", "charged_back"].includes(status)
+          ? PedidoStatus.CANCELADO
+          : pedido.status;
   const webhookPayload =
     payload === undefined
       ? pedido.mpWebhookPayload === null
@@ -125,33 +286,93 @@ export async function handleMercadoPagoPaymentUpdate({
       status: nextStatus,
       valorPago:
         typeof transactionAmount === "number"
-          ? Number(transactionAmount.toFixed(2))
+          ? Number(
+              (
+                (isBalancePayment ? Number(pedido.valorPago || 0) : 0) + transactionAmount
+              ).toFixed(2)
+            )
           : pedido.valorPago,
-      mpPaymentId: paymentId,
-      mpMerchantOrderId: merchantOrderId ? String(merchantOrderId) : pedido.mpMerchantOrderId,
-      mpStatus: status,
-      mpStatusDetail: statusDetail || pedido.mpStatusDetail,
+      mpPaymentId: isBalancePayment ? pedido.mpPaymentId : paymentId,
+      mpMerchantOrderId:
+        isBalancePayment ? pedido.mpMerchantOrderId : merchantOrderId ? String(merchantOrderId) : pedido.mpMerchantOrderId,
+      saldoPagoAt:
+        isBalancePayment && status === "approved" ? new Date() : (pedido as PedidoWithReadyFields).saldoPagoAt,
+      mpStatus: isBalancePayment ? pedido.mpStatus : status,
+      mpStatusDetail: isBalancePayment ? pedido.mpStatusDetail : statusDetail || pedido.mpStatusDetail,
       mpWebhookPayload: webhookPayload,
-    },
+    } as never,
     include: { itens: true },
-  });
+  } as never);
 
-  if (status === "approved") {
-    await notifyPaidPedido(updated);
+  if (!isBalancePayment && status === "approved") {
+    await notifyPaidPedido(updated as PedidoWithItens);
   }
 
   return updated;
 }
 
 export async function updatePedidoStatus(id: string, status: PedidoStatus) {
-  return prisma.pedido.update({
+  const pedidoAtual = await loadPedidoById(id);
+
+  if (!pedidoAtual) {
+    throw new Error("Pedido nao encontrado.");
+  }
+
+  const pedidoAtualWithReady = pedidoAtual as PedidoWithReadyFields;
+  const enteringReady =
+    status === ("PRONTO" as PedidoStatus) && pedidoAtual.status !== ("PRONTO" as PedidoStatus);
+  const leavingReady =
+    status !== ("PRONTO" as PedidoStatus) && pedidoAtual.status === ("PRONTO" as PedidoStatus);
+
+  const balanceCharge = enteringReady
+    ? await ensurePedidoBalanceCharge(pedidoAtualWithReady)
+    : null;
+
+  const pedido = await (prisma.pedido as never as {
+    update: (args: Prisma.PedidoUpdateArgs) => Promise<PedidoWithReadyFields>;
+  }).update({
     where: { id },
-    data: { status },
+    data: {
+      status,
+      prontoAt: enteringReady ? new Date() : leavingReady ? null : pedidoAtualWithReady.prontoAt,
+      notificadoProntoClienteAt: enteringReady ? null : pedidoAtualWithReady.notificadoProntoClienteAt,
+      notificadoToleranciaAt:
+        enteringReady || leavingReady ? null : pedidoAtualWithReady.notificadoToleranciaAt,
+      saldoExternalReference: balanceCharge?.saldoExternalReference ?? pedidoAtualWithReady.saldoExternalReference,
+      saldoPreferenceId: balanceCharge?.saldoPreferenceId ?? pedidoAtualWithReady.saldoPreferenceId,
+      saldoInitPoint: balanceCharge?.saldoInitPoint ?? pedidoAtualWithReady.saldoInitPoint,
+      saldoTotalCobrado:
+        balanceCharge?.saldoTotalCobrado ?? pedidoAtualWithReady.saldoTotalCobrado,
+      saldoCobrancaEnviadaAt: enteringReady ? null : pedidoAtualWithReady.saldoCobrancaEnviadaAt,
+    },
     include: {
       itens: true,
       produto: true,
     },
-  });
+  } as never);
+
+  if (enteringReady) {
+    const notifiedAt = await notifyPedidoReady(pedido as PedidoWithReadyFields);
+
+    if (notifiedAt) {
+      return (prisma.pedido as never as {
+        update: (args: Prisma.PedidoUpdateArgs) => Promise<PedidoWithReadyFields>;
+      }).update({
+        where: { id: pedido.id },
+        data: {
+          notificadoProntoClienteAt: notifiedAt,
+          saldoCobrancaEnviadaAt:
+            pedido.percentualPagamento === 50 && !pedido.saldoPagoAt ? notifiedAt : pedido.saldoCobrancaEnviadaAt,
+        } as never,
+        include: {
+          itens: true,
+          produto: true,
+        },
+      } as never);
+    }
+  }
+
+  return pedido;
 }
 
 export async function markPedidoPrinted(id: string) {

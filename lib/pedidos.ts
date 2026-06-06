@@ -108,7 +108,7 @@ export function getPaymentMethodConfig(method: MetodoPagamento) {
   return SUPPORTED_PAYMENT_METHODS.find((item) => item.id === method);
 }
 
-export function getPedidoStatusMeta(status: PedidoStatus) {
+export function getPedidoStatusMeta(status: PedidoStatus | "PRONTO") {
   return PEDIDO_STATUS_META[status];
 }
 
@@ -320,6 +320,89 @@ export function buildWhatsappMessageForOwner(pedido: PedidoSummaryShape) {
       payment.remaining > 0 ? `   Restante: ${formatCurrency(payment.remaining)}` : "   Restante: R$ 0,00",
     ],
     pedido.observacoes ? `📝 *Observações:* ${pedido.observacoes}` : null,
+  ]);
+}
+
+export function buildWhatsappMessageForReady(pedido: Pick<Pedido, "codigo" | "clienteNome" | "produtoNomeSnapshot">) {
+  return formatWhatsAppMessage([
+    "🍽️ *Seu pedido está pronto!*",
+    [
+      `👋 Oi, ${pedido.clienteNome}!`,
+      `Seu pedido *#${pedido.codigo}* da *${BUSINESS_INFO.name}* já está pronto.`,
+    ],
+    [`📦 *Produto:* ${pedido.produtoNomeSnapshot}`],
+    [
+      `⏰ Temos uma tolerância de *${BUSINESS_RULES.toleranceMinutes} minutos* após esse aviso.`,
+      `📲 Se precisar falar com a equipe, chame no WhatsApp: ${BUSINESS_INFO.supportPhone}`,
+    ],
+  ]);
+}
+
+export function buildWhatsappMessageForReadyWithBalance({
+  pedido,
+  amount,
+  paymentLabel,
+  paymentUrl,
+}: {
+  pedido: Pick<Pedido, "codigo" | "clienteNome" | "produtoNomeSnapshot">;
+  amount: number;
+  paymentLabel: string;
+  paymentUrl: string;
+}) {
+  return formatWhatsAppMessage([
+    "🍽️ *Seu pedido está pronto!*",
+    [
+      `👋 Oi, ${pedido.clienteNome}!`,
+      `Seu pedido *#${pedido.codigo}* da *${BUSINESS_INFO.name}* já está pronto.`,
+      `📦 *Produto:* ${pedido.produtoNomeSnapshot}`,
+    ],
+    [
+      "💰 *Falta o pagamento da 2ª parte*",
+      `Valor para quitar agora: *${formatCurrency(amount)}*`,
+      `Forma de pagamento: *${paymentLabel}*`,
+    ],
+    [
+      "🔗 *Acesse sua cobrança para pagar:*",
+      paymentUrl,
+      "Ao abrir o link, você poderá concluir o pagamento e, quando disponível, copiar o Pix por lá.",
+    ],
+    `⏰ Temos uma tolerância de *${BUSINESS_RULES.toleranceMinutes} minutos* após esse aviso.`,
+  ]);
+}
+
+export function buildWhatsappBalanceCardImageUrl({
+  clienteNome,
+  codigo,
+  valor,
+  metodoPagamentoLabel,
+  appUrl,
+}: {
+  clienteNome: string;
+  codigo: string;
+  valor: number;
+  metodoPagamentoLabel: string;
+  appUrl: string;
+}) {
+  const params = new URLSearchParams({
+    cliente: clienteNome,
+    codigo,
+    valor: formatCurrency(valor),
+    metodo: metodoPagamentoLabel,
+  });
+
+  return `${appUrl.replace(/\/$/, "")}/api/whatsapp/cards/saldo?${params.toString()}`;
+}
+
+export function buildWhatsappReadyToleranceReminder(
+  pedido: Pick<Pedido, "codigo" | "clienteNome">
+) {
+  return formatWhatsAppMessage([
+    "⏰ *Lembrete de tolerância*",
+    [
+      `👋 ${pedido.clienteNome}, já se passaram *${BUSINESS_RULES.toleranceMinutes} minutos* desde o aviso de pedido pronto.`,
+      `Seu pedido *#${pedido.codigo}* segue aguardando retirada/recebimento.`,
+    ],
+    `📲 Se houver qualquer imprevisto, fale com a equipe pelo WhatsApp: ${BUSINESS_INFO.supportPhone}`,
   ]);
 }
 

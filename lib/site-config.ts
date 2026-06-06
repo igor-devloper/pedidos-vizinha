@@ -69,7 +69,7 @@ export const SUPPORTED_PAYMENT_METHODS: SupportedPaymentMethod[] = [
 ];
 
 export const PEDIDO_STATUS_META: Record<
-  PedidoStatus,
+  PedidoStatus | "PRONTO",
   { label: string; tone: string }
 > = {
   PENDENTE_PAGAMENTO: {
@@ -83,6 +83,10 @@ export const PEDIDO_STATUS_META: Record<
   EM_PREPARO: {
     label: "Em preparo",
     tone: "border-sky-200 bg-sky-50 text-sky-800",
+  },
+  PRONTO: {
+    label: "Pronto",
+    tone: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800",
   },
   ENTREGUE: {
     label: "Entregue",

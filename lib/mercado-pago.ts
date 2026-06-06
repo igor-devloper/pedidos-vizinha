@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-import { type Pedido } from "@prisma/client";
+import { Prisma, type Pedido } from "@prisma/client";
 
 import { BUSINESS_INFO, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
 
@@ -106,17 +106,16 @@ export async function createMercadoPagoPreference({
   pedido,
   payer,
 }: {
-  pedido: Pick<
-    Pedido,
-    | "codigo"
-    | "mpExternalReference"
-    | "produtoNomeSnapshot"
-    | "totalCobrado"
-    | "clienteNome"
-    | "clienteEmail"
-    | "clienteTelefone"
-    | "metodoPagamento"
-  >;
+  pedido: {
+    codigo: string;
+    mpExternalReference: string;
+    produtoNomeSnapshot: string;
+    totalCobrado: number | string | Prisma.Decimal;
+    clienteNome: string;
+    clienteEmail?: string | null;
+    clienteTelefone: string;
+    metodoPagamento: Pedido["metodoPagamento"];
+  };
   payer: {
     email?: string | null;
     name: string;

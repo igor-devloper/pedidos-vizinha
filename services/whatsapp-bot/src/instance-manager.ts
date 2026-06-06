@@ -39,6 +39,11 @@ type SendTextResult = {
   messageId: string;
 };
 
+type SendImageInput = {
+  caption?: string;
+  imageUrl?: string;
+};
+
 class InstanceManager {
   private readonly sockets = new Map<string, RuntimeInstance>();
   private readonly openInstances = new Set<string>();
@@ -268,6 +273,34 @@ class InstanceManager {
 
     if (!messageId) {
       throw new Error("WhatsApp send did not return a message id.");
+    }
+
+    return {
+      jid,
+      verifiedJid,
+      attemptedJids,
+      messageId,
+    } satisfies SendTextResult;
+  }
+
+  async sendImage(instanceId: string, number: string, input: SendImageInput) {
+    const socket = await this.start(instanceId);
+    await this.waitForSocketReady(instanceId, socket);
+    const attemptedJids = this.buildCandidateJids(number);
+    const { jid, verifiedJid } = await this.resolveDeliveryTarget(socket, attemptedJids);
+
+    if (!input.imageUrl) {
+      throw new Error("WhatsApp image send requires imageUrl.");
+    }
+
+    const result = await socket.sendMessage(jid, {
+      image: { url: input.imageUrl },
+      caption: input.caption ? formatWhatsAppText(input.caption) : undefined,
+    });
+    const messageId = result?.key?.id;
+
+    if (!messageId) {
+      throw new Error("WhatsApp image send did not return a message id.");
     }
 
     return {

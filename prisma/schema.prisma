@@ -142,11 +142,20 @@ model Pedido {
   mpMerchantOrderId     String?
   mpExternalReference   String             @unique
   mpInitPoint           String?
+  saldoExternalReference String?           @unique
+  saldoPreferenceId     String?
+  saldoInitPoint        String?
+  saldoTotalCobrado     Decimal?           @db.Decimal(10, 2)
+  saldoPagoAt           DateTime?
+  saldoCobrancaEnviadaAt DateTime?
   mpStatus              String?
   mpStatusDetail        String?
   mpWebhookPayload      Json?
   notificadoClienteAt   DateTime?
   notificadoVizinhaAt   DateTime?
+  prontoAt              DateTime?
+  notificadoProntoClienteAt DateTime?
+  notificadoToleranciaAt DateTime?
   impressoAutomaticamenteAt DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
@@ -190,6 +199,7 @@ enum PedidoStatus {
   PENDENTE_PAGAMENTO
   PAGO
   EM_PREPARO
+  PRONTO
   ENTREGUE
   CANCELADO
 }

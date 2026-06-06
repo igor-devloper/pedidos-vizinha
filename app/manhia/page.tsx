@@ -68,6 +68,11 @@ async function getPedidos(): Promise<PedidoAdmin[]> {
       produtoNomeSnapshot: pedido.produtoNomeSnapshot,
       notificadoClienteAt: pedido.notificadoClienteAt?.toISOString() || null,
       notificadoVizinhaAt: pedido.notificadoVizinhaAt?.toISOString() || null,
+      prontoAt: (pedido as { prontoAt?: Date | null }).prontoAt?.toISOString() || null,
+      notificadoProntoClienteAt:
+        (pedido as { notificadoProntoClienteAt?: Date | null }).notificadoProntoClienteAt?.toISOString() || null,
+      notificadoToleranciaAt:
+        (pedido as { notificadoToleranciaAt?: Date | null }).notificadoToleranciaAt?.toISOString() || null,
       impressoAutomaticamenteAt:
         pedido.impressoAutomaticamenteAt?.toISOString() || null,
       itens: pedido.itens.map((item) => ({

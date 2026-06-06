@@ -21,6 +21,12 @@ const sendTextSchema = z.object({
   text: z.string().min(1),
 });
 
+const sendImageSchema = z.object({
+  number: z.string().min(8),
+  imageUrl: z.string().url(),
+  caption: z.string().optional(),
+});
+
 async function bootstrap() {
   await ensureDir(config.authDir);
   await ensureDir(config.storeDir);
@@ -86,6 +92,16 @@ async function bootstrap() {
       payload.number,
       payload.text
     );
+
+    res.json({ ok: true, result });
+  });
+
+  app.post("/instances/:id/send-image", async (req, res) => {
+    const payload = sendImageSchema.parse(req.body);
+    const result = await instanceManager.sendImage(req.params.id, payload.number, {
+      imageUrl: payload.imageUrl,
+      caption: payload.caption,
+    });
 
     res.json({ ok: true, result });
   });

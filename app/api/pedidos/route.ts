@@ -1,3 +1,4 @@
+import { PedidoStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
@@ -30,6 +31,29 @@ export async function POST(req: Request) {
 
     validateDeliveryDate(entrega);
 
+    const conflictingPedido = await prisma.pedido.findFirst({
+      where: {
+        dataEntrega: entrega,
+        status: {
+          not: PedidoStatus.CANCELADO,
+        },
+      },
+      select: {
+        id: true,
+        codigo: true,
+      },
+    });
+
+    if (conflictingPedido) {
+      return NextResponse.json(
+        {
+          error:
+            "Esse horario ja esta reservado para outra encomenda. Escolha outro horario para continuar.",
+        },
+        { status: 409 }
+      );
+    }
+
     if (payload.percentualPagamento === 50 && !produto.permitePagamentoParcial) {
       return NextResponse.json(
         { error: "Esse produto exige pagamento integral." },
@@ -48,38 +72,57 @@ export async function POST(req: Request) {
     const codigo = createPedidoCode();
     const externalReference = `vizinha-${codigo}`;
 
-    const pedido = await prisma.pedido.create({
-      data: {
-        codigo,
-        clienteNome: payload.clienteNome.trim(),
-        clienteTelefone: payload.clienteTelefone.trim(),
-        clienteEmail: payload.clienteEmail?.trim() || null,
-        observacoes: payload.observacoes?.trim() || null,
-        dataEntrega: entrega,
-        percentualPagamento: payload.percentualPagamento,
-        metodoPagamento: payload.metodoPagamento,
-        metodoPagamentoLabel: payment.methodLabel,
-        taxaPercentual: payment.feePercent,
-        taxaValor: payment.feeAmount,
-        subtotal,
-        totalCobrado: payment.totalToCharge,
-        totalUnidades,
-        totalTipos,
-        produtoNomeSnapshot: produto.nome,
-        produtoPrecoSnapshot: subtotal,
-        mpExternalReference: externalReference,
-        produtoId: produto.id,
-        itens: {
-          create: itens.map((item) => ({
-            tipo: item.tipo,
-            quantidade: item.quantidade,
-          })),
+    let pedido;
+
+    try {
+      pedido = await prisma.pedido.create({
+        data: {
+          codigo,
+          clienteNome: payload.clienteNome.trim(),
+          clienteTelefone: payload.clienteTelefone.trim(),
+          clienteEmail: payload.clienteEmail?.trim() || null,
+          observacoes: payload.observacoes?.trim() || null,
+          dataEntrega: entrega,
+          percentualPagamento: payload.percentualPagamento,
+          metodoPagamento: payload.metodoPagamento,
+          metodoPagamentoLabel: payment.methodLabel,
+          taxaPercentual: payment.feePercent,
+          taxaValor: payment.feeAmount,
+          subtotal,
+          totalCobrado: payment.totalToCharge,
+          totalUnidades,
+          totalTipos,
+          produtoNomeSnapshot: produto.nome,
+          produtoPrecoSnapshot: subtotal,
+          mpExternalReference: externalReference,
+          produtoId: produto.id,
+          itens: {
+            create: itens.map((item) => ({
+              tipo: item.tipo,
+              quantidade: item.quantidade,
+            })),
+          },
         },
-      },
-      include: {
-        itens: true,
-      },
-    });
+        include: {
+          itens: true,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Esse horario acabou de ser reservado por outra encomenda. Escolha outro horario para continuar.",
+          },
+          { status: 409 }
+        );
+      }
+
+      throw error;
+    }
 
     const preference = await createMercadoPagoPreference({
       pedido,

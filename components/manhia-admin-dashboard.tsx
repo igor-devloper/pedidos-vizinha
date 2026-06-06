@@ -16,7 +16,6 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { PedidoStatus } from "@prisma/client";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -68,10 +67,19 @@ export type PedidoAdmin = {
   totalCobrado: string | number;
   totalUnidades: number;
   totalTipos: number;
-  status: PedidoStatus;
+  status:
+    | "PENDENTE_PAGAMENTO"
+    | "PAGO"
+    | "EM_PREPARO"
+    | "PRONTO"
+    | "ENTREGUE"
+    | "CANCELADO";
   produtoNomeSnapshot: string;
   notificadoClienteAt: string | null;
   notificadoVizinhaAt: string | null;
+  prontoAt?: string | null;
+  notificadoProntoClienteAt?: string | null;
+  notificadoToleranciaAt?: string | null;
   impressoAutomaticamenteAt: string | null;
   itens: { id: string; tipo: string; quantidade: number }[];
 };
@@ -103,6 +111,15 @@ const EMPTY_FORM: ProdutoFormState = {
   emPromocao: false,
   ativo: true,
 };
+
+const PEDIDO_STATUS_OPTIONS = [
+  "PENDENTE_PAGAMENTO",
+  "PAGO",
+  "EM_PREPARO",
+  "PRONTO",
+  "ENTREGUE",
+  "CANCELADO",
+] as const;
 
 async function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -139,7 +156,7 @@ export function ManhiaAdminDashboard({
     [produtos]
   );
   const pagos = useMemo(
-    () => pedidos.filter((pedido) => pedido.status === PedidoStatus.PAGO).length,
+    () => pedidos.filter((pedido) => pedido.status === "PAGO").length,
     [pedidos]
   );
 
@@ -168,7 +185,7 @@ export function ManhiaAdminDashboard({
       if (autoPrintEnabled) {
         for (const pedido of data) {
           if (
-            pedido.status === PedidoStatus.PAGO &&
+            pedido.status === "PAGO" &&
             !pedido.impressoAutomaticamenteAt &&
             !printedRef.current.has(pedido.id)
           ) {
@@ -357,7 +374,10 @@ export function ManhiaAdminDashboard({
     }
   };
 
-  const handleUpdatePedidoStatus = async (pedidoId: string, status: PedidoStatus) => {
+  const handleUpdatePedidoStatus = async (
+    pedidoId: string,
+    status: PedidoAdmin["status"]
+  ) => {
     try {
       setStatusLoadingId(pedidoId);
       const response = await fetch(`/api/manhia/pedidos/${pedidoId}`, {
@@ -580,14 +600,14 @@ export function ManhiaAdminDashboard({
                           value={pedido.status}
                           disabled={statusLoadingId === pedido.id}
                           onValueChange={(value) =>
-                            void handleUpdatePedidoStatus(pedido.id, value as PedidoStatus)
+                            void handleUpdatePedidoStatus(pedido.id, value as PedidoAdmin["status"])
                           }
                         >
                           <SelectTrigger className="h-11 w-full rounded-xl border-pink-100 bg-white text-sm text-slate-700 sm:w-[220px]">
                             <SelectValue placeholder="Selecione o status" />
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.values(PedidoStatus).map((status) => (
+                            {PEDIDO_STATUS_OPTIONS.map((status) => (
                               <SelectItem key={status} value={status}>
                                 {getPedidoStatusMeta(status).label}
                               </SelectItem>

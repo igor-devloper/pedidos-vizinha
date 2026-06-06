@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { isManhiaRequestAuthenticated } from "@/lib/admin-auth";
+import { processReadyPedidoToleranceReminders } from "@/lib/pedido-service";
 
 export async function GET(req: Request) {
   if (!isManhiaRequestAuthenticated(req)) {
@@ -9,6 +10,8 @@ export async function GET(req: Request) {
   }
 
   try {
+    await processReadyPedidoToleranceReminders();
+
     const pedidos = await prisma.pedido.findMany({
       orderBy: [{ createdAt: "desc" }],
       include: {

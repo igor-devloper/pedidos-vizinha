@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { getPedidoForView } from "@/lib/pedido-service";
+import { getPedidoForView, processReadyPedidoToleranceReminders } from "@/lib/pedido-service";
 
 export async function GET(
   _req: Request,
   context: { params: Promise<{ codigo: string }> }
 ) {
   try {
+    await processReadyPedidoToleranceReminders();
+
     const { codigo } = await context.params;
     const pedido = await getPedidoForView(codigo);
 

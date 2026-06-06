@@ -14,7 +14,7 @@ type PedidoResponse = {
   clienteNome: string;
   dataEntrega: string;
   totalCobrado: string | number;
-  status: "PENDENTE_PAGAMENTO" | "PAGO" | "EM_PREPARO" | "ENTREGUE" | "CANCELADO";
+  status: "PENDENTE_PAGAMENTO" | "PAGO" | "EM_PREPARO" | "PRONTO" | "ENTREGUE" | "CANCELADO";
   produtoNomeSnapshot: string;
 };
 
@@ -55,7 +55,7 @@ export function CheckoutReturnClient({
         const data = (await response.json()) as PedidoResponse;
         setPedido(data);
 
-        if (["PAGO", "EM_PREPARO", "ENTREGUE", "CANCELADO"].includes(data.status) && intervalId) {
+        if (["PAGO", "EM_PREPARO", "PRONTO", "ENTREGUE", "CANCELADO"].includes(data.status) && intervalId) {
           clearInterval(intervalId);
           intervalId = null;
         }
@@ -82,7 +82,10 @@ export function CheckoutReturnClient({
   }, [externalReference]);
 
   const isConfirmed =
-    pedido?.status === "PAGO" || pedido?.status === "EM_PREPARO" || pedido?.status === "ENTREGUE";
+    pedido?.status === "PAGO" ||
+    pedido?.status === "EM_PREPARO" ||
+    pedido?.status === "PRONTO" ||
+    pedido?.status === "ENTREGUE";
 
   if (loading) {
     return (
@@ -136,7 +139,7 @@ export function CheckoutReturnClient({
                   <p>Produto: {pedido.produtoNomeSnapshot}</p>
                   <p>Entrega: {formatDateTime(pedido.dataEntrega)}</p>
                   <p>Total cobrado: {formatCurrency(Number(pedido.totalCobrado))}</p>
-                  <p>Status atual: {getPedidoStatusMeta(pedido.status).label}</p>
+                  <p>Status atual: {getPedidoStatusMeta(pedido.status as "PRONTO").label}</p>
                 </div>
               </div>
             ) : (
