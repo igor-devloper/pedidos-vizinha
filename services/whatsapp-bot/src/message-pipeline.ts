@@ -1,10 +1,23 @@
 import { processInboundMessage } from "./automation.js";
+import { markInboundMessageIfNew } from "./inbound-dedupe.js";
 import { enrichInboundMedia } from "./media-understanding.js";
 import { emitWebhook } from "./webhook.js";
 import { logger } from "./logger.js";
 import type { InboundMessageJob } from "./types.js";
 
 export async function handleInboundMessage(job: InboundMessageJob) {
+  if (!markInboundMessageIfNew(job.instanceId, job.messageId)) {
+    logger.info(
+      {
+        instanceId: job.instanceId,
+        remoteJid: job.remoteJid,
+        messageId: job.messageId,
+      },
+      "Skipping duplicated inbound WhatsApp message"
+    );
+    return;
+  }
+
   const enrichedJob = await enrichInboundMedia(job);
 
   logger.info(

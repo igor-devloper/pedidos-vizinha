@@ -34,6 +34,8 @@ import {
   buildSiteOrderInstructionsMessage,
   buildSupportPromptMessage,
   buildWelcomeMessage,
+  formatWhatsAppList,
+  formatWhatsAppMessage,
 } from "./whatsapp-format.js";
 
 function isOutsideBusinessHours(now = new Date()) {
@@ -119,7 +121,156 @@ function indicatesPayment(text: string) {
 }
 
 function canUseSalesAgent(lead: BotLead) {
-  return ["new", "awaiting_intent", "site_order_guided"].includes(lead.stage);
+  return !["awaiting_owner_approval", "awaiting_payment_validation"].includes(lead.stage);
+}
+
+function isPricingQuestion(text: string) {
+  return ["valor", "valores", "preco", "precos", "preço", "preços", "quanto", "custa"].some((term) =>
+    text.includes(term)
+  );
+}
+
+function isHoursQuestion(text: string) {
+  return ["horario", "horarios", "hora", "horas", "abre", "fecha", "funciona", "domingo", "segunda"].some(
+    (term) => text.includes(term)
+  );
+}
+
+function isOrderingQuestion(text: string) {
+  return ["encomenda", "encomendar", "pedido", "comprar", "como faz", "como pedir"].some((term) =>
+    text.includes(term)
+  );
+}
+
+function isPaymentQuestion(text: string) {
+  return ["pix", "pagar", "pagamento", "sinal", "entrada", "50%", "metade", "total", "cartao", "cartão"].some(
+    (term) => text.includes(term)
+  );
+}
+
+function tokenizeSearchTerms(text: string) {
+  const ignoredTerms = new Set([
+    "qual",
+    "quais",
+    "valor",
+    "valores",
+    "preco",
+    "precos",
+    "preço",
+    "preços",
+    "quanto",
+    "custa",
+    "custam",
+    "tem",
+    "de",
+    "da",
+    "do",
+    "dos",
+    "das",
+    "uma",
+    "um",
+    "uns",
+    "umas",
+    "para",
+    "com",
+  ]);
+
+  return normalizeText(text)
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length >= 3 && !ignoredTerms.has(term));
+}
+
+async function buildSupportReply(text: string) {
+  const normalized = normalizeText(text);
+
+  if (isHoursQuestion(normalized)) {
+    return formatWhatsAppMessage([
+      "🕒 *Horário da Vizinha*",
+      [
+        `Atendemos ${config.pickupHours}`,
+        "⏰ A tolerância de atraso é de 15 minutos para ambas as partes.",
+      ],
+    ]);
+  }
+
+  if (isPaymentQuestion(normalized)) {
+    return formatWhatsAppMessage([
+      "💳 *Como funciona o pagamento*",
+      [
+        "Para confirmar a encomenda, é necessário pagar pelo menos *50%* do valor.",
+        "Se preferir, também pode pagar o valor total.",
+        "Assim que o pedido for aprovado, eu envio as orientações de pagamento aqui no WhatsApp.",
+      ],
+    ]);
+  }
+
+  if (isPricingQuestion(normalized)) {
+    const products = await listActiveProducts();
+    const searchTerms = tokenizeSearchTerms(normalized);
+    const matches = products
+      .map((product) => {
+        const haystack = normalizeText(`${product.nome} ${product.descricao} ${product.categoria}`);
+        const score = searchTerms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+        return { product, score };
+      })
+      .filter(({ score }) => (searchTerms.length > 0 ? score > 0 : true))
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+
+        return Number(a.product.preco) - Number(b.product.preco);
+      })
+      .slice(0, 4)
+      .map(({ product }) => product);
+
+    if (matches.length > 0) {
+      return formatWhatsAppMessage([
+        "💸 *Valores que encontrei no cardápio*",
+        formatWhatsAppList(
+          matches.map((product) => `*${product.nome}* por *R$ ${product.preco}*`),
+          "-"
+        ),
+        `📲 Se quiser ver tudo certinho, aqui está o cardápio completo:\n${config.cardapioUrl}`,
+      ]);
+    }
+
+    if (products.length > 0) {
+      return formatWhatsAppMessage([
+        "💸 *Sobre os valores*",
+        "Posso te adiantar alguns itens do cardápio:",
+        formatWhatsAppList(
+          products.slice(0, 3).map((product) => `*${product.nome}* por *R$ ${product.preco}*`),
+          "-"
+        ),
+        `📲 Cardápio completo: ${config.cardapioUrl}`,
+      ]);
+    }
+  }
+
+  if (isOrderingQuestion(normalized)) {
+    return buildSiteOrderInstructionsMessage(config.cardapioUrl);
+  }
+
+  return null;
+}
+
+async function maybeHandleSupportQuestion(job: InboundMessageJob, lead: BotLead) {
+  const normalized = normalizeText(job.text);
+  const reply = await buildSupportReply(job.text);
+
+  if (!reply) {
+    return false;
+  }
+
+  const nextLead = await updateLead(lead.id, {
+    lastInboundText: job.text,
+    stage: lead.stage === "new" ? "awaiting_intent" : lead.stage,
+    intent: isPricingQuestion(normalized) ? "valores" : isPaymentQuestion(normalized) ? "pagamento" : "duvida",
+  });
+
+  await sendAndTrack(job, nextLead || lead, reply);
+  return true;
 }
 
 async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: string) {
@@ -243,17 +394,33 @@ async function handleOwnerMessage(job: InboundMessageJob) {
   }
 
   if (command.type === "APPROVE") {
+    if (order.status === "AWAITING_PAYMENT" || order.status === "PAYMENT_REPORTED" || order.status === "CONFIRMED") {
+      await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerApprovedAckMessage(command.code));
+      return true;
+    }
+
     const updated = await updateBotOrder(order.id, {
       status: "AWAITING_PAYMENT",
       ownerReason: null,
     });
 
     await notifyCustomerAwaitingPayment(job.instanceId, updated || order);
+    if (order.leadId) {
+      await updateLead(order.leadId, {
+        stage: "awaiting_payment_validation",
+        status: "qualified",
+      });
+    }
     await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerApprovedAckMessage(command.code));
     return true;
   }
 
   if (command.type === "PAID") {
+    if (order.status === "CONFIRMED" && order.paymentStatus === command.payment) {
+      await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerPaidAckMessage(command.code));
+      return true;
+    }
+
     const updated = await updateBotOrder(order.id, {
       status: "CONFIRMED",
       paymentStatus: command.payment,
@@ -261,6 +428,12 @@ async function handleOwnerMessage(job: InboundMessageJob) {
     });
 
     await notifyCustomerOrderConfirmed(job.instanceId, updated || order);
+    if (order.leadId) {
+      await updateLead(order.leadId, {
+        stage: "confirmed",
+        status: "closed",
+      });
+    }
     await sendTextToNumber(job.instanceId, job.remoteJid, buildOwnerPaidAckMessage(command.code));
     return true;
   }
@@ -376,6 +549,10 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
   }
 
   if (lead.stage === "new") {
+    if (await maybeHandleSupportQuestion(job, lead)) {
+      return true;
+    }
+
     await updateLead(lead.id, {
       stage: "awaiting_intent",
       lastInboundText: job.text,
@@ -409,6 +586,10 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
       return true;
     }
 
+    if (await maybeHandleSupportQuestion(job, lead)) {
+      return true;
+    }
+
     await sendIntro(job, lead);
     return true;
   }
@@ -420,6 +601,10 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
     lead.stage === "awaiting_delivery_time" ||
     lead.stage === "awaiting_notes"
   ) {
+    if (await maybeHandleSupportQuestion(job, lead)) {
+      return true;
+    }
+
     await updateLead(lead.id, {
       stage: "site_order_guided",
       lastInboundText: job.text,
@@ -515,6 +700,10 @@ export async function processInboundMessage(job: InboundMessageJob) {
   if (isMenuRequest(normalized)) {
     await updateLead(lead.id, { lastInboundText: job.text });
     await sendCatalogOverview(job, lead);
+    return;
+  }
+
+  if (await maybeHandleSupportQuestion(job, lead)) {
     return;
   }
 
