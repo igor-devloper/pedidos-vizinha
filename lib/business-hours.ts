@@ -2,7 +2,7 @@ import { BUSINESS_RULES } from "@/lib/site-config";
 
 const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 
-function getBusinessTimeParts(input: Date) {
+export function getBusinessTimeParts(input: Date) {
   const formatter = new Intl.DateTimeFormat("sv-SE", {
     timeZone: BUSINESS_TIME_ZONE,
     year: "numeric",
@@ -26,7 +26,7 @@ function getBusinessTimeParts(input: Date) {
   };
 }
 
-function getBusinessWeekday(input: Date) {
+export function getBusinessWeekday(input: Date) {
   const weekday = new Intl.DateTimeFormat("en-US", {
     timeZone: BUSINESS_TIME_ZONE,
     weekday: "short",

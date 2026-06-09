@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { MetodoPagamento, PedidoStatus, type Pedido, type PedidoItem, type Produto } from "@prisma/client";
 import { z } from "zod";
 
-import { getBusinessHoursStatus } from "@/lib/business-hours";
+import { getBusinessHoursStatus, getBusinessTimeParts, getBusinessWeekday } from "@/lib/business-hours";
 import { getProdutoComboItens, isComboProduto } from "@/lib/produtos";
 import { BUSINESS_INFO, BUSINESS_RULES, PEDIDO_STATUS_META, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
 import {
@@ -115,19 +115,8 @@ export function parseDeliveryDate(input: string) {
 export function validateDeliveryDate(input: Date, now = new Date()) {
   const minDate = new Date(now.getTime() + BUSINESS_RULES.minimumLeadHours * 60 * 60 * 1000);
   const { isOpen: isWithinSchedule } = getBusinessHoursStatus(input);
-  const formatter = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
-    minute: "2-digit",
-    weekday: "short",
-    hourCycle: "h23",
-  });
-  const parts = formatter.formatToParts(input);
-  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(
-    parts.find((part) => part.type === "weekday")?.value || ""
-  );
-  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
-  const minutes = Number(parts.find((part) => part.type === "minute")?.value || 0);
+  const weekday = getBusinessWeekday(input);
+  const { hour, minute: minutes } = getBusinessTimeParts(input);
   const schedule = BUSINESS_RULES.scheduleByWeekday[
     weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday
   ];
