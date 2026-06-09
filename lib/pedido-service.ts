@@ -200,44 +200,74 @@ export async function processReadyPedidoToleranceReminders(now = new Date()) {
 async function notifyPaidPedido(pedido: PedidoWithItens) {
   const clientMessage = buildWhatsappMessageForClient(pedido);
   const ownerMessage = buildWhatsappMessageForOwner(pedido);
-
-  let notificadoClienteAt = pedido.notificadoClienteAt;
-  let notificadoVizinhaAt = pedido.notificadoVizinhaAt;
-
   if (!pedido.notificadoClienteAt) {
-    try {
-      await sendWhatsappText(pedido.clienteTelefone, clientMessage);
-      notificadoClienteAt = new Date();
-    } catch (error) {
-      console.error("Falha ao notificar cliente via WhatsApp", {
-        pedidoId: pedido.id,
-        codigo: pedido.codigo,
-        error,
-      });
+    const claimedAt = new Date();
+    const claim = await prisma.pedido.updateMany({
+      where: {
+        id: pedido.id,
+        notificadoClienteAt: null,
+      },
+      data: {
+        notificadoClienteAt: claimedAt,
+      },
+    });
+
+    if (claim.count > 0) {
+      try {
+        await sendWhatsappText(pedido.clienteTelefone, clientMessage);
+      } catch (error) {
+        await prisma.pedido.updateMany({
+          where: {
+            id: pedido.id,
+            notificadoClienteAt: claimedAt,
+          },
+          data: {
+            notificadoClienteAt: null,
+          },
+        });
+
+        console.error("Falha ao notificar cliente via WhatsApp", {
+          pedidoId: pedido.id,
+          codigo: pedido.codigo,
+          error,
+        });
+      }
     }
   }
 
   if (!pedido.notificadoVizinhaAt && BUSINESS_INFO.ownerPhone) {
-    try {
-      await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
-      notificadoVizinhaAt = new Date();
-    } catch (error) {
-      console.error("Falha ao notificar vizinha via WhatsApp", {
-        pedidoId: pedido.id,
-        codigo: pedido.codigo,
-        error,
-      });
-    }
-  }
-
-  if (notificadoClienteAt || notificadoVizinhaAt) {
-    await prisma.pedido.update({
-      where: { id: pedido.id },
+    const claimedAt = new Date();
+    const claim = await prisma.pedido.updateMany({
+      where: {
+        id: pedido.id,
+        notificadoVizinhaAt: null,
+      },
       data: {
-        notificadoClienteAt,
-        notificadoVizinhaAt,
+        notificadoVizinhaAt: claimedAt,
       },
     });
+
+    if (claim.count > 0) {
+      try {
+        await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
+      } catch (error) {
+        await prisma.pedido.updateMany({
+          where: {
+            id: pedido.id,
+            notificadoVizinhaAt: claimedAt,
+          },
+          data: {
+            notificadoVizinhaAt: null,
+          },
+        });
+
+        console.error("Falha ao notificar vizinha via WhatsApp", {
+          pedidoId: pedido.id,
+          codigo: pedido.codigo,
+          error,
+        });
+      }
+    }
   }
 }
 

@@ -6,12 +6,13 @@ import { logger } from "./logger.js";
 import type { InboundMessageJob } from "./types.js";
 
 export async function handleInboundMessage(job: InboundMessageJob) {
-  if (!markInboundMessageIfNew(job.instanceId, job.messageId)) {
+  if (!markInboundMessageIfNew(job)) {
     logger.info(
       {
         instanceId: job.instanceId,
         remoteJid: job.remoteJid,
         messageId: job.messageId,
+        mediaKind: job.mediaKind,
       },
       "Skipping duplicated inbound WhatsApp message"
     );
