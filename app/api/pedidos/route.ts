@@ -61,8 +61,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const { totalTipos, totalUnidades } = validatePedidoAgainstProduto(produto, itens);
-    const subtotal = Number(produto.preco);
+    const productQuantity = payload.productQuantity;
+    const { totalTipos, totalUnidades } = validatePedidoAgainstProduto(produto, itens, productQuantity);
+    const subtotal = Number(produto.preco) * productQuantity;
     const payment = calculatePaymentAmounts(
       subtotal,
       payload.percentualPagamento,

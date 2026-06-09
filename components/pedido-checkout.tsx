@@ -185,6 +185,7 @@ export function PedidoCheckout({
   paymentMethods: PaymentMethodOption[];
 }) {
   const isCombo = produto.categoria === "COMBO" && produto.comboItens.length > 0;
+  const isCentoProduct = produto.categoria === "CENTO";
   const businessStatus = useMemo(() => getBusinessHoursStatus(), []);
   const minDeliveryDate = useMemo(() => getMinDeliveryDate(), []);
   const minDeliveryDateKey = useMemo(() => formatDateInputValue(minDeliveryDate), [minDeliveryDate]);
@@ -199,6 +200,7 @@ export function PedidoCheckout({
   const [percentualPagamento, setPercentualPagamento] = useState<50 | 100>(
     produto.permitePagamentoParcial ? 50 : 100
   );
+  const [productQuantity, setProductQuantity] = useState(1);
   const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>(
     paymentMethods[0]?.id || MetodoPagamento.PIX
   );
@@ -225,7 +227,10 @@ export function PedidoCheckout({
     () => items.reduce((sum, item) => sum + Number(item.quantidade || 0), 0),
     [items]
   );
-  const remaining = produto.totalUnidades - totalUnidades;
+  const requiredUnits = produto.totalUnidades * productQuantity;
+  const maxAllowedTypes = produto.maxTiposSalgado * productQuantity;
+  const effectivePrice = produto.preco * productQuantity;
+  const remaining = requiredUnits - totalUnidades;
   const activeTypes = useMemo(
     () => items.filter((item) => item.tipo.trim() && item.quantidade > 0).length,
     [items]
@@ -239,19 +244,19 @@ export function PedidoCheckout({
   );
   const dataEntrega = buildDeliveryDateTime(dataEntregaData, dataEntregaHora);
   const paymentPreview = useMemo(
-    () => calculatePaymentAmounts(produto.preco, percentualPagamento, metodoPagamento),
-    [produto.preco, percentualPagamento, metodoPagamento]
+    () => calculatePaymentAmounts(effectivePrice, percentualPagamento, metodoPagamento),
+    [effectivePrice, percentualPagamento, metodoPagamento]
   );
 
-  const canAddType = !isCombo && items.length < produto.maxTiposSalgado;
+  const canAddType = !isCombo && items.length < maxAllowedTypes;
   const canSubmit =
     clienteNome.trim().length >= 2 &&
     clienteTelefone.trim().length >= 10 &&
     Boolean(dataEntregaData) &&
     Boolean(dataEntregaHora) &&
-    totalUnidades === produto.totalUnidades &&
+    totalUnidades === requiredUnits &&
     activeTypes > 0 &&
-    activeTypes <= produto.maxTiposSalgado &&
+    activeTypes <= maxAllowedTypes &&
     !submitting;
 
   const selectedDateHasNoSchedule = Boolean(dataEntregaData) && timeSlots.length === 0;
@@ -304,6 +309,7 @@ export function PedidoCheckout({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           produtoId: produto.id,
+          productQuantity,
           clienteNome,
           clienteTelefone,
           clienteEmail,
@@ -390,19 +396,19 @@ export function PedidoCheckout({
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
                     Valor base
                   </p>
-                  <p className="mt-2 text-lg font-semibold">{formatCurrency(produto.preco)}</p>
+                  <p className="mt-2 text-lg font-semibold">{formatCurrency(effectivePrice)}</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
                     Unidades
                   </p>
-                  <p className="mt-2 text-lg font-semibold">{produto.totalUnidades}</p>
+                  <p className="mt-2 text-lg font-semibold">{requiredUnits}</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
                     Tipos
                   </p>
-                  <p className="mt-2 text-lg font-semibold">Ate {produto.maxTiposSalgado}</p>
+                  <p className="mt-2 text-lg font-semibold">Ate {maxAllowedTypes}</p>
                 </div>
               </div>
             </CardContent>
@@ -421,9 +427,33 @@ export function PedidoCheckout({
               <p className="mt-2 text-sm text-[#48654f]">
                 {isCombo
                   ? "Esse combo já vem com quantidades fechadas. O cliente vê exatamente o que está levando."
-                  : `A soma precisa fechar em ${produto.totalUnidades} unidades e no maximo ${produto.maxTiposSalgado} tipos.`}
+                  : `A soma precisa fechar em ${requiredUnits} unidades e no maximo ${maxAllowedTypes} tipos.`}
               </p>
             </div>
+
+            {isCentoProduct ? (
+              <div className="grid gap-2 rounded-[1.5rem] border border-[#dfeab9] bg-[#f7fde3] p-4 sm:max-w-xs">
+                <label className="text-sm font-medium text-[#284a2e]">Quantidade de centos</label>
+                <Select
+                  value={String(productQuantity)}
+                  onValueChange={(value) => setProductQuantity(Number(value))}
+                >
+                  <SelectTrigger className="w-full border-[#d8e8a4] bg-white">
+                    <SelectValue placeholder="Escolha a quantidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <SelectItem key={value} value={String(value)}>
+                        {value} cento{value > 1 ? "s" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-[#48654f]">
+                  Cada cento soma mais {produto.totalUnidades} unidades e libera mais {produto.maxTiposSalgado} tipo{produto.maxTiposSalgado > 1 ? "s" : ""}.
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-3">
               {items.map((item, index) => (
@@ -679,7 +709,7 @@ export function PedidoCheckout({
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-[#48654f]">
-                  Base do pagamento: {formatCurrency((produto.preco * percentualPagamento) / 100)}
+                  Base do pagamento: {formatCurrency((effectivePrice * percentualPagamento) / 100)}
                 </p>
               </div>
 
@@ -713,7 +743,7 @@ export function PedidoCheckout({
               <div className="mt-4 space-y-2 text-sm text-white/85">
                 <div className="flex items-center justify-between gap-3">
                   <span>Produto</span>
-                  <span>{formatCurrency(produto.preco)}</span>
+                  <span>{formatCurrency(effectivePrice)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Percentual agora</span>
@@ -738,7 +768,7 @@ export function PedidoCheckout({
                   : `Faltam ${remaining} unidades para completar o produto.`}
               </p>
               <p className="mt-1">
-                Tipos ativos: {activeTypes} de {produto.maxTiposSalgado}
+                Tipos ativos: {activeTypes} de {maxAllowedTypes}
               </p>
               <p className="mt-1">
                 Atendimento: terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.

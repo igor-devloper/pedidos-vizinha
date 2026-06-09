@@ -21,6 +21,7 @@ export const pedidoItemSchema = z.object({
 
 export const createPedidoSchema = z.object({
   produtoId: z.string().trim().min(1),
+  productQuantity: z.coerce.number().int().positive("Informe uma quantidade valida do produto.").default(1),
   clienteNome: z.string().trim().min(2, "Informe o nome do cliente."),
   clienteTelefone: z.string().trim().min(10, "Informe um telefone valido."),
   clienteEmail: z.string().trim().email("Informe um e-mail valido.").optional().or(z.literal("")),
@@ -161,7 +162,8 @@ export function normalizePedidoItems(items: CreatePedidoInput["itens"]) {
 
 export function validatePedidoAgainstProduto(
   produto: Produto & { comboItens?: unknown; categoria?: string },
-  items: ReturnType<typeof normalizePedidoItems>
+  items: ReturnType<typeof normalizePedidoItems>,
+  productQuantity = 1
 ) {
   if (isComboProduto(produto)) {
     const comboItens = getProdutoComboItens(produto);
@@ -184,12 +186,15 @@ export function validatePedidoAgainstProduto(
   const totalUnidades = items.reduce((sum, item) => sum + item.quantidade, 0);
   const totalTipos = items.length;
 
-  if (totalUnidades !== produto.totalUnidades) {
-    throw new Error(`Esse produto exige exatamente ${produto.totalUnidades} unidades.`);
+  const requiredUnits = produto.totalUnidades * productQuantity;
+  const maxAllowedTypes = produto.maxTiposSalgado * productQuantity;
+
+  if (totalUnidades !== requiredUnits) {
+    throw new Error(`Esse produto exige exatamente ${requiredUnits} unidades.`);
   }
 
-  if (totalTipos > produto.maxTiposSalgado) {
-    throw new Error(`Esse produto permite no maximo ${produto.maxTiposSalgado} tipos diferentes.`);
+  if (totalTipos > maxAllowedTypes) {
+    throw new Error(`Esse produto permite no maximo ${maxAllowedTypes} tipos diferentes.`);
   }
 
   return { totalUnidades, totalTipos };
