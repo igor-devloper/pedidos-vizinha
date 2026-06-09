@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getProdutoComboItens } from "@/lib/produtos";
 import { getManhiaPassword, isManhiaAuthenticated } from "@/lib/admin-auth";
 import { normalizeSaboresList } from "@/lib/sabores";
 import { ManhiaLoginForm } from "@/components/manhia-login-form";
@@ -27,11 +28,12 @@ async function getProdutos(): Promise<ProdutoAdmin[]> {
       descricao: produto.descricao,
       preco: Number(produto.preco),
       imagemBase64: produto.imagemBase64,
-      categoria: produto.categoria,
+      categoria: produto.categoria as "CENTO" | "LANCHONETE" | "COMBO",
       totalUnidades: produto.totalUnidades,
       maxTiposSalgado: produto.maxTiposSalgado,
       permitePagamentoParcial: produto.permitePagamentoParcial,
       saboresSugeridos: normalizeSaboresList(produto.saboresSugeridos),
+      comboItens: getProdutoComboItens(produto as { comboItens?: unknown }),
       emPromocao: Boolean(produto.emPromocao),
       ativo: produto.ativo,
       createdAt: produto.createdAt.toISOString(),

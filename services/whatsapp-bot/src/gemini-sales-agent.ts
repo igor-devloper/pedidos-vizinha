@@ -15,7 +15,7 @@ type AgentResult = {
   nome?: string;
   eventoDetalhes?: string;
   horarioEntrega?: string;
-  menuCategoria?: "CENTO" | "LANCHONETE";
+  menuCategoria?: "CENTO" | "LANCHONETE" | "COMBO";
   bairroRetirada?: string;
   observacoes?: string;
   shouldRespond: boolean;
@@ -32,7 +32,9 @@ function normalizeOptionalText(value: unknown) {
 
 function sanitizeAgentResult(raw: AgentResult) {
   const menuCategoria =
-    raw.menuCategoria === "CENTO" || raw.menuCategoria === "LANCHONETE"
+    raw.menuCategoria === "CENTO" ||
+    raw.menuCategoria === "LANCHONETE" ||
+    raw.menuCategoria === "COMBO"
       ? raw.menuCategoria
       : undefined;
 
@@ -154,7 +156,7 @@ Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
   "nome": "nome se apareceu de forma útil",
   "eventoDetalhes": "detalhes se for útil guardar",
   "horarioEntrega": "horario se for útil guardar",
-  "menuCategoria": "CENTO|LANCHONETE se ficar claro",
+  "menuCategoria": "CENTO|LANCHONETE|COMBO se ficar claro",
   "bairroRetirada": "bairro ou retirada se fizer sentido",
   "observacoes": "observacoes extras se necessário"
 }

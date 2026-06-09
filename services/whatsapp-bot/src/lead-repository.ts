@@ -10,7 +10,7 @@ export type BotLead = {
   pushName: string | null;
   phoneNumber: string | null;
   nome: string | null;
-  menuCategoria: "CENTO" | "LANCHONETE" | null;
+  menuCategoria: "CENTO" | "LANCHONETE" | "COMBO" | null;
   horarioEntrega: string | null;
   stage: string;
   status: string;
@@ -34,7 +34,7 @@ type LeadPatch = Partial<{
   pushName: string | null;
   phoneNumber: string | null;
   nome: string | null;
-  menuCategoria: "CENTO" | "LANCHONETE" | null;
+  menuCategoria: "CENTO" | "LANCHONETE" | "COMBO" | null;
   horarioEntrega: string | null;
   stage: string;
   status: string;

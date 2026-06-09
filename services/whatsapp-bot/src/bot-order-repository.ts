@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
 import { logger } from "./logger.js";
 
-export type OrderMenuCategory = "CENTO" | "LANCHONETE";
+export type OrderMenuCategory = "CENTO" | "LANCHONETE" | "COMBO";
 export type BotOrderStatus =
   | "PENDING_OWNER_APPROVAL"
   | "AWAITING_PAYMENT"

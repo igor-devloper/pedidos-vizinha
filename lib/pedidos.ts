@@ -3,6 +3,8 @@ import { createHash } from "crypto";
 import { MetodoPagamento, PedidoStatus, type Pedido, type PedidoItem, type Produto } from "@prisma/client";
 import { z } from "zod";
 
+import { getBusinessHoursStatus } from "@/lib/business-hours";
+import { getProdutoComboItens, isComboProduto } from "@/lib/produtos";
 import { BUSINESS_INFO, BUSINESS_RULES, PEDIDO_STATUS_META, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
 import {
   formatWhatsAppList,
@@ -10,7 +12,6 @@ import {
   WHATSAPP_SECTION_DIVIDER,
 } from "@/lib/whatsapp-message";
 
-const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 const BUSINESS_UTC_OFFSET = "-03:00";
 
 export const pedidoItemSchema = z.object({
@@ -58,41 +59,8 @@ export function formatDateTime(value: string | Date) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
-    timeZone: BUSINESS_TIME_ZONE,
+    timeZone: "America/Sao_Paulo",
   }).format(typeof value === "string" ? new Date(value) : value);
-}
-
-function getBusinessTimeParts(input: Date) {
-  const formatter = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
-
-  const parts = formatter.formatToParts(input);
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value || "";
-
-  return {
-    year: Number(get("year")),
-    month: Number(get("month")),
-    day: Number(get("day")),
-    hour: Number(get("hour")),
-    minute: Number(get("minute")),
-  };
-}
-
-function getBusinessWeekday(input: Date) {
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TIME_ZONE,
-    weekday: "short",
-  }).format(input);
-
-  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
 }
 
 export function normalizePhone(phone: string) {
@@ -146,27 +114,38 @@ export function parseDeliveryDate(input: string) {
 
 export function validateDeliveryDate(input: Date, now = new Date()) {
   const minDate = new Date(now.getTime() + BUSINESS_RULES.minimumLeadHours * 60 * 60 * 1000);
-  const businessTime = getBusinessTimeParts(input);
-  const weekday = getBusinessWeekday(input);
-  const schedule = BUSINESS_RULES.scheduleByWeekday[weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday];
+  const { isOpen: isWithinSchedule } = getBusinessHoursStatus(input);
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+    hourCycle: "h23",
+  });
+  const parts = formatter.formatToParts(input);
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(
+    parts.find((part) => part.type === "weekday")?.value || ""
+  );
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  const minutes = Number(parts.find((part) => part.type === "minute")?.value || 0);
+  const schedule = BUSINESS_RULES.scheduleByWeekday[
+    weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday
+  ];
 
   if (input.getTime() < minDate.getTime()) {
     throw new Error(`Escolha um horario com pelo menos ${BUSINESS_RULES.minimumLeadHours} horas de antecedencia.`);
   }
 
   if (!schedule) {
-    throw new Error("Nao atendemos nas segundas-feiras. Escolha de terca a sabado, das 10h as 17h, ou domingo, das 9h as 13h.");
+    throw new Error("Nao atendemos nas segundas-feiras. Escolha de terça a sabádo, das 10h as 17h, ou domingo, das 9h as 13h.");
   }
 
-  const hour = businessTime.hour;
-  const minutes = businessTime.minute;
-
-  if (hour < schedule.openHour || hour > schedule.closeHour) {
+  if (!isWithinSchedule && (hour < schedule.openHour || hour > schedule.closeHour)) {
     if (weekday === 0) {
       throw new Error("Aos domingos, os pedidos precisam ficar entre 9h e 13h.");
     }
 
-    throw new Error("De terca a sabado, os pedidos precisam ficar entre 10h e 17h.");
+    throw new Error("De terça a sabádo, os pedidos precisam ficar entre 10h e 17h.");
   }
 
   if (hour === schedule.closeHour && minutes > 0) {
@@ -174,7 +153,7 @@ export function validateDeliveryDate(input: Date, now = new Date()) {
       throw new Error("No domingo, o ultimo horario disponivel e as 13h.");
     }
 
-    throw new Error("O ultimo horario disponivel de terca a sabado e as 17h.");
+    throw new Error("O ultimo horario disponivel de terça a sabádo e as 17h.");
   }
 
   if (minutes % BUSINESS_RULES.slotMinutes !== 0) {
@@ -191,7 +170,28 @@ export function normalizePedidoItems(items: CreatePedidoInput["itens"]) {
     .filter((item) => item.tipo && item.quantidade > 0);
 }
 
-export function validatePedidoAgainstProduto(produto: Produto, items: ReturnType<typeof normalizePedidoItems>) {
+export function validatePedidoAgainstProduto(
+  produto: Produto & { comboItens?: unknown; categoria?: string },
+  items: ReturnType<typeof normalizePedidoItems>
+) {
+  if (isComboProduto(produto)) {
+    const comboItens = getProdutoComboItens(produto);
+
+    if (items.length !== comboItens.length) {
+      throw new Error("Esse combo possui itens fixos e nao pode ser alterado.");
+    }
+
+    for (const comboItem of comboItens) {
+      const item = items.find(
+        (entry) => entry.tipo.trim().toLowerCase() === comboItem.nome.trim().toLowerCase()
+      );
+
+      if (!item || item.quantidade !== comboItem.quantidade) {
+        throw new Error("Esse combo possui quantidades fixas e nao pode ser alterado.");
+      }
+    }
+  }
+
   const totalUnidades = items.reduce((sum, item) => sum + item.quantidade, 0);
   const totalTipos = items.length;
 

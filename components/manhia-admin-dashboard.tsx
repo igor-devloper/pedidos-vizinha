@@ -31,6 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  type ComboItem,
+  type ProductCategory,
+} from "@/lib/produtos";
 import { normalizeSaboresList } from "@/lib/sabores";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateTime, getPedidoStatusMeta } from "@/lib/pedidos";
@@ -42,11 +46,12 @@ export type ProdutoAdmin = {
   descricao: string;
   preco: string | number;
   imagemBase64: string;
-  categoria: "CENTO" | "LANCHONETE";
+  categoria: ProductCategory;
   totalUnidades: number;
   maxTiposSalgado: number;
   permitePagamentoParcial: boolean;
   saboresSugeridos: string[];
+  comboItens: ComboItem[];
   emPromocao: boolean;
   ativo: boolean;
   createdAt: string;
@@ -89,11 +94,12 @@ type ProdutoFormState = {
   descricao: string;
   preco: string;
   imagemBase64: string;
-  categoria: "CENTO" | "LANCHONETE";
+  categoria: ProductCategory;
   totalUnidades: string;
   maxTiposSalgado: string;
   permitePagamentoParcial: boolean;
   saboresSugeridos: string[];
+  comboItens: Array<{ nome: string; quantidade: string }>;
   emPromocao: boolean;
   ativo: boolean;
 };
@@ -108,6 +114,7 @@ const EMPTY_FORM: ProdutoFormState = {
   maxTiposSalgado: "5",
   permitePagamentoParcial: true,
   saboresSugeridos: [""],
+  comboItens: [{ nome: "", quantidade: "1" }],
   emPromocao: false,
   ativo: true,
 };
@@ -225,6 +232,8 @@ export function ManhiaAdminDashboard({
     setEditingId(null);
   };
 
+  const isComboCategory = form.categoria === "COMBO";
+
   const updateSabor = (index: number, value: string) => {
     setForm((current) => ({
       ...current,
@@ -248,6 +257,35 @@ export function ManhiaAdminDashboard({
         current.saboresSugeridos.length === 1
           ? [""]
           : current.saboresSugeridos.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
+  const updateComboItem = (
+    index: number,
+    patch: Partial<{ nome: string; quantidade: string }>
+  ) => {
+    setForm((current) => ({
+      ...current,
+      comboItens: current.comboItens.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      ),
+    }));
+  };
+
+  const addComboItem = () => {
+    setForm((current) => ({
+      ...current,
+      comboItens: [...current.comboItens, { nome: "", quantidade: "1" }],
+    }));
+  };
+
+  const removeComboItem = (index: number) => {
+    setForm((current) => ({
+      ...current,
+      comboItens:
+        current.comboItens.length === 1
+          ? [{ nome: "", quantidade: "1" }]
+          : current.comboItens.filter((_, itemIndex) => itemIndex !== index),
     }));
   };
 
@@ -293,6 +331,10 @@ export function ManhiaAdminDashboard({
             maxTiposSalgado: form.maxTiposSalgado,
             permitePagamentoParcial: form.permitePagamentoParcial,
             saboresSugeridos: normalizeSaboresList(form.saboresSugeridos),
+            comboItens: form.comboItens.map((item) => ({
+              nome: item.nome,
+              quantidade: Number(item.quantidade || 0),
+            })),
             emPromocao: form.emPromocao,
             ativo: form.ativo,
           }),
@@ -343,6 +385,13 @@ export function ManhiaAdminDashboard({
         normalizeSaboresList(produto.saboresSugeridos).length > 0
           ? normalizeSaboresList(produto.saboresSugeridos)
           : [""],
+      comboItens:
+        produto.comboItens.length > 0
+          ? produto.comboItens.map((item) => ({
+              nome: item.nome,
+              quantidade: String(item.quantidade),
+            }))
+          : [{ nome: "", quantidade: "1" }],
       emPromocao: produto.emPromocao,
       ativo: produto.ativo,
     });
@@ -686,7 +735,7 @@ export function ManhiaAdminDashboard({
                         onValueChange={(value) =>
                           setForm((current) => ({
                             ...current,
-                            categoria: value as "CENTO" | "LANCHONETE",
+                            categoria: value as ProductCategory,
                           }))
                         }
                       >
@@ -696,6 +745,7 @@ export function ManhiaAdminDashboard({
                         <SelectContent>
                           <SelectItem value="CENTO">Cento</SelectItem>
                           <SelectItem value="LANCHONETE">Lanchonete</SelectItem>
+                          <SelectItem value="COMBO">Combo</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -707,6 +757,7 @@ export function ManhiaAdminDashboard({
                         min="1"
                         step="1"
                         value={form.totalUnidades}
+                        disabled={isComboCategory}
                         onChange={(event) =>
                           setForm((current) => ({
                             ...current,
@@ -723,6 +774,7 @@ export function ManhiaAdminDashboard({
                         min="1"
                         step="1"
                         value={form.maxTiposSalgado}
+                        disabled={isComboCategory}
                         onChange={(event) =>
                           setForm((current) => ({
                             ...current,
@@ -732,48 +784,107 @@ export function ManhiaAdminDashboard({
                       />
                     </div>
 
-                    <div className="space-y-2 sm:col-span-2">
-                      <label className="text-sm font-medium text-slate-700">
-                        Sabores sugeridos
-                      </label>
-                      <div className="space-y-3 rounded-[1.4rem] border border-pink-100 bg-[#fff8fb] p-4">
-                        {form.saboresSugeridos.map((sabor, index) => (
-                          <div
-                            key={`sabor-${index}`}
-                            className="flex flex-col gap-3 sm:flex-row sm:items-center"
-                          >
-                            <Input
-                              value={sabor}
-                              onChange={(event) => updateSabor(index, event.target.value)}
-                              placeholder={`Ex: sabor ${index + 1}`}
-                              className="flex-1 border-pink-100 bg-white"
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => removeSabor(index)}
-                              className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
+                    {isComboCategory ? (
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          Itens fixos do combo
+                        </label>
+                        <div className="space-y-3 rounded-[1.4rem] border border-pink-100 bg-[#fff8fb] p-4">
+                          {form.comboItens.map((item, index) => (
+                            <div
+                              key={`combo-${index}`}
+                              className="grid gap-3 sm:grid-cols-[1fr_140px_auto]"
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Remover
-                            </Button>
-                          </div>
-                        ))}
+                              <Input
+                                value={item.nome}
+                                onChange={(event) =>
+                                  updateComboItem(index, { nome: event.target.value })
+                                }
+                                placeholder={`Ex: item ${index + 1}`}
+                                className="border-pink-100 bg-white"
+                              />
+                              <Input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.quantidade}
+                                onChange={(event) =>
+                                  updateComboItem(index, { quantidade: event.target.value })
+                                }
+                                className="border-pink-100 bg-white"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => removeComboItem(index)}
+                                className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Remover
+                              </Button>
+                            </div>
+                          ))}
 
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={addSabor}
-                          className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Adicionar sabor
-                        </Button>
-                        <p className="text-sm text-slate-500">
-                          Cadastre cada tipo separadamente para a cliente escolher um por vez na montagem.
-                        </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={addComboItem}
+                            className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Adicionar item fixo
+                          </Button>
+                          <p className="text-sm text-slate-500">
+                            Para combo, as quantidades ficam travadas no cadastro e entram prontas no pedido.
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
+
+                    {!isComboCategory ? (
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          Sabores sugeridos
+                        </label>
+                        <div className="space-y-3 rounded-[1.4rem] border border-pink-100 bg-[#fff8fb] p-4">
+                          {form.saboresSugeridos.map((sabor, index) => (
+                            <div
+                              key={`sabor-${index}`}
+                              className="flex flex-col gap-3 sm:flex-row sm:items-center"
+                            >
+                              <Input
+                                value={sabor}
+                                onChange={(event) => updateSabor(index, event.target.value)}
+                                placeholder={`Ex: sabor ${index + 1}`}
+                                className="flex-1 border-pink-100 bg-white"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => removeSabor(index)}
+                                className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Remover
+                              </Button>
+                            </div>
+                          ))}
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={addSabor}
+                            className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Adicionar sabor
+                          </Button>
+                          <p className="text-sm text-slate-500">
+                            Cadastre cada tipo separadamente para a cliente escolher um por vez na montagem.
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
 
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-medium text-slate-700">Foto do produto</label>

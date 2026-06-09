@@ -1,23 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/db";
 import { isValidManhiaSessionToken, MANHIA_COOKIE_NAME } from "@/lib/admin-auth";
+import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/pedidos";
-import { normalizeSaboresList } from "@/lib/sabores";
-
-type ProdutoPayload = {
-  nome?: string;
-  descricao?: string;
-  preco?: number | string;
-  imagemBase64?: string;
-  categoria?: "CENTO" | "LANCHONETE";
-  totalUnidades?: number | string;
-  maxTiposSalgado?: number | string;
-  permitePagamentoParcial?: boolean;
-  saboresSugeridos?: string[];
-  emPromocao?: boolean;
-  ativo?: boolean;
-};
+import { type ProdutoPayloadInput, validateProdutoPayload } from "@/lib/produtos";
 
 function getToken(req: Request) {
   return (
@@ -30,67 +16,7 @@ function getToken(req: Request) {
 }
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-}
-
-function validateProdutoPayload(body: ProdutoPayload) {
-  const nome = body.nome?.trim() || "";
-  const descricao = body.descricao?.trim() || "";
-  const preco = Number(body.preco);
-  const imagemBase64 = body.imagemBase64?.trim() || "";
-  const totalUnidades = Number(body.totalUnidades);
-  const maxTiposSalgado = Number(body.maxTiposSalgado);
-  const categoria: "CENTO" | "LANCHONETE" =
-    body.categoria === "LANCHONETE" ? "LANCHONETE" : "CENTO";
-  const permitePagamentoParcial = body.permitePagamentoParcial ?? true;
-  const saboresSugeridos = normalizeSaboresList(body.saboresSugeridos);
-  const emPromocao = body.emPromocao ?? false;
-  const ativo = body.ativo ?? true;
-
-  if (!nome) {
-    return { error: "Informe o nome do produto." };
-  }
-
-  if (!descricao) {
-    return { error: "Informe a descricao do produto." };
-  }
-
-  if (!Number.isFinite(preco) || preco <= 0) {
-    return { error: "Informe um valor valido." };
-  }
-
-  if (!Number.isInteger(totalUnidades) || totalUnidades <= 0) {
-    return { error: "Informe o total de unidades do produto." };
-  }
-
-  if (!Number.isInteger(maxTiposSalgado) || maxTiposSalgado <= 0) {
-    return { error: "Informe o limite de tipos permitidos." };
-  }
-
-  if (!imagemBase64.startsWith("data:image/")) {
-    return { error: "Envie uma imagem valida para o produto." };
-  }
-
-  if (imagemBase64.length > 2_500_000) {
-    return { error: "A imagem ficou muito grande. Tente um arquivo menor." };
-  }
-
-  return {
-    data: {
-      slug: slugify(nome),
-      nome,
-      descricao,
-      preco: Number(preco.toFixed(2)),
-      imagemBase64,
-      categoria,
-      totalUnidades,
-      maxTiposSalgado,
-      permitePagamentoParcial,
-      saboresSugeridos,
-      emPromocao,
-      ativo,
-    },
-  };
+  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
 }
 
 export async function PATCH(
@@ -103,15 +29,16 @@ export async function PATCH(
 
   try {
     const { id } = await context.params;
-    const body = (await req.json()) as ProdutoPayload;
+    const body = (await req.json()) as ProdutoPayloadInput;
     const validation = validateProdutoPayload(body);
 
     if ("error" in validation) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const slugBase = slugify(validation.data.nome);
     const existing = await prisma.produto.findUnique({
-      where: { slug: validation.data.slug },
+      where: { slug: slugBase },
       select: { id: true },
     });
 
@@ -121,18 +48,15 @@ export async function PATCH(
         ...validation.data,
         slug:
           existing && existing.id !== id
-            ? `${validation.data.slug}-${Date.now().toString(36)}`
-            : validation.data.slug,
-      },
+            ? `${slugBase}-${Date.now().toString(36)}`
+            : slugBase,
+      } as never,
     });
 
     return NextResponse.json(produto);
   } catch (error) {
     console.error("PATCH /api/manhia/produtos/[id] error", error);
-    return NextResponse.json(
-      { error: "Erro ao atualizar produto." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao atualizar produto." }, { status: 500 });
   }
 }
 
@@ -154,9 +78,6 @@ export async function DELETE(
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("DELETE /api/manhia/produtos/[id] error", error);
-    return NextResponse.json(
-      { error: "Erro ao excluir produto." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao excluir produto." }, { status: 500 });
   }
 }

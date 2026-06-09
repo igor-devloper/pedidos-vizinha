@@ -4,6 +4,7 @@ import { MetodoPagamento } from "@prisma/client";
 import { PedidoCheckout } from "@/components/pedido-checkout";
 import { prisma } from "@/lib/db";
 import { listMercadoPagoMethods } from "@/lib/mercado-pago";
+import { getProdutoComboItens } from "@/lib/produtos";
 import { normalizeSaboresList } from "@/lib/sabores";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +53,9 @@ export default async function PedidoPage({
             totalUnidades: produto.totalUnidades,
             maxTiposSalgado: produto.maxTiposSalgado,
             permitePagamentoParcial: produto.permitePagamentoParcial,
+            categoria: produto.categoria as "CENTO" | "LANCHONETE" | "COMBO",
             saboresSugeridos: normalizeSaboresList(produto.saboresSugeridos),
+            comboItens: getProdutoComboItens(produto as { comboItens?: unknown }),
           }}
           paymentMethods={
             paymentMethods.length > 0

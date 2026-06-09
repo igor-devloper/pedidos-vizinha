@@ -6,7 +6,7 @@ export type ProductRecord = {
   nome: string;
   descricao: string;
   preco: string;
-  categoria: "CENTO" | "LANCHONETE";
+  categoria: "CENTO" | "LANCHONETE" | "COMBO";
   emPromocao: boolean;
 };
 

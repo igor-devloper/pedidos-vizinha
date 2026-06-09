@@ -1,0 +1,4 @@
+ALTER TYPE "CategoriaProduto" ADD VALUE 'COMBO';
+
+ALTER TABLE "Produto"
+ADD COLUMN "comboItens" JSONB NOT NULL DEFAULT '[]';

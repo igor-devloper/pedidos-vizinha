@@ -2,8 +2,18 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { LoaderCircle, Minus, Plus, ShieldCheck } from "lucide-react";
 import { MetodoPagamento } from "@prisma/client";
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  LoaderCircle,
+  Minus,
+  Plus,
+  ShieldCheck,
+  Trophy,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,7 +27,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getBusinessHoursStatus } from "@/lib/business-hours";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
+import { type ComboItem, PRODUCT_CATEGORY_LABEL, type ProductCategory } from "@/lib/produtos";
 import { BUSINESS_RULES } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
@@ -35,10 +47,12 @@ type ProdutoCheckout = {
   descricao: string;
   preco: number;
   imagemBase64: string;
+  categoria: ProductCategory;
   totalUnidades: number;
   maxTiposSalgado: number;
   permitePagamentoParcial: boolean;
   saboresSugeridos: string[];
+  comboItens: ComboItem[];
 };
 
 type ItemState = {
@@ -48,7 +62,7 @@ type ItemState = {
 
 const PAYMENT_PERCENTAGES = [50, 100] as const;
 
-function getMinDateTimeValue() {
+function getMinDeliveryDate() {
   const minDate = new Date(Date.now() + BUSINESS_RULES.minimumLeadHours * 60 * 60 * 1000);
   minDate.setMinutes(
     Math.ceil(minDate.getMinutes() / BUSINESS_RULES.slotMinutes) * BUSINESS_RULES.slotMinutes,
@@ -56,8 +70,111 @@ function getMinDateTimeValue() {
     0
   );
 
-  const timezoneOffset = minDate.getTimezoneOffset() * 60_000;
-  return new Date(minDate.getTime() - timezoneOffset).toISOString().slice(0, 16);
+  return minDate;
+}
+
+function formatDateInputValue(value: Date) {
+  const timezoneOffset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - timezoneOffset).toISOString().slice(0, 10);
+}
+
+function formatTimeInputValue(value: Date) {
+  return value.toTimeString().slice(0, 5);
+}
+
+function formatDateLabel(value: string) {
+  if (!value) {
+    return "Selecione a data";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "full",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(`${value}T12:00:00`));
+}
+
+function startOfMonth(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
+}
+
+function addMonths(value: Date, amount: number) {
+  return new Date(value.getFullYear(), value.getMonth() + amount, 1);
+}
+
+function getCalendarDays(month: Date) {
+  const firstDay = startOfMonth(month);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells: Array<{ date: Date; currentMonth: boolean }> = [];
+
+  for (let index = startWeekday - 1; index >= 0; index -= 1) {
+    cells.push({
+      date: new Date(month.getFullYear(), month.getMonth(), -index),
+      currentMonth: false,
+    });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push({
+      date: new Date(month.getFullYear(), month.getMonth(), day),
+      currentMonth: true,
+    });
+  }
+
+  while (cells.length % 7 !== 0) {
+    const nextDay = cells.length - (startWeekday + daysInMonth) + 1;
+    cells.push({
+      date: new Date(month.getFullYear(), month.getMonth() + 1, nextDay),
+      currentMonth: false,
+    });
+  }
+
+  return cells;
+}
+
+function buildDeliveryDateTime(date: string, time: string) {
+  return `${date}T${time}`;
+}
+
+function getTimeSlots(dateValue: string, minDate: Date) {
+  if (!dateValue) {
+    return [] as string[];
+  }
+
+  const selectedDate = new Date(`${dateValue}T12:00:00`);
+  const weekday = selectedDate.getDay();
+  const schedule = BUSINESS_RULES.scheduleByWeekday[
+    weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday
+  ];
+
+  if (!schedule) {
+    return [] as string[];
+  }
+
+  const slots: string[] = [];
+  const selectedKey = dateValue;
+  const minKey = formatDateInputValue(minDate);
+  const startMinutes =
+    schedule.openHour * 60 +
+    (selectedKey === minKey
+      ? Math.max(
+          0,
+          Math.ceil(minDate.getMinutes() / BUSINESS_RULES.slotMinutes) *
+            BUSINESS_RULES.slotMinutes -
+            schedule.openHour * 60 +
+            minDate.getHours() * 60
+        )
+      : 0);
+  const firstMinutes = Math.max(schedule.openHour * 60, startMinutes);
+  const lastMinutes = schedule.closeHour * 60;
+
+  for (let minutes = firstMinutes; minutes <= lastMinutes; minutes += BUSINESS_RULES.slotMinutes) {
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    slots.push(`${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`);
+  }
+
+  return slots;
 }
 
 export function PedidoCheckout({
@@ -67,10 +184,17 @@ export function PedidoCheckout({
   produto: ProdutoCheckout;
   paymentMethods: PaymentMethodOption[];
 }) {
+  const isCombo = produto.categoria === "COMBO" && produto.comboItens.length > 0;
+  const businessStatus = useMemo(() => getBusinessHoursStatus(), []);
+  const minDeliveryDate = useMemo(() => getMinDeliveryDate(), []);
+  const minDeliveryDateKey = useMemo(() => formatDateInputValue(minDeliveryDate), [minDeliveryDate]);
   const [clienteNome, setClienteNome] = useState("");
   const [clienteTelefone, setClienteTelefone] = useState("");
   const [clienteEmail, setClienteEmail] = useState("");
-  const [dataEntrega, setDataEntrega] = useState(getMinDateTimeValue());
+  const [dataEntregaData, setDataEntregaData] = useState(formatDateInputValue(minDeliveryDate));
+  const [dataEntregaHora, setDataEntregaHora] = useState(formatTimeInputValue(minDeliveryDate));
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(minDeliveryDate));
   const [observacoes, setObservacoes] = useState("");
   const [percentualPagamento, setPercentualPagamento] = useState<50 | 100>(
     produto.permitePagamentoParcial ? 50 : 100
@@ -79,6 +203,13 @@ export function PedidoCheckout({
     paymentMethods[0]?.id || MetodoPagamento.PIX
   );
   const [items, setItems] = useState<ItemState[]>(() => {
+    if (isCombo) {
+      return produto.comboItens.map((item) => ({
+        tipo: item.nome,
+        quantidade: item.quantidade,
+      }));
+    }
+
     const initial = produto.saboresSugeridos
       .slice(0, Math.min(2, produto.maxTiposSalgado))
       .map((tipo) => ({
@@ -101,25 +232,46 @@ export function PedidoCheckout({
   );
 
   const selectedMethod = paymentMethods.find((method) => method.id === metodoPagamento);
+  const calendarDays = useMemo(() => getCalendarDays(displayMonth), [displayMonth]);
+  const timeSlots = useMemo(
+    () => getTimeSlots(dataEntregaData, minDeliveryDate),
+    [dataEntregaData, minDeliveryDate]
+  );
+  const dataEntrega = buildDeliveryDateTime(dataEntregaData, dataEntregaHora);
   const paymentPreview = useMemo(
     () => calculatePaymentAmounts(produto.preco, percentualPagamento, metodoPagamento),
     [produto.preco, percentualPagamento, metodoPagamento]
   );
 
-  const canAddType = items.length < produto.maxTiposSalgado;
+  const canAddType = !isCombo && items.length < produto.maxTiposSalgado;
   const canSubmit =
     clienteNome.trim().length >= 2 &&
     clienteTelefone.trim().length >= 10 &&
+    Boolean(dataEntregaData) &&
+    Boolean(dataEntregaHora) &&
     totalUnidades === produto.totalUnidades &&
     activeTypes > 0 &&
     activeTypes <= produto.maxTiposSalgado &&
     !submitting;
 
+  const selectedDateHasNoSchedule = Boolean(dataEntregaData) && timeSlots.length === 0;
+
+  const selectDeliveryDate = (nextDate: string) => {
+    setDataEntregaData(nextDate);
+    const nextSlots = getTimeSlots(nextDate, minDeliveryDate);
+    if (!nextSlots.includes(dataEntregaHora)) {
+      setDataEntregaHora(nextSlots[0] || "");
+    }
+    setCalendarOpen(false);
+  };
+
   const updateItem = (index: number, patch: Partial<ItemState>) => {
+    if (isCombo) {
+      return;
+    }
+
     setItems((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, ...patch } : item
-      )
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
     );
   };
 
@@ -132,6 +284,10 @@ export function PedidoCheckout({
   };
 
   const removeType = (index: number) => {
+    if (isCombo) {
+      return;
+    }
+
     setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
@@ -164,7 +320,7 @@ export function PedidoCheckout({
         | null;
 
       if (!response.ok || !data?.redirectUrl) {
-        throw new Error(data?.error || "Não foi possível iniciar o pagamento.");
+        throw new Error(data?.error || "Nao foi possivel iniciar o pagamento.");
       }
 
       window.location.assign(data.redirectUrl);
@@ -178,9 +334,26 @@ export function PedidoCheckout({
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
       <section className="space-y-6">
-        <Card className="overflow-hidden border-pink-200 bg-white/95 shadow-lg shadow-pink-100/30">
+        {!businessStatus.isOpen ? (
+          <Card className="overflow-hidden border-yellow-300 bg-[linear-gradient(135deg,#fff9c4,#fff6e5_55%,#fef3c7)] shadow-lg shadow-yellow-200/40">
+            <CardContent className="flex gap-4 p-5">
+              <AlertTriangle className="mt-1 h-5 w-5 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-800">
+                  Atendimento fora do horario
+                </p>
+                <p className="mt-2 text-sm leading-6 text-amber-950">
+                  {businessStatus.message} Se voce seguir para o site agora, pode encontrar a loja
+                  fechada.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        <Card className="overflow-hidden border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
           <div className="grid gap-0 md:grid-cols-[260px_1fr]">
-            <div className="relative min-h-72 bg-pink-50">
+            <div className="relative min-h-72 bg-[linear-gradient(180deg,#1b5e20,#2e7d32_45%,#fdd835)]">
               <Image
                 src={produto.imagemBase64}
                 alt={produto.nome}
@@ -188,50 +361,67 @@ export function PedidoCheckout({
                 unoptimized
                 className="object-cover"
               />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,32,12,0.08),rgba(7,32,12,0.22))]" />
+              <div className="absolute left-4 top-4 rounded-full bg-[#0b3d0b]/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-white">
+                Copa da Vizinha
+              </div>
             </div>
 
-            <CardContent className="space-y-4 p-6">
+            <CardContent className="space-y-4 bg-[radial-gradient(circle_at_top_right,#fff59d_0,transparent_28%),linear-gradient(180deg,#ffffff,#f7ffe7)] p-6">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-pink-600">
-                  Produto selecionado
-                </p>
-                <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[#0b5d1e] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white">
+                    {PRODUCT_CATEGORY_LABEL[produto.categoria]}
+                  </span>
+                  {isCombo ? (
+                    <span className="rounded-full bg-[#fedf00] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#175c2b]">
+                      Combo fixo
+                    </span>
+                  ) : null}
+                </div>
+                <h1 className="mt-3 text-3xl font-black tracking-tight text-[#0b2d16]">
                   {produto.nome}
                 </h1>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{produto.descricao}</p>
+                <p className="mt-3 text-sm leading-6 text-[#35553d]">{produto.descricao}</p>
               </div>
 
-              <div className="grid gap-3 rounded-[1.5rem] bg-[#fff7fb] p-4 text-sm text-slate-700 sm:grid-cols-3">
+              <div className="grid gap-3 rounded-[1.5rem] bg-[linear-gradient(135deg,#0f5d22,#1c8d39)] p-4 text-sm text-white sm:grid-cols-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-pink-600">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
                     Valor base
                   </p>
                   <p className="mt-2 text-lg font-semibold">{formatCurrency(produto.preco)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-pink-600">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
                     Unidades
                   </p>
                   <p className="mt-2 text-lg font-semibold">{produto.totalUnidades}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-pink-600">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
                     Tipos
                   </p>
-                  <p className="mt-2 text-lg font-semibold">Até {produto.maxTiposSalgado}</p>
+                  <p className="mt-2 text-lg font-semibold">Ate {produto.maxTiposSalgado}</p>
                 </div>
               </div>
             </CardContent>
           </div>
         </Card>
 
-        <Card className="border-pink-200 bg-white/95 shadow-lg shadow-pink-100/30">
+        <Card className="border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
           <CardContent className="space-y-6 p-6">
             <div>
-              <h2 className="text-2xl font-semibold text-slate-900">Monte os salgados</h2>
-              <p className="mt-2 text-sm text-slate-500">
-                A soma precisa fechar em {produto.totalUnidades} unidades e no máximo{" "}
-                {produto.maxTiposSalgado} tipos.
+              <div className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-[#1b7f31]" />
+                <h2 className="text-2xl font-semibold text-[#0b2d16]">
+                  {isCombo ? "Composição do combo" : "Monte os salgados"}
+                </h2>
+              </div>
+              <p className="mt-2 text-sm text-[#48654f]">
+                {isCombo
+                  ? "Esse combo já vem com quantidades fechadas. O cliente vê exatamente o que está levando."
+                  : `A soma precisa fechar em ${produto.totalUnidades} unidades e no maximo ${produto.maxTiposSalgado} tipos.`}
               </p>
             </div>
 
@@ -239,18 +429,20 @@ export function PedidoCheckout({
               {items.map((item, index) => (
                 <div
                   key={`${index}-${item.tipo}`}
-                  className="grid gap-3 rounded-[1.5rem] border border-pink-100 bg-[#fff8fb] p-4 sm:grid-cols-[1fr_120px_auto]"
+                  className="grid gap-3 rounded-[1.5rem] border border-[#dfeab9] bg-[linear-gradient(180deg,#fbfff0,#f7fde3)] p-4 sm:grid-cols-[1fr_120px_auto]"
                 >
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">
-                      Tipo de salgado {index + 1}
+                    <label className="text-sm font-medium text-[#284a2e]">
+                      {isCombo ? `Item do combo ${index + 1}` : `Tipo de salgado ${index + 1}`}
                     </label>
-                    {produto.saboresSugeridos.length > 0 ? (
+                    {isCombo ? (
+                      <Input value={item.tipo} disabled className="border-[#d8e8a4] bg-white" />
+                    ) : produto.saboresSugeridos.length > 0 ? (
                       <Select
                         value={item.tipo}
                         onValueChange={(value) => updateItem(index, { tipo: value })}
                       >
-                        <SelectTrigger className="w-full border-pink-100 bg-white">
+                        <SelectTrigger className="w-full border-[#d8e8a4] bg-white">
                           <SelectValue placeholder="Selecione o salgado" />
                         </SelectTrigger>
                         <SelectContent>
@@ -271,11 +463,12 @@ export function PedidoCheckout({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Quantidade</label>
+                    <label className="text-sm font-medium text-[#284a2e]">Quantidade</label>
                     <Input
                       type="number"
                       min="0"
                       step="1"
+                      disabled={isCombo}
                       value={item.quantidade}
                       onChange={(event) =>
                         updateItem(index, {
@@ -290,8 +483,8 @@ export function PedidoCheckout({
                       type="button"
                       variant="outline"
                       onClick={() => removeType(index)}
-                      disabled={items.length === 1}
-                      className="w-full rounded-xl border-pink-200 text-pink-700 hover:bg-pink-50"
+                      disabled={isCombo || items.length === 1}
+                      className="w-full rounded-xl border-[#d8e8a4] text-[#1b5e20] hover:bg-[#eff8d0]"
                     >
                       <Minus className="mr-2 h-4 w-4" />
                       Remover
@@ -300,28 +493,30 @@ export function PedidoCheckout({
                 </div>
               ))}
 
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!canAddType}
-                onClick={addType}
-                className="rounded-full border-pink-200 text-pink-700 hover:bg-pink-50"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar tipo
-              </Button>
+              {!isCombo ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!canAddType}
+                  onClick={addType}
+                  className="rounded-full border-[#d8e8a4] text-[#1b5e20] hover:bg-[#eff8d0]"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Adicionar tipo
+                </Button>
+              ) : null}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-pink-200 bg-white/95 shadow-lg shadow-pink-100/30">
+        <Card className="border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
           <CardContent className="grid gap-4 p-6 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Nome</label>
+              <label className="text-sm font-medium text-[#284a2e]">Nome</label>
               <Input value={clienteNome} onChange={(event) => setClienteNome(event.target.value)} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Telefone / WhatsApp</label>
+              <label className="text-sm font-medium text-[#284a2e]">Telefone / WhatsApp</label>
               <Input
                 value={clienteTelefone}
                 onChange={(event) => setClienteTelefone(event.target.value)}
@@ -329,7 +524,7 @@ export function PedidoCheckout({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">E-mail</label>
+              <label className="text-sm font-medium text-[#284a2e]">E-mail</label>
               <Input
                 type="email"
                 value={clienteEmail}
@@ -338,22 +533,115 @@ export function PedidoCheckout({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Entrega</label>
-              <Input
-                type="datetime-local"
-                min={getMinDateTimeValue()}
-                step={BUSINESS_RULES.slotMinutes * 60}
-                value={dataEntrega}
-                onChange={(event) => setDataEntrega(event.target.value)}
-              />
+              <label className="text-sm font-medium text-[#284a2e]">Entrega</label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCalendarOpen((current) => !current)}
+                    className="h-11 w-full justify-between border-[#d8e8a4] bg-white px-3 text-left text-[#284a2e] hover:bg-[#f7fde3]"
+                  >
+                    <span className="truncate">{formatDateLabel(dataEntregaData)}</span>
+                    <CalendarDays className="h-4 w-4 shrink-0" />
+                  </Button>
+
+                  {calendarOpen ? (
+                    <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-[18rem] rounded-2xl border border-[#d8e8a4] bg-white p-4 shadow-[0_24px_60px_rgba(27,94,32,0.18)]">
+                      <div className="mb-4 flex items-center justify-between">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDisplayMonth((current) => addMonths(current, -1))}
+                          className="h-9 w-9 rounded-full text-[#1b5e20] hover:bg-[#f7fde3]"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <p className="text-sm font-semibold capitalize text-[#0b2d16]">
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            month: "long",
+                            year: "numeric",
+                          }).format(displayMonth)}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDisplayMonth((current) => addMonths(current, 1))}
+                          className="h-9 w-9 rounded-full text-[#1b5e20] hover:bg-[#f7fde3]"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#6f8a55]">
+                        {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"].map((day) => (
+                          <span key={day} className="py-1">
+                            {day}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-7 gap-1">
+                        {calendarDays.map(({ date, currentMonth }) => {
+                          const dateKey = formatDateInputValue(date);
+                          const isSelected = dateKey === dataEntregaData;
+                          const isDisabled = dateKey < minDeliveryDateKey;
+
+                          return (
+                            <button
+                              key={`${dateKey}-${currentMonth ? "current" : "other"}`}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => selectDeliveryDate(dateKey)}
+                              className={cn(
+                                "h-10 rounded-xl text-sm transition",
+                                isSelected
+                                  ? "bg-[#1b7f31] font-semibold text-white"
+                                  : "text-[#284a2e] hover:bg-[#f7fde3]",
+                                !currentMonth && !isSelected && "text-[#9aad8a]",
+                                isDisabled && "cursor-not-allowed opacity-35 hover:bg-transparent"
+                              )}
+                            >
+                              {date.getDate()}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <Select value={dataEntregaHora} onValueChange={setDataEntregaHora}>
+                  <SelectTrigger className="w-full border-[#d8e8a4] bg-white">
+                    <SelectValue placeholder="Selecione o horario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {timeSlots.map((time) => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedDateHasNoSchedule ? (
+                <p className="text-sm text-amber-700">
+                  Nao atendemos nessa data. Escolha de terca a sabado, das 10h as 17h, ou domingo, das 9h as 13h.
+                </p>
+              ) : (
+                <p className="text-sm text-[#48654f]">
+                  Escolha a data e depois o horario para evitar confusão no agendamento.
+                </p>
+              )}
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-slate-700">Observações</label>
+              <label className="text-sm font-medium text-[#284a2e]">Observacoes</label>
               <Textarea
                 value={observacoes}
                 onChange={(event) => setObservacoes(event.target.value)}
                 className="min-h-24"
-                placeholder="Ponto de referência, recheios preferidos, observações gerais..."
+                placeholder="Ponto de referencia, recheios preferidos, observacoes gerais..."
               />
             </div>
           </CardContent>
@@ -361,23 +649,23 @@ export function PedidoCheckout({
       </section>
 
       <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-        <Card className="border-pink-200 bg-white/95 shadow-lg shadow-pink-100/30">
+        <Card className="border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
           <CardContent className="space-y-5 p-6">
             <div>
-              <h2 className="text-2xl font-semibold text-slate-900">Pagamento</h2>
-              <p className="mt-2 text-sm text-slate-500">
+              <h2 className="text-2xl font-semibold text-[#0b2d16]">Pagamento</h2>
+              <p className="mt-2 text-sm text-[#48654f]">
                 Escolha quanto pagar agora e selecione a forma de pagamento.
               </p>
             </div>
 
-            <div className="grid gap-4 rounded-[1.5rem] border border-pink-100 bg-[#fff8fb] p-4">
+            <div className="grid gap-4 rounded-[1.5rem] border border-[#dfeab9] bg-[#f7fde3] p-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Quanto pagar agora</label>
+                <label className="text-sm font-medium text-[#284a2e]">Quanto pagar agora</label>
                 <Select
                   value={String(percentualPagamento)}
                   onValueChange={(value) => setPercentualPagamento(Number(value) as 50 | 100)}
                 >
-                  <SelectTrigger className="h-11 w-full border-pink-100 bg-white">
+                  <SelectTrigger className="h-11 w-full border-[#d8e8a4] bg-white">
                     <SelectValue placeholder="Selecione o valor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -390,18 +678,18 @@ export function PedidoCheckout({
                     )}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-[#48654f]">
                   Base do pagamento: {formatCurrency((produto.preco * percentualPagamento) / 100)}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Forma de pagamento</label>
+                <label className="text-sm font-medium text-[#284a2e]">Forma de pagamento</label>
                 <Select
                   value={metodoPagamento}
                   onValueChange={(value) => setMetodoPagamento(value as MetodoPagamento)}
                 >
-                  <SelectTrigger className="h-11 w-full border-pink-100 bg-white">
+                  <SelectTrigger className="h-11 w-full border-[#d8e8a4] bg-white">
                     <SelectValue placeholder="Selecione a forma de pagamento" />
                   </SelectTrigger>
                   <SelectContent>
@@ -412,17 +700,17 @@ export function PedidoCheckout({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-[#48654f]">
                   {selectedMethod?.description || "Escolha a forma de pagamento."}
                 </p>
               </div>
             </div>
 
-            <div className="rounded-[1.6rem] bg-[#1f0e17] p-5 text-white">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#ff9fc1]">
+            <div className="rounded-[1.6rem] bg-[linear-gradient(135deg,#0b3d0b,#127c2e_45%,#f4c600)] p-5 text-white">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#fff2a8]">
                 Resumo
               </p>
-              <div className="mt-4 space-y-2 text-sm text-white/80">
+              <div className="mt-4 space-y-2 text-sm text-white/85">
                 <div className="flex items-center justify-between gap-3">
                   <span>Produto</span>
                   <span>{formatCurrency(produto.preco)}</span>
@@ -432,7 +720,7 @@ export function PedidoCheckout({
                   <span>{percentualPagamento}%</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span>Taxa de serviço</span>
+                  <span>Taxa de servico</span>
                   <span>{formatCurrency(paymentPreview.feeAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 text-base font-semibold text-white">
@@ -442,8 +730,8 @@ export function PedidoCheckout({
               </div>
             </div>
 
-            <div className="rounded-[1.5rem] border border-pink-100 bg-[#fff8fb] p-4 text-sm text-slate-600">
-              <p className="font-semibold text-slate-900">Validação do pedido</p>
+            <div className="rounded-[1.5rem] border border-[#dfeab9] bg-[#f7fde3] p-4 text-sm text-[#35553d]">
+              <p className="font-semibold text-[#0b2d16]">Validacao do pedido</p>
               <p className={cn("mt-2", remaining === 0 ? "text-emerald-700" : "text-amber-700")}>
                 {remaining === 0
                   ? "Quantidade fechada corretamente."
@@ -453,18 +741,21 @@ export function PedidoCheckout({
                 Tipos ativos: {activeTypes} de {produto.maxTiposSalgado}
               </p>
               <p className="mt-1">
-                Atendimento: terça a sábado, das 10h às 17h. Domingo, das 9h às 13h. Segunda fechado.
+                Atendimento: terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.
               </p>
-              <p className="mt-1">
-                Tolerância de {BUSINESS_RULES.toleranceMinutes} minutos.
-              </p>
+              {!businessStatus.isOpen ? (
+                <p className="mt-1 font-medium text-amber-700">
+                  Aviso: o atendimento esta fechado neste momento.
+                </p>
+              ) : null}
+              <p className="mt-1">Tolerancia de {BUSINESS_RULES.toleranceMinutes} minutos.</p>
             </div>
 
             <Button
               type="button"
               disabled={!canSubmit}
               onClick={handleSubmit}
-              className="h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700"
+              className="h-12 rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
             >
               {submitting ? (
                 <>
@@ -476,11 +767,11 @@ export function PedidoCheckout({
               )}
             </Button>
 
-            <div className="flex items-start gap-3 rounded-[1.4rem] border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <div className="flex items-start gap-3 rounded-[1.4rem] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Você será redirecionada para concluir o pagamento com{" "}
-                <strong>{selectedMethod?.label || "o método selecionado"}</strong>.
+                Voce sera redirecionada para concluir o pagamento com{" "}
+                <strong>{selectedMethod?.label || "o metodo selecionado"}</strong>.
               </p>
             </div>
           </CardContent>

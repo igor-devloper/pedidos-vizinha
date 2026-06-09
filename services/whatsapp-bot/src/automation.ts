@@ -36,6 +36,46 @@ import {
   buildWelcomeMessage,
 } from "./whatsapp-format.js";
 
+function isOutsideBusinessHours(now = new Date()) {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+  }).format(now);
+  const hourMinute = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const hour = Number(hourMinute.find((part) => part.type === "hour")?.value || 0);
+  const minute = Number(hourMinute.find((part) => part.type === "minute")?.value || 0);
+  const totalMinutes = hour * 60 + minute;
+  const map = {
+    Sun: { open: 9 * 60, close: 13 * 60 },
+    Mon: null,
+    Tue: { open: 10 * 60, close: 17 * 60 },
+    Wed: { open: 10 * 60, close: 17 * 60 },
+    Thu: { open: 10 * 60, close: 17 * 60 },
+    Fri: { open: 10 * 60, close: 17 * 60 },
+    Sat: { open: 10 * 60, close: 17 * 60 },
+  } as const;
+
+  const schedule = map[weekday as keyof typeof map];
+  if (!schedule) {
+    return true;
+  }
+
+  return totalMinutes < schedule.open || totalMinutes > schedule.close;
+}
+
+function appendOutsideHoursNotice(text: string) {
+  if (!isOutsideBusinessHours()) {
+    return text;
+  }
+
+  return `${text}\n\n⏰ *Aviso de horario*\nAgora estamos fora do horario de atendimento.\nHorario da Vizinha: ${config.pickupHours}\nSe voce abrir o site neste momento, ele pode aparecer como fechado.`;
+}
+
 function normalizeText(value: string) {
   return value
     .normalize("NFD")
@@ -83,25 +123,32 @@ function canUseSalesAgent(lead: BotLead) {
 }
 
 async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: string) {
+  const outboundText = appendOutsideHoursNotice(text);
   logger.info(
     {
       instanceId: job.instanceId,
       remoteJid: job.remoteJid,
       leadId: lead?.id || null,
-      outboundPreview: text.slice(0, 160),
+      outboundPreview: outboundText.slice(0, 160),
     },
     "Attempting to send outbound message"
   );
 
-  await instanceManager.sendText(job.instanceId, job.remoteJid, text);
+  await instanceManager.sendText(job.instanceId, job.remoteJid, outboundText);
 
   if (lead) {
-    await updateLead(lead.id, { lastOutboundText: text });
+    await updateLead(lead.id, { lastOutboundText: outboundText });
   }
 }
 
-async function sendTextToNumber(instanceId: string, number: string, text: string) {
-  await instanceManager.sendText(instanceId, normalizeOutboundNumber(number), text);
+async function sendTextToNumber(
+  instanceId: string,
+  number: string,
+  text: string,
+  options?: { appendOutsideHoursNotice?: boolean }
+) {
+  const outboundText = options?.appendOutsideHoursNotice ? appendOutsideHoursNotice(text) : text;
+  await instanceManager.sendText(instanceId, normalizeOutboundNumber(number), outboundText);
 }
 
 async function sendIntro(job: InboundMessageJob, lead: BotLead | null) {
@@ -122,7 +169,8 @@ async function notifyCustomerOrderRejected(instanceId: string, order: BotOrder) 
   await sendTextToNumber(
     instanceId,
     order.customerRemoteJid,
-    buildCustomerOrderRejectedMessage(order.code, config.cardapioUrl, order.ownerReason)
+    buildCustomerOrderRejectedMessage(order.code, config.cardapioUrl, order.ownerReason),
+    { appendOutsideHoursNotice: true }
   );
 }
 
@@ -130,7 +178,8 @@ async function notifyCustomerAwaitingPayment(instanceId: string, order: BotOrder
   await sendTextToNumber(
     instanceId,
     order.customerRemoteJid,
-    buildCustomerAwaitingPaymentMessage(order.code, config.pixKey)
+    buildCustomerAwaitingPaymentMessage(order.code, config.pixKey),
+    { appendOutsideHoursNotice: true }
   );
 }
 
@@ -138,7 +187,8 @@ async function notifyCustomerOrderConfirmed(instanceId: string, order: BotOrder)
   await sendTextToNumber(
     instanceId,
     order.customerRemoteJid,
-    buildCustomerOrderConfirmedMessage(order.code, order.horarioEntrega, order.paymentStatus)
+    buildCustomerOrderConfirmedMessage(order.code, order.horarioEntrega, order.paymentStatus),
+    { appendOutsideHoursNotice: true }
   );
 }
 

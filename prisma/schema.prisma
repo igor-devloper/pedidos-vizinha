@@ -43,6 +43,7 @@ model Produto {
   maxTiposSalgado Int   @default(5)
   permitePagamentoParcial Boolean @default(true)
   saboresSugeridos String[] @default([])
+  comboItens    Json    @default("[]")
   emPromocao   Boolean  @default(false)
   ativo        Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -186,6 +187,7 @@ enum StatusEncomenda {
 enum CategoriaProduto {
   CENTO
   LANCHONETE
+  COMBO
 }
 
 enum MetodoPagamento {

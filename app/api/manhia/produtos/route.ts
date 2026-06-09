@@ -1,97 +1,26 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/db";
 import { isValidManhiaSessionToken, MANHIA_COOKIE_NAME } from "@/lib/admin-auth";
+import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/pedidos";
-import { normalizeSaboresList } from "@/lib/sabores";
-
-type ProdutoPayload = {
-  nome?: string;
-  descricao?: string;
-  preco?: number | string;
-  imagemBase64?: string;
-  categoria?: "CENTO" | "LANCHONETE";
-  totalUnidades?: number | string;
-  maxTiposSalgado?: number | string;
-  permitePagamentoParcial?: boolean;
-  saboresSugeridos?: string[];
-  emPromocao?: boolean;
-  ativo?: boolean;
-};
+import { type ProdutoPayloadInput, validateProdutoPayload } from "@/lib/produtos";
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
 }
 
-function validateProdutoPayload(body: ProdutoPayload) {
-  const nome = body.nome?.trim() || "";
-  const descricao = body.descricao?.trim() || "";
-  const preco = Number(body.preco);
-  const imagemBase64 = body.imagemBase64?.trim() || "";
-  const totalUnidades = Number(body.totalUnidades);
-  const maxTiposSalgado = Number(body.maxTiposSalgado);
-  const categoria: "CENTO" | "LANCHONETE" =
-    body.categoria === "LANCHONETE" ? "LANCHONETE" : "CENTO";
-  const permitePagamentoParcial = body.permitePagamentoParcial ?? true;
-  const saboresSugeridos = normalizeSaboresList(body.saboresSugeridos);
-  const emPromocao = body.emPromocao ?? false;
-  const ativo = body.ativo ?? true;
-
-  if (!nome) {
-    return { error: "Informe o nome do produto." };
-  }
-
-  if (!descricao) {
-    return { error: "Informe a descricao do produto." };
-  }
-
-  if (!Number.isFinite(preco) || preco <= 0) {
-    return { error: "Informe um valor valido." };
-  }
-
-  if (!Number.isInteger(totalUnidades) || totalUnidades <= 0) {
-    return { error: "Informe o total de unidades do produto." };
-  }
-
-  if (!Number.isInteger(maxTiposSalgado) || maxTiposSalgado <= 0) {
-    return { error: "Informe o limite de tipos permitidos." };
-  }
-
-  if (!imagemBase64.startsWith("data:image/")) {
-    return { error: "Envie uma imagem valida para o produto." };
-  }
-
-  if (imagemBase64.length > 2_500_000) {
-    return { error: "A imagem ficou muito grande. Tente um arquivo menor." };
-  }
-
-  return {
-    data: {
-      slug: slugify(nome),
-      nome,
-      descricao,
-      preco: Number(preco.toFixed(2)),
-      imagemBase64,
-      categoria,
-      totalUnidades,
-      maxTiposSalgado,
-      permitePagamentoParcial,
-      saboresSugeridos,
-      emPromocao,
-      ativo,
-    },
-  };
-}
-
-export async function GET(req: Request) {
-  const token =
+function getToken(req: Request) {
+  return (
     req.headers.get("cookie")
       ?.split(";")
       .map((item) => item.trim())
       .find((item) => item.startsWith(`${MANHIA_COOKIE_NAME}=`))
-      ?.split("=")[1] || "";
+      ?.split("=")[1] || ""
+  );
+}
 
-  if (!isValidManhiaSessionToken(token)) {
+export async function GET(req: Request) {
+  if (!isValidManhiaSessionToken(getToken(req))) {
     return unauthorizedResponse();
   }
 
@@ -103,34 +32,24 @@ export async function GET(req: Request) {
     return NextResponse.json(produtos);
   } catch (error) {
     console.error("GET /api/manhia/produtos error", error);
-    return NextResponse.json(
-      { error: "Erro ao carregar produtos." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao carregar produtos." }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  const token =
-    req.headers.get("cookie")
-      ?.split(";")
-      .map((item) => item.trim())
-      .find((item) => item.startsWith(`${MANHIA_COOKIE_NAME}=`))
-      ?.split("=")[1] || "";
-
-  if (!isValidManhiaSessionToken(token)) {
+  if (!isValidManhiaSessionToken(getToken(req))) {
     return unauthorizedResponse();
   }
 
   try {
-    const body = (await req.json()) as ProdutoPayload;
+    const body = (await req.json()) as ProdutoPayloadInput;
     const validation = validateProdutoPayload(body);
 
     if ("error" in validation) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const slugBase = validation.data.slug;
+    const slugBase = slugify(validation.data.nome);
     const existing = await prisma.produto.findUnique({
       where: { slug: slugBase },
       select: { id: true },
@@ -140,15 +59,12 @@ export async function POST(req: Request) {
       data: {
         ...validation.data,
         slug: existing ? `${slugBase}-${Date.now().toString(36)}` : slugBase,
-      },
+      } as never,
     });
 
     return NextResponse.json(produto, { status: 201 });
   } catch (error) {
     console.error("POST /api/manhia/produtos error", error);
-    return NextResponse.json(
-      { error: "Erro ao criar produto." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao criar produto." }, { status: 500 });
   }
 }

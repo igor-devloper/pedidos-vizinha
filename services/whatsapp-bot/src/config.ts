@@ -34,7 +34,7 @@ export const config = {
   pickupReference: process.env.PICKUP_REFERENCE?.trim() || undefined,
   pickupHours: readOptional(
     "PICKUP_HOURS",
-    "Terca a sabado, das 10h as 17h. Domingo, das 9h as 13h. Segunda, fechado."
+    "terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda, fechado."
   ),
   authDir: readOptional("AUTH_DIR", "./data/auth"),
   storeDir: readOptional("STORE_DIR", "./data/store"),
