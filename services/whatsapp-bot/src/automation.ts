@@ -20,8 +20,11 @@ import {
   buildCustomerAwaitingPaymentMessage,
   buildCustomerOrderConfirmedMessage,
   buildCustomerOrderRejectedMessage,
+  buildAwaitingHumanReplyMessage,
   buildFallbackHelpMessage,
+  buildHumanHandoffMessage,
   buildMediaRetryMessage,
+  buildOwnerHandoffAlertMessage,
   buildOwnerApprovedAckMessage,
   buildOwnerCommandHelpMessage,
   buildOwnerOrderNotFoundMessage,
@@ -130,7 +133,7 @@ function indicatesPayment(text: string) {
 }
 
 function canUseSalesAgent(lead: BotLead) {
-  return !["awaiting_owner_approval", "awaiting_payment_validation"].includes(lead.stage);
+  return !["awaiting_owner_approval", "awaiting_payment_validation", "human_handoff"].includes(lead.stage);
 }
 
 function isPricingQuestion(text: string) {
@@ -461,6 +464,27 @@ function getCustomerLabel(order: BotOrder) {
   return order.customerName || order.customerPhoneNumber || order.customerRemoteJid;
 }
 
+function getLeadLabel(lead: BotLead) {
+  return lead.nome || lead.pushName || lead.phoneNumber || lead.remoteJid;
+}
+
+async function transferToHumanAttendant(job: InboundMessageJob, lead: BotLead, reply?: string) {
+  const nextLead = await updateLead(lead.id, {
+    stage: "human_handoff",
+    status: "handoff",
+    lastInboundText: job.text,
+  });
+
+  const handoffLead = nextLead || lead;
+  await sendAndTrack(job, handoffLead, reply || buildHumanHandoffMessage());
+  await sendTextToNumber(
+    job.instanceId,
+    config.ownerApprovalNumber,
+    buildOwnerHandoffAlertMessage(getLeadLabel(handoffLead), job.text, handoffLead.lastOutboundText)
+  );
+  return true;
+}
+
 async function handleExistingOpenOrder(job: InboundMessageJob, lead: BotLead) {
   const text = normalizeText(job.text);
   const openOrder = await findLatestOpenOrderByCustomer(job.instanceId, job.remoteJid);
@@ -513,6 +537,10 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
 
   if (!agentResult?.reply) {
     return false;
+  }
+
+  if (agentResult.status === "handoff") {
+    return transferToHumanAttendant(job, lead, agentResult.reply);
   }
 
   const nextLead = await updateLead(lead.id, {
@@ -628,6 +656,12 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
     return true;
   }
 
+  if (lead.stage === "human_handoff") {
+    await updateLead(lead.id, { lastInboundText: job.text });
+    await sendAndTrack(job, lead, buildAwaitingHumanReplyMessage());
+    return true;
+  }
+
   if (lead.stage === "confirmed") {
     await updateLead(lead.id, { lastInboundText: job.text });
     await sendAndTrack(job, lead, buildConfirmedFollowUpMessage(config.cardapioUrl));
@@ -693,6 +727,11 @@ export async function processInboundMessage(job: InboundMessageJob) {
     const agentResult = await runSalesAgent(job, lead);
 
     if (agentResult?.reply) {
+      if (agentResult.status === "handoff") {
+        await transferToHumanAttendant(job, lead, agentResult.reply);
+        return;
+      }
+
       await sendAndTrack(job, lead, agentResult.reply);
       await updateLead(lead.id, {
         lastInboundText: job.text,

@@ -14,6 +14,7 @@ import { config } from "./config.js";
 import { getInstanceAuthPath } from "./auth-paths.js";
 import { ensureDir, removeDir } from "./fs-utils.js";
 import { instanceStore } from "./instance-store.js";
+import { updateLeadByRemoteJid } from "./lead-repository.js";
 import { logger } from "./logger.js";
 import { handleInboundMessage } from "./message-pipeline.js";
 import { qrStore } from "./qr-store.js";
@@ -274,6 +275,10 @@ class InstanceManager {
     if (!messageId) {
       throw new Error("WhatsApp send did not return a message id.");
     }
+
+    await updateLeadByRemoteJid(instanceId, jid, {
+      lastOutboundText: formatWhatsAppText(text),
+    });
 
     return {
       jid,

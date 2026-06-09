@@ -126,3 +126,39 @@ export async function updateLead(leadId: string, patch: LeadPatch) {
     return null;
   }
 }
+
+export async function updateLeadByRemoteJid(
+  instanceId: string,
+  remoteJid: string,
+  patch: LeadPatch
+) {
+  if (!db) {
+    return null;
+  }
+
+  try {
+    const entries = Object.entries(patch).filter(([, value]) => value !== undefined);
+
+    if (entries.length === 0) {
+      return null;
+    }
+
+    const setters = entries.map(([key], index) => `"${key}" = $${index + 3}`);
+    const values = entries.map(([, value]) => value);
+
+    const result = await db.query<BotLead>(
+      `
+        UPDATE "BotLead"
+        SET ${setters.join(", ")}, "updatedAt" = NOW()
+        WHERE "instanceId" = $1 AND "remoteJid" = $2
+        RETURNING *
+      `,
+      [instanceId, remoteJid, ...values]
+    );
+
+    return result.rows[0] || null;
+  } catch (error) {
+    logger.error({ error, instanceId, remoteJid }, "Failed to update bot lead by remoteJid");
+    return null;
+  }
+}

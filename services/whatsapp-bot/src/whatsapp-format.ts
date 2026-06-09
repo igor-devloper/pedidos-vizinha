@@ -24,6 +24,30 @@ function cleanupLines(text: string) {
     .trim();
 }
 
+export function buildHumanHandoffMessage() {
+  return formatWhatsAppMessage([
+    "🙏 *Vou te encaminhar para atendimento humano*",
+    "Percebi que sua mensagem depende do contexto da conversa e não quero te responder algo sem nexo.",
+    "A Vizinha vai continuar por aqui assim que puder.",
+  ]);
+}
+
+export function buildAwaitingHumanReplyMessage() {
+  return formatWhatsAppMessage([
+    "👀 *Seu atendimento já foi encaminhado*",
+    "A Vizinha vai seguir com você por aqui. Enquanto isso, pode mandar mais detalhes se quiser.",
+  ]);
+}
+
+export function buildOwnerHandoffAlertMessage(customerLabel: string, inboundText: string, lastOutboundText?: string | null) {
+  return formatWhatsAppMessage([
+    "🚨 *Atendimento humano solicitado*",
+    [`👤 *Cliente:* ${customerLabel}`],
+    lastOutboundText ? [`📤 *Última mensagem enviada ao cliente:*`, lastOutboundText] : null,
+    [`📥 *Mensagem do cliente agora:*`, inboundText],
+  ]);
+}
+
 export function buildMediaRetryMessage(mediaKind: "audio" | "image") {
   const mediaLabel = mediaKind === "audio" ? "áudio" : "imagem";
 
