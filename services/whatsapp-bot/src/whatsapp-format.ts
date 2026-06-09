@@ -24,6 +24,17 @@ function cleanupLines(text: string) {
     .trim();
 }
 
+export function buildMediaRetryMessage(mediaKind: "audio" | "image") {
+  const mediaLabel = mediaKind === "audio" ? "áudio" : "imagem";
+
+  return formatWhatsAppMessage([
+    `🙏 *Não consegui entender seu ${mediaLabel} ainda*`,
+    mediaKind === "audio"
+      ? "Pode reenviar o áudio ou, se preferir, escrever sua dúvida por aqui? Assim eu te respondo sem te mandar para o menu inicial."
+      : "Pode reenviar a imagem com mais nitidez ou escrever sua dúvida por aqui? Assim eu consigo te ajudar melhor.",
+  ]);
+}
+
 function addBreathingRoom(text: string) {
   if (!text.includes("\n") && text.length > 120) {
     return text.replace(WHATSAPP_SENTENCE_BREAK, "$1\n\n");

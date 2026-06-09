@@ -21,6 +21,7 @@ import {
   buildCustomerOrderConfirmedMessage,
   buildCustomerOrderRejectedMessage,
   buildFallbackHelpMessage,
+  buildMediaRetryMessage,
   buildOwnerApprovedAckMessage,
   buildOwnerCommandHelpMessage,
   buildOwnerOrderNotFoundMessage,
@@ -106,6 +107,14 @@ function isOwnerChat(remoteJid: string) {
 
 function isGreeting(text: string) {
   return ["oi", "ola", "menu", "cardapio", "cardapio por favor"].includes(text);
+}
+
+function isMediaPlaceholderText(text: string) {
+  return /^\[(audio|image|mensagem) recebida\]$/i.test(text.trim());
+}
+
+function hasMeaningfulInboundText(job: InboundMessageJob) {
+  return Boolean(job.text.trim()) && !isMediaPlaceholderText(job.text);
 }
 
 function isMenuRequest(text: string) {
@@ -630,6 +639,7 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
 
 export async function processInboundMessage(job: InboundMessageJob) {
   const normalized = normalizeText(job.text);
+  const hasMeaningfulText = hasMeaningfulInboundText(job);
   logger.info(
     {
       instanceId: job.instanceId,
@@ -652,7 +662,17 @@ export async function processInboundMessage(job: InboundMessageJob) {
   });
 
   if (!lead) {
+    if (job.mediaKind && !hasMeaningfulText) {
+      await instanceManager.sendText(job.instanceId, job.remoteJid, buildMediaRetryMessage(job.mediaKind));
+      return;
+    }
+
     await sendIntro(job, null);
+    return;
+  }
+
+  if (job.mediaKind && !hasMeaningfulText) {
+    await sendAndTrack(job, lead, buildMediaRetryMessage(job.mediaKind));
     return;
   }
 
