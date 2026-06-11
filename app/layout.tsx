@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
-import { Inter } from "next/font/google";
+import { Nunito } from "next/font/google";
 import { Toaster } from "sonner";
 
 import "./globals.css";
 
-const inter = Inter({
+const nunito = Nunito({
   subsets: ["latin"],
   variable: "--font-inter",
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body
-        className={`${inter.variable} min-h-screen bg-[linear-gradient(180deg,#f7ffe7,#fffde7_48%,#eef8d1)] text-slate-900 antialiased`}
+        className={`${nunito.variable} min-h-screen bg-[linear-gradient(180deg,#f7ffe7,#fffde7_48%,#eef8d1)] text-slate-900 antialiased`}
       >
         <div className="pointer-events-none fixed inset-0 -z-10 opacity-50" aria-hidden="true">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,#4caf5040_0,transparent_38%),radial-gradient(circle_at_100%_0%,#fdd83535_0,transparent_34%),radial-gradient(circle_at_50%_100%,#c8e6c940_0,transparent_48%)]" />

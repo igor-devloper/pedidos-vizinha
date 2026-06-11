@@ -27,7 +27,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getBusinessHoursStatus } from "@/lib/business-hours";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
 import { type ComboItem, PRODUCT_CATEGORY_LABEL, type ProductCategory } from "@/lib/produtos";
 import { BUSINESS_RULES } from "@/lib/site-config";
@@ -62,8 +61,14 @@ type ItemState = {
 
 const PAYMENT_PERCENTAGES = [50, 100] as const;
 
-function getMinDeliveryDate() {
-  const minDate = new Date(Date.now() + BUSINESS_RULES.minimumLeadHours * 60 * 60 * 1000);
+type BusinessStatusData = {
+  isOpen: boolean;
+  message: string;
+  minimumLeadHours: number;
+};
+
+function getMinDeliveryDate(minimumLeadHours: number) {
+  const minDate = new Date(Date.now() + minimumLeadHours * 60 * 60 * 1000);
   minDate.setMinutes(
     Math.ceil(minDate.getMinutes() / BUSINESS_RULES.slotMinutes) * BUSINESS_RULES.slotMinutes,
     0,
@@ -180,14 +185,18 @@ function getTimeSlots(dateValue: string, minDate: Date) {
 export function PedidoCheckout({
   produto,
   paymentMethods,
+  businessStatus,
 }: {
   produto: ProdutoCheckout;
   paymentMethods: PaymentMethodOption[];
+  businessStatus: BusinessStatusData;
 }) {
   const isCombo = produto.categoria === "COMBO" && produto.comboItens.length > 0;
   const isCentoProduct = produto.categoria === "CENTO";
-  const businessStatus = useMemo(() => getBusinessHoursStatus(), []);
-  const minDeliveryDate = useMemo(() => getMinDeliveryDate(), []);
+  const minDeliveryDate = useMemo(
+    () => getMinDeliveryDate(businessStatus.minimumLeadHours),
+    [businessStatus.minimumLeadHours]
+  );
   const minDeliveryDateKey = useMemo(() => formatDateInputValue(minDeliveryDate), [minDeliveryDate]);
   const [clienteNome, setClienteNome] = useState("");
   const [clienteTelefone, setClienteTelefone] = useState("");

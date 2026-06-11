@@ -20,7 +20,6 @@ import {
   buildCustomerAwaitingPaymentMessage,
   buildCustomerOrderConfirmedMessage,
   buildCustomerOrderRejectedMessage,
-  buildAwaitingHumanReplyMessage,
   buildFallbackHelpMessage,
   buildHumanHandoffMessage,
   buildMediaRetryMessage,
@@ -658,7 +657,6 @@ async function handleLeadFunnel(job: InboundMessageJob, lead: BotLead) {
 
   if (lead.stage === "human_handoff") {
     await updateLead(lead.id, { lastInboundText: job.text });
-    await sendAndTrack(job, lead, buildAwaitingHumanReplyMessage());
     return true;
   }
 

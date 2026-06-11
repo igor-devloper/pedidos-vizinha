@@ -1,7 +1,10 @@
 import { PedidoStatus, Prisma, type Pedido, type PedidoItem } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { createMercadoPagoPreference } from "@/lib/mercado-pago";
+import {
+  createMercadoPagoPreference,
+  findLatestMercadoPagoPaymentByExternalReference,
+} from "@/lib/mercado-pago";
 import {
   buildWhatsappBalanceCardImageUrl,
   buildPrintableReceipt,
@@ -339,6 +342,38 @@ export async function handleMercadoPagoPaymentUpdate({
   }
 
   return updated;
+}
+
+export async function syncPedidoPaymentByExternalReference(externalReference: string) {
+  const pedido = await loadPedidoByReference(externalReference);
+
+  if (!pedido) {
+    throw new Error(`Pedido nao encontrado para a referencia ${externalReference}.`);
+  }
+
+  if (pedido.status !== PedidoStatus.PENDENTE_PAGAMENTO) {
+    return pedido;
+  }
+
+  const payment = await findLatestMercadoPagoPaymentByExternalReference(externalReference);
+
+  if (!payment) {
+    return pedido;
+  }
+
+  return handleMercadoPagoPaymentUpdate({
+    externalReference,
+    paymentId: String(payment.id),
+    merchantOrderId: payment.order?.id,
+    status: payment.status,
+    statusDetail: payment.status_detail,
+    transactionAmount: payment.transaction_amount,
+    payload: {
+      source: "checkout-return-sync",
+      paymentId: payment.id,
+      status: payment.status,
+    },
+  });
 }
 
 export async function updatePedidoStatus(id: string, status: PedidoStatus) {

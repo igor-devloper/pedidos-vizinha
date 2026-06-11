@@ -44,6 +44,11 @@ export function CheckoutReturnClient({
           setLoading(true);
         }
 
+        await fetch(`/api/pedidos/${externalReference}/sync`, {
+          method: "POST",
+          cache: "no-store",
+        }).catch(() => null);
+
         const response = await fetch(`/api/pedidos/${externalReference}`, {
           cache: "no-store",
         });

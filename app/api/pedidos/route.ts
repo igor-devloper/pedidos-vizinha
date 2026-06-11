@@ -2,6 +2,7 @@ import { PedidoStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
+import { getStoreSettings } from "@/lib/business-hours";
 import { createMercadoPagoPreference } from "@/lib/mercado-pago";
 import {
   calculatePaymentAmounts,
@@ -28,8 +29,16 @@ export async function POST(req: Request) {
 
     const itens = normalizePedidoItems(payload.itens);
     const entrega = parseDeliveryDate(payload.dataEntrega);
+    const settings = await getStoreSettings();
 
-    validateDeliveryDate(entrega);
+    if (!settings.isOpen) {
+      return NextResponse.json(
+        { error: "A loja esta fechada no momento. Tente novamente mais tarde." },
+        { status: 400 }
+      );
+    }
+
+    validateDeliveryDate(entrega, new Date(), settings.minimumLeadHours);
 
     const conflictingPedido = await prisma.pedido.findFirst({
       where: {

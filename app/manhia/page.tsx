@@ -7,7 +7,9 @@ import {
   ManhiaAdminDashboard,
   type PedidoAdmin,
   type ProdutoAdmin,
+  type StoreSettingsData,
 } from "@/components/manhia-admin-dashboard";
+import { getStoreSettings } from "@/lib/business-hours";
 
 type ProdutoWithPromocao = Awaited<
   ReturnType<typeof prisma.produto.findMany>
@@ -97,6 +99,22 @@ export default async function ManhiaPage() {
     return <ManhiaLoginForm isConfigured={isConfigured} />;
   }
 
-  const [produtos, pedidos] = await Promise.all([getProdutos(), getPedidos()]);
-  return <ManhiaAdminDashboard initialProdutos={produtos} initialPedidos={pedidos} />;
+  const [produtos, pedidos, settingsRaw] = await Promise.all([
+    getProdutos(),
+    getPedidos(),
+    getStoreSettings(),
+  ]);
+
+  const initialSettings: StoreSettingsData = {
+    isOpen: settingsRaw.isOpen,
+    minimumLeadHours: settingsRaw.minimumLeadHours,
+  };
+
+  return (
+    <ManhiaAdminDashboard
+      initialProdutos={produtos}
+      initialPedidos={pedidos}
+      initialSettings={initialSettings}
+    />
+  );
 }

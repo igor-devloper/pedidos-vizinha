@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/db";
 import { BUSINESS_RULES } from "@/lib/site-config";
 
 const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
@@ -35,6 +36,10 @@ export function getBusinessWeekday(input: Date) {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
 }
 
+/**
+ * Verifica apenas o horário de funcionamento (sem verificar se a loja está aberta no DB).
+ * Use para lógica interna que não depende do painel.
+ */
 export function getBusinessHoursStatus(now = new Date()) {
   const businessTime = getBusinessTimeParts(now);
   const weekday = getBusinessWeekday(now);
@@ -65,5 +70,48 @@ export function getBusinessHoursStatus(now = new Date()) {
       : weekday === 0
         ? "Agora estamos fora do horario. Aos domingos atendemos das 9h as 13h."
         : "Agora estamos fora do horario. De terça a sabádo atendemos das 10h as 17h.",
+  };
+}
+
+/**
+ * Retorna as configurações da loja do banco de dados (singleton).
+ * Cria o registro com os padrões se ainda não existir.
+ */
+export async function getStoreSettings() {
+  return prisma.storeSettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: {
+      id: "singleton",
+      isOpen: true,
+      minimumLeadHours: BUSINESS_RULES.minimumLeadHours,
+    },
+  });
+}
+
+/**
+ * Verifica se a loja está aberta considerando tanto o horário de funcionamento
+ * quanto o toggle manual do painel.
+ */
+export async function getFullStoreStatus(now = new Date()) {
+  const [hoursStatus, settings] = await Promise.all([
+    getBusinessHoursStatus(now),
+    getStoreSettings(),
+  ]);
+
+  if (!settings.isOpen) {
+    return {
+      isOpen: false,
+      minimumLeadHours: settings.minimumLeadHours,
+      message: "A loja está fechada no momento. Volte em breve!",
+      closedByOwner: true,
+    };
+  }
+
+  return {
+    isOpen: hoursStatus.isOpen,
+    minimumLeadHours: settings.minimumLeadHours,
+    message: hoursStatus.message,
+    closedByOwner: false,
   };
 }

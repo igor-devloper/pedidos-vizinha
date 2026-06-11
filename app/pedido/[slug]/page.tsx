@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { MetodoPagamento } from "@prisma/client";
 
 import { PedidoCheckout } from "@/components/pedido-checkout";
+import { getFullStoreStatus } from "@/lib/business-hours";
 import { prisma } from "@/lib/db";
 import { listMercadoPagoMethods } from "@/lib/mercado-pago";
 import { getProdutoComboItens } from "@/lib/produtos";
@@ -24,7 +25,10 @@ export default async function PedidoPage({
     notFound();
   }
 
-  const paymentMethods = await listMercadoPagoMethods();
+  const [paymentMethods, businessStatus] = await Promise.all([
+    listMercadoPagoMethods(),
+    getFullStoreStatus(),
+  ]);
 
   return (
     <main className="px-4 py-6 sm:px-6 lg:px-8">
@@ -69,6 +73,11 @@ export default async function PedidoPage({
                   },
                 ]
           }
+          businessStatus={{
+            isOpen: businessStatus.isOpen,
+            message: businessStatus.message,
+            minimumLeadHours: businessStatus.minimumLeadHours,
+          }}
         />
       </div>
     </main>

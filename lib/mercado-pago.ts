@@ -32,6 +32,10 @@ type MercadoPagoPaymentResponse = {
   metadata?: Record<string, unknown>;
 };
 
+type MercadoPagoPaymentSearchResponse = {
+  results?: MercadoPagoPaymentResponse[];
+};
+
 function getAccessToken() {
   const token =
     process.env.envMERCADO_PAGO_ACCESS_TOKEN?.trim() ||
@@ -186,6 +190,21 @@ export async function createMercadoPagoPreference({
 
 export async function getMercadoPagoPayment(paymentId: string) {
   return mercadoPagoRequest<MercadoPagoPaymentResponse>(`/v1/payments/${paymentId}`);
+}
+
+export async function findLatestMercadoPagoPaymentByExternalReference(externalReference: string) {
+  const params = new URLSearchParams({
+    external_reference: externalReference,
+    sort: "date_created",
+    criteria: "desc",
+    limit: "1",
+  });
+
+  const data = await mercadoPagoRequest<MercadoPagoPaymentSearchResponse>(
+    `/v1/payments/search?${params.toString()}`
+  );
+
+  return data.results?.[0] || null;
 }
 
 export function verifyMercadoPagoWebhookSignature(request: Request) {

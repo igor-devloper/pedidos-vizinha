@@ -176,6 +176,19 @@ model PedidoItem {
   pedido     Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
 
+// ============================================================
+// StoreSettings - configurações dinâmicas da loja
+// Há sempre exatamente 1 registro com id = "singleton".
+// ============================================================
+model StoreSettings {
+  id                String   @id @default("singleton")
+  /// Loja aberta manualmente (true = aberta, false = fechada forçada)
+  isOpen            Boolean  @default(true)
+  /// Horas mínimas de antecedência para pedidos (padrão: 2)
+  minimumLeadHours  Int      @default(2)
+  updatedAt         DateTime @updatedAt
+}
+
 enum StatusEncomenda {
   AGUARDANDO_PAGAMENTO
   AGUARDANDO_VALIDACAO

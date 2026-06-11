@@ -6,7 +6,7 @@ import { ArrowRight, BadgePercent, Clock3, Flame, Star, Trophy } from "lucide-re
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/db";
-import { getBusinessHoursStatus } from "@/lib/business-hours";
+import { getFullStoreStatus } from "@/lib/business-hours";
 import { formatCurrency } from "@/lib/pedidos";
 import { getProdutoComboItens, PRODUCT_CATEGORY_LABEL } from "@/lib/produtos";
 
@@ -129,7 +129,7 @@ function ProductCard({
 export default async function CardapioPage() {
   const produtos = await getProdutos();
   const destaque = produtos[0] || null;
-  const businessStatus = getBusinessHoursStatus();
+  const businessStatus = await getFullStoreStatus();
 
   return (
     <main className="px-4 py-6 sm:px-6 lg:px-8">
