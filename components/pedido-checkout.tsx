@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { calculateDiscountedSubtotal } from "@/lib/descontos";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
 import { type ComboItem, PRODUCT_CATEGORY_LABEL, type ProductCategory } from "@/lib/produtos";
 import { BUSINESS_RULES } from "@/lib/site-config";
@@ -50,8 +51,16 @@ type ProdutoCheckout = {
   totalUnidades: number;
   maxTiposSalgado: number;
   permitePagamentoParcial: boolean;
+  emPromocao: boolean;
+  descontoPercentual: number;
   saboresSugeridos: string[];
   comboItens: ComboItem[];
+};
+
+type AppliedCoupon = {
+  codigo: string;
+  divulgadorNome: string;
+  descontoPercentual: number;
 };
 
 type ItemState = {
@@ -213,6 +222,9 @@ export function PedidoCheckout({
   const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>(
     paymentMethods[0]?.id || MetodoPagamento.PIX
   );
+  const [cupomCodigo, setCupomCodigo] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [items, setItems] = useState<ItemState[]>(() => {
     if (isCombo) {
       return produto.comboItens.map((item) => ({
@@ -238,7 +250,12 @@ export function PedidoCheckout({
   );
   const requiredUnits = produto.totalUnidades * productQuantity;
   const maxAllowedTypes = produto.maxTiposSalgado * productQuantity;
-  const effectivePrice = produto.preco * productQuantity;
+  const basePrice = produto.preco * productQuantity;
+  const productDiscountPercent = produto.emPromocao ? Number(produto.descontoPercentual || 0) : 0;
+  const couponDiscountPercent = appliedCoupon?.descontoPercentual || 0;
+  const totalDiscountPercent = Math.min(productDiscountPercent + couponDiscountPercent, 100);
+  const discountPreview = calculateDiscountedSubtotal(basePrice, totalDiscountPercent);
+  const effectivePrice = discountPreview.subtotal;
   const remaining = requiredUnits - totalUnidades;
   const activeTypes = useMemo(
     () => items.filter((item) => item.tipo.trim() && item.quantidade > 0).length,
@@ -305,6 +322,50 @@ export function PedidoCheckout({
     setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const handleApplyCoupon = async () => {
+    const codigo = cupomCodigo.trim();
+
+    if (!codigo) {
+      toast.error("Informe o cupom.");
+      return;
+    }
+
+    try {
+      setValidatingCoupon(true);
+      const response = await fetch("/api/cupons/validar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codigo, produtoId: produto.id }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | (AppliedCoupon & { error?: string })
+        | null;
+
+      if (!response.ok || !data) {
+        throw new Error(data?.error || "Cupom invalido.");
+      }
+
+      setAppliedCoupon({
+        codigo: data.codigo,
+        divulgadorNome: data.divulgadorNome,
+        descontoPercentual: Number(data.descontoPercentual),
+      });
+      setCupomCodigo(data.codigo);
+      toast.success("Cupom aplicado.");
+    } catch (error) {
+      setAppliedCoupon(null);
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel aplicar o cupom.");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCupomCodigo("");
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) {
       toast.error("Revise os dados do pedido antes de continuar.");
@@ -326,6 +387,7 @@ export function PedidoCheckout({
           dataEntrega,
           percentualPagamento,
           metodoPagamento,
+          cupomCodigo: appliedCoupon?.codigo || "",
           itens: items,
         }),
       });
@@ -403,9 +465,16 @@ export function PedidoCheckout({
               <div className="grid gap-3 rounded-[1.5rem] bg-[linear-gradient(135deg,#0f5d22,#1c8d39)] p-4 text-sm text-white sm:grid-cols-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
-                    Valor base
+                    Valor
                   </p>
-                  <p className="mt-2 text-lg font-semibold">{formatCurrency(effectivePrice)}</p>
+                  {discountPreview.discountValue > 0 ? (
+                    <div className="mt-2">
+                      <p className="text-sm text-white/60 line-through">{formatCurrency(basePrice)}</p>
+                      <p className="text-lg font-semibold">{formatCurrency(effectivePrice)}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-lg font-semibold">{formatCurrency(effectivePrice)}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
@@ -745,6 +814,44 @@ export function PedidoCheckout({
               </div>
             </div>
 
+            <div className="grid gap-3 rounded-[1.5rem] border border-[#dfeab9] bg-white p-4">
+              <label className="text-sm font-medium text-[#284a2e]">Cupom de desconto</label>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Input
+                  value={cupomCodigo}
+                  onChange={(event) => {
+                    setCupomCodigo(event.target.value.toUpperCase());
+                    if (appliedCoupon) {
+                      setAppliedCoupon(null);
+                    }
+                  }}
+                  placeholder="Digite seu cupom"
+                  className="uppercase"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={validatingCoupon}
+                  onClick={appliedCoupon ? handleRemoveCoupon : () => void handleApplyCoupon()}
+                  className="rounded-xl border-[#d8e8a4] text-[#1b5e20] hover:bg-[#eff8d0]"
+                >
+                  {validatingCoupon ? (
+                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  {appliedCoupon ? "Remover" : "Aplicar"}
+                </Button>
+              </div>
+              {appliedCoupon ? (
+                <p className="text-sm font-medium text-emerald-700">
+                  {appliedCoupon.codigo}: {appliedCoupon.descontoPercentual}% aplicado.
+                </p>
+              ) : (
+                <p className="text-sm text-[#48654f]">
+                  Use o codigo recebido para ganhar desconto no pedido.
+                </p>
+              )}
+            </div>
+
             <div className="rounded-[1.6rem] bg-[linear-gradient(135deg,#0b3d0b,#127c2e_45%,#f4c600)] p-5 text-white">
               <p className="text-xs font-black uppercase tracking-[0.22em] text-[#fff2a8]">
                 Resumo
@@ -752,6 +859,16 @@ export function PedidoCheckout({
               <div className="mt-4 space-y-2 text-sm text-white/85">
                 <div className="flex items-center justify-between gap-3">
                   <span>Produto</span>
+                  <span>{formatCurrency(basePrice)}</span>
+                </div>
+                {discountPreview.discountValue > 0 ? (
+                  <div className="flex items-center justify-between gap-3 text-[#fff2a8]">
+                    <span>Desconto ({discountPreview.discountPercent}%)</span>
+                    <span>-{formatCurrency(discountPreview.discountValue)}</span>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between gap-3">
+                  <span>Subtotal</span>
                   <span>{formatCurrency(effectivePrice)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">

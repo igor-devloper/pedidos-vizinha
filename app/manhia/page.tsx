@@ -5,6 +5,7 @@ import { normalizeSaboresList } from "@/lib/sabores";
 import { ManhiaLoginForm } from "@/components/manhia-login-form";
 import {
   ManhiaAdminDashboard,
+  type CupomAdmin,
   type PedidoAdmin,
   type ProdutoAdmin,
   type StoreSettingsData,
@@ -37,6 +38,7 @@ async function getProdutos(): Promise<ProdutoAdmin[]> {
       saboresSugeridos: normalizeSaboresList(produto.saboresSugeridos),
       comboItens: getProdutoComboItens(produto as { comboItens?: unknown }),
       emPromocao: Boolean(produto.emPromocao),
+      descontoPercentual: Number(produto.descontoPercentual),
       ativo: produto.ativo,
       createdAt: produto.createdAt.toISOString(),
     }));
@@ -66,6 +68,10 @@ async function getPedidos(): Promise<PedidoAdmin[]> {
       subtotal: Number(pedido.subtotal),
       taxaValor: Number(pedido.taxaValor),
       totalCobrado: Number(pedido.totalCobrado),
+      descontoPercentual: Number(pedido.descontoPercentual),
+      descontoValor: Number(pedido.descontoValor),
+      cupomCodigoSnapshot: pedido.cupomCodigoSnapshot,
+      cupomDivulgadorSnapshot: pedido.cupomDivulgadorSnapshot,
       totalUnidades: pedido.totalUnidades,
       totalTipos: pedido.totalTipos,
       status: pedido.status,
@@ -91,6 +97,38 @@ async function getPedidos(): Promise<PedidoAdmin[]> {
   }
 }
 
+async function getCupons(): Promise<CupomAdmin[]> {
+  try {
+    const cupons = await prisma.cupomDesconto.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        produto: {
+          select: {
+            id: true,
+            nome: true,
+          },
+        },
+      },
+    });
+
+    return cupons.map((cupom) => ({
+      id: cupom.id,
+      codigo: cupom.codigo,
+      produtoId: cupom.produtoId,
+      produtoNome: cupom.produto.nome,
+      divulgadorNome: cupom.divulgadorNome,
+      divulgadorContato: cupom.divulgadorContato,
+      descricao: cupom.descricao,
+      descontoPercentual: Number(cupom.descontoPercentual),
+      ativo: cupom.ativo,
+      createdAt: cupom.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    console.error("GET cupons manhia page error", error);
+    return [];
+  }
+}
+
 export default async function ManhiaPage() {
   const isConfigured = Boolean(getManhiaPassword());
   const authenticated = await isManhiaAuthenticated();
@@ -99,9 +137,10 @@ export default async function ManhiaPage() {
     return <ManhiaLoginForm isConfigured={isConfigured} />;
   }
 
-  const [produtos, pedidos, settingsRaw] = await Promise.all([
+  const [produtos, pedidos, cupons, settingsRaw] = await Promise.all([
     getProdutos(),
     getPedidos(),
+    getCupons(),
     getStoreSettings(),
   ]);
 
@@ -114,6 +153,7 @@ export default async function ManhiaPage() {
     <ManhiaAdminDashboard
       initialProdutos={produtos}
       initialPedidos={pedidos}
+      initialCupons={cupons}
       initialSettings={initialSettings}
     />
   );

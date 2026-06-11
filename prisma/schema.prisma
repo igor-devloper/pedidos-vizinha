@@ -45,11 +45,29 @@ model Produto {
   saboresSugeridos String[] @default([])
   comboItens    Json    @default("[]")
   emPromocao   Boolean  @default(false)
+  descontoPercentual Decimal @default(0) @db.Decimal(5, 2)
   ativo        Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   pedidos      Pedido[]
+  cupons       CupomDesconto[]
+}
+
+model CupomDesconto {
+  id                 String   @id @default(cuid())
+  codigo             String   @unique
+  divulgadorNome     String
+  divulgadorContato  String?
+  descricao          String?
+  descontoPercentual Decimal  @db.Decimal(5, 2)
+  ativo              Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  produtoId          String
+  produto            Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  pedidos            Pedido[]
 }
 
 model BotFlow {
@@ -133,6 +151,10 @@ model Pedido {
   subtotal              Decimal            @db.Decimal(10, 2)
   totalCobrado          Decimal            @db.Decimal(10, 2)
   valorPago             Decimal?           @db.Decimal(10, 2)
+  descontoPercentual    Decimal            @default(0) @db.Decimal(5, 2)
+  descontoValor         Decimal            @default(0) @db.Decimal(10, 2)
+  cupomCodigoSnapshot   String?
+  cupomDivulgadorSnapshot String?
   totalUnidades         Int
   totalTipos            Int
   status                PedidoStatus       @default(PENDENTE_PAGAMENTO)
@@ -163,6 +185,8 @@ model Pedido {
 
   produtoId             String
   produto               Produto            @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  cupomId               String?
+  cupom                 CupomDesconto?      @relation(fields: [cupomId], references: [id], onDelete: SetNull)
   itens                 PedidoItem[]
 }
 

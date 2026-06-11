@@ -57,6 +57,8 @@ export default async function PedidoPage({
             totalUnidades: produto.totalUnidades,
             maxTiposSalgado: produto.maxTiposSalgado,
             permitePagamentoParcial: produto.permitePagamentoParcial,
+            emPromocao: produto.emPromocao,
+            descontoPercentual: Number(produto.descontoPercentual),
             categoria: produto.categoria as "CENTO" | "LANCHONETE" | "COMBO",
             saboresSugeridos: normalizeSaboresList(produto.saboresSugeridos),
             comboItens: getProdutoComboItens(produto as { comboItens?: unknown }),

@@ -1,4 +1,4 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, BadgePercent, Clock3, Flame, Star, Trophy } from "lucide-react";
@@ -41,6 +41,8 @@ function ProductCard({
   produto: Awaited<ReturnType<typeof getProdutos>>[number];
 }) {
   const isCombo = String(produto.categoria) === "COMBO" && produto.comboItens.length > 0;
+  const discountPercent = produto.emPromocao ? Number(produto.descontoPercentual || 0) : 0;
+  const promotionalPrice = Number((produto.preco * (1 - discountPercent / 100)).toFixed(2));
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[#dbe7b6] bg-white shadow-[0_20px_60px_rgba(27,94,32,0.16)] transition duration-300 hover:-translate-y-1">
@@ -59,7 +61,7 @@ function ProductCard({
           <div className="flex flex-col gap-2">
             {produto.emPromocao && (
               <span className="rounded-full bg-[#fedf00] px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-[#0b5d1e] shadow-lg">
-                Promoção
+                Promoção {discountPercent}%
               </span>
             )}
             <span className="w-fit rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#0b5d1e] backdrop-blur">
@@ -71,7 +73,14 @@ function ProductCard({
             <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#fff3a8]">
               Preço
             </p>
-            <p className="text-xl font-black">{formatCurrency(produto.preco)}</p>
+            {discountPercent > 0 ? (
+              <>
+                <p className="text-xs text-white/60 line-through">{formatCurrency(produto.preco)}</p>
+                <p className="text-xl font-black">{formatCurrency(promotionalPrice)}</p>
+              </>
+            ) : (
+              <p className="text-xl font-black">{formatCurrency(produto.preco)}</p>
+            )}
           </div>
         </div>
       </div>
@@ -103,7 +112,7 @@ function ProductCard({
           {produto.emPromocao && (
             <div className="flex items-center gap-1 text-sm font-bold text-[#c79300]">
               <Flame className="h-4 w-4" />
-              Promoção
+               Promoção 
             </div>
           )}
           {isCombo ? (
@@ -201,7 +210,7 @@ export default async function CardapioPage() {
                       Horarios
                     </p>
                     <p className="mt-2 text-sm text-white/72">
-                      Terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.
+                      TerÃ§a a sabÃ¡do, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.
                     </p>
                   </div>
 
@@ -254,7 +263,7 @@ export default async function CardapioPage() {
                 <h2 className="text-3xl font-black tracking-tight">Produtos para encomenda</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-white/78">
                   Cada produto ja traz suas regras de quantidade, tipos permitidos, pagamento e, se
-                  for combo, a composição fixa.
+                  for combo, a composiÃ§Ã£o fixa.
                 </p>
               </div>
             </div>

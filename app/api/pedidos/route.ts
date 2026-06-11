@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { getStoreSettings } from "@/lib/business-hours";
+import {
+  calculateDiscountedSubtotal,
+  normalizeCouponCode,
+  normalizeDiscountPercent,
+} from "@/lib/descontos";
 import { createMercadoPagoPreference } from "@/lib/mercado-pago";
 import {
   calculatePaymentAmounts,
@@ -72,7 +77,33 @@ export async function POST(req: Request) {
 
     const productQuantity = payload.productQuantity;
     const { totalTipos, totalUnidades } = validatePedidoAgainstProduto(produto, itens, productQuantity);
-    const subtotal = Number(produto.preco) * productQuantity;
+    const baseSubtotal = Number(produto.preco) * productQuantity;
+    const produtoDiscountPercent = produto.emPromocao
+      ? normalizeDiscountPercent(produto.descontoPercentual)
+      : 0;
+    const cupomCodigo = normalizeCouponCode(payload.cupomCodigo);
+    const cupom = cupomCodigo
+      ? await prisma.cupomDesconto.findFirst({
+          where: {
+            codigo: cupomCodigo,
+            produtoId: produto.id,
+          },
+        })
+      : null;
+
+    if (cupomCodigo && (!cupom || !cupom.ativo)) {
+      return NextResponse.json(
+        { error: "Cupom invalido para este produto ou inativo." },
+        { status: 400 }
+      );
+    }
+
+    const cupomDiscountPercent = cupom ? normalizeDiscountPercent(cupom.descontoPercentual) : 0;
+    const totalDiscountPercent = normalizeDiscountPercent(
+      produtoDiscountPercent + cupomDiscountPercent
+    );
+    const discount = calculateDiscountedSubtotal(baseSubtotal, totalDiscountPercent);
+    const subtotal = discount.subtotal;
     const payment = calculatePaymentAmounts(
       subtotal,
       payload.percentualPagamento,
@@ -102,10 +133,15 @@ export async function POST(req: Request) {
           totalCobrado: payment.totalToCharge,
           totalUnidades,
           totalTipos,
+          descontoPercentual: discount.discountPercent,
+          descontoValor: discount.discountValue,
+          cupomCodigoSnapshot: cupom?.codigo || null,
+          cupomDivulgadorSnapshot: cupom?.divulgadorNome || null,
           produtoNomeSnapshot: produto.nome,
-          produtoPrecoSnapshot: subtotal,
+          produtoPrecoSnapshot: baseSubtotal,
           mpExternalReference: externalReference,
           produtoId: produto.id,
+          cupomId: cupom?.id || null,
           itens: {
             create: itens.map((item) => ({
               tipo: item.tipo,

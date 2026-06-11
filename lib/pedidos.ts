@@ -29,6 +29,7 @@ export const createPedidoSchema = z.object({
   dataEntrega: z.string().trim().min(1, "Escolha a data e hora de entrega."),
   percentualPagamento: z.union([z.literal(50), z.literal(100)]),
   metodoPagamento: z.nativeEnum(MetodoPagamento),
+  cupomCodigo: z.string().trim().max(40).optional().or(z.literal("")),
   itens: z.array(pedidoItemSchema).min(1, "Escolha ao menos um tipo de salgado."),
 });
 
@@ -215,6 +216,10 @@ type PedidoSummaryShape = Pick<
   | "subtotal"
   | "taxaValor"
   | "totalCobrado"
+  | "descontoPercentual"
+  | "descontoValor"
+  | "cupomCodigoSnapshot"
+  | "cupomDivulgadorSnapshot"
   | "percentualPagamento"
   | "observacoes"
   | "produtoNomeSnapshot"

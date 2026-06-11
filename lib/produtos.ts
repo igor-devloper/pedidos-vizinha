@@ -1,4 +1,5 @@
 import { normalizeSaboresList } from "@/lib/sabores";
+import { normalizeDiscountPercent } from "@/lib/descontos";
 
 export const PRODUCT_CATEGORIES = ["CENTO", "LANCHONETE", "COMBO"] as const;
 
@@ -27,6 +28,7 @@ export type ProdutoPayloadInput = {
   saboresSugeridos?: string[];
   comboItens?: ComboItem[] | null;
   emPromocao?: boolean;
+  descontoPercentual?: number | string;
   ativo?: boolean;
 };
 
@@ -71,6 +73,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
   const saboresSugeridos = normalizeSaboresList(body.saboresSugeridos);
   const comboItens = normalizeComboItens(body.comboItens);
   const emPromocao = body.emPromocao ?? false;
+  const descontoPercentual = normalizeDiscountPercent(body.descontoPercentual);
   const ativo = body.ativo ?? true;
 
   if (!nome) {
@@ -83,6 +86,10 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
 
   if (!Number.isFinite(preco) || preco <= 0) {
     return { error: "Informe um valor valido." };
+  }
+
+  if (emPromocao && descontoPercentual <= 0) {
+    return { error: "Informe o percentual de desconto da promocao." };
   }
 
   if (!imagemBase64.startsWith("data:image/")) {
@@ -114,6 +121,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
         saboresSugeridos: comboItens.map((item) => item.nome),
         comboItens,
         emPromocao,
+        descontoPercentual,
         ativo,
       },
     };
@@ -143,6 +151,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
       saboresSugeridos,
       comboItens: [],
       emPromocao,
+      descontoPercentual,
       ativo,
     },
   };

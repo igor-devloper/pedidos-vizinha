@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   CheckCheck,
   Clock,
+  Copy,
   LoaderCircle,
   LogOut,
   Pencil,
@@ -15,6 +16,7 @@ import {
   RefreshCcw,
   ShoppingBag,
   SlidersHorizontal,
+  TicketPercent,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -55,6 +57,20 @@ export type ProdutoAdmin = {
   saboresSugeridos: string[];
   comboItens: ComboItem[];
   emPromocao: boolean;
+  descontoPercentual: string | number;
+  ativo: boolean;
+  createdAt: string;
+};
+
+export type CupomAdmin = {
+  id: string;
+  codigo: string;
+  produtoId: string;
+  produtoNome: string;
+  divulgadorNome: string;
+  divulgadorContato: string | null;
+  descricao: string | null;
+  descontoPercentual: string | number;
   ativo: boolean;
   createdAt: string;
 };
@@ -72,6 +88,10 @@ export type PedidoAdmin = {
   subtotal: string | number;
   taxaValor: string | number;
   totalCobrado: string | number;
+  descontoPercentual: string | number;
+  descontoValor: string | number;
+  cupomCodigoSnapshot: string | null;
+  cupomDivulgadorSnapshot: string | null;
   totalUnidades: number;
   totalTipos: number;
   status:
@@ -108,6 +128,17 @@ type ProdutoFormState = {
   saboresSugeridos: string[];
   comboItens: Array<{ nome: string; quantidade: string }>;
   emPromocao: boolean;
+  descontoPercentual: string;
+  ativo: boolean;
+};
+
+type CupomFormState = {
+  codigo: string;
+  produtoId: string;
+  divulgadorNome: string;
+  divulgadorContato: string;
+  descricao: string;
+  descontoPercentual: string;
   ativo: boolean;
 };
 
@@ -123,6 +154,17 @@ const EMPTY_FORM: ProdutoFormState = {
   saboresSugeridos: [""],
   comboItens: [{ nome: "", quantidade: "1" }],
   emPromocao: false,
+  descontoPercentual: "",
+  ativo: true,
+};
+
+const EMPTY_CUPOM_FORM: CupomFormState = {
+  codigo: "",
+  produtoId: "",
+  divulgadorNome: "",
+  divulgadorContato: "",
+  descricao: "",
+  descontoPercentual: "",
   ativo: true,
 };
 
@@ -169,7 +211,7 @@ async function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+    reader.onerror = () => reject(new Error("NÃ£o foi possÃ­vel ler a imagem."));
     reader.readAsDataURL(file);
   });
 }
@@ -189,23 +231,30 @@ function getNextOperationalStatus(status: PedidoAdmin["status"]) {
 export function ManhiaAdminDashboard({
   initialProdutos,
   initialPedidos,
+  initialCupons,
   initialSettings,
 }: {
   initialProdutos: ProdutoAdmin[];
   initialPedidos: PedidoAdmin[];
+  initialCupons: CupomAdmin[];
   initialSettings: StoreSettingsData;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"pedidos" | "produtos" | "configuracoes">("pedidos");
+  const [activeTab, setActiveTab] = useState<"pedidos" | "produtos" | "cupons" | "configuracoes">("pedidos");
   const [produtos, setProdutos] = useState(initialProdutos);
   const [pedidos, setPedidos] = useState(initialPedidos);
+  const [cupons, setCupons] = useState(initialCupons);
   const [settings, setSettings] = useState(initialSettings);
   const [form, setForm] = useState<ProdutoFormState>(EMPTY_FORM);
+  const [cupomForm, setCupomForm] = useState<CupomFormState>(EMPTY_CUPOM_FORM);
   const [saving, setSaving] = useState(false);
+  const [savingCupom, setSavingCupom] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCupomId, setEditingCupomId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingCupomId, setDeletingCupomId] = useState<string | null>(null);
   const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
   const [draggedPedidoId, setDraggedPedidoId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<"PAGO" | "PRONTO" | "ENTREGUE" | null>(null);
@@ -249,7 +298,7 @@ export function ManhiaAdminDashboard({
       setRefreshingPedidos(true);
       const response = await fetch("/api/manhia/pedidos", { cache: "no-store" });
       if (!response.ok) {
-        throw new Error("Não foi possível atualizar os pedidos.");
+        throw new Error("NÃ£o foi possÃ­vel atualizar os pedidos.");
       }
 
       const data = (await response.json()) as PedidoAdmin[];
@@ -296,6 +345,11 @@ export function ManhiaAdminDashboard({
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setEditingId(null);
+  };
+
+  const resetCupomForm = () => {
+    setCupomForm(EMPTY_CUPOM_FORM);
+    setEditingCupomId(null);
   };
 
   const isComboCategory = form.categoria === "COMBO";
@@ -402,6 +456,7 @@ export function ManhiaAdminDashboard({
               quantidade: Number(item.quantidade || 0),
             })),
             emPromocao: form.emPromocao,
+            descontoPercentual: form.emPromocao ? form.descontoPercentual : 0,
             ativo: form.ativo,
           }),
         }
@@ -412,7 +467,7 @@ export function ManhiaAdminDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Não foi possível salvar o produto.");
+        throw new Error(data?.error || "NÃ£o foi possÃ­vel salvar o produto.");
       }
 
       const produto = data as ProdutoAdmin;
@@ -429,7 +484,7 @@ export function ManhiaAdminDashboard({
       resetForm();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
+      toast.error(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar.");
     } finally {
       setSaving(false);
     }
@@ -459,6 +514,7 @@ export function ManhiaAdminDashboard({
             }))
           : [{ nome: "", quantidade: "1" }],
       emPromocao: produto.emPromocao,
+      descontoPercentual: String(produto.descontoPercentual || ""),
       ativo: produto.ativo,
     });
   };
@@ -473,7 +529,7 @@ export function ManhiaAdminDashboard({
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Não foi possível excluir o produto.");
+        throw new Error(data?.error || "NÃ£o foi possÃ­vel excluir o produto.");
       }
 
       setProdutos((current) => current.filter((item) => item.id !== produtoId));
@@ -483,9 +539,100 @@ export function ManhiaAdminDashboard({
       toast.success("Produto removido.");
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível excluir.");
+      toast.error(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel excluir.");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleCupomSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      setSavingCupom(true);
+      const response = await fetch(
+        editingCupomId ? `/api/manhia/cupons/${editingCupomId}` : "/api/manhia/cupons",
+        {
+          method: editingCupomId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cupomForm),
+        }
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | (CupomAdmin & { error?: string })
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Nao foi possivel salvar o cupom.");
+      }
+
+      const cupom = data as CupomAdmin;
+
+      setCupons((current) => {
+        if (editingCupomId) {
+          return current.map((item) => (item.id === cupom.id ? cupom : item));
+        }
+
+        return [cupom, ...current];
+      });
+
+      toast.success(editingCupomId ? "Cupom atualizado." : "Cupom criado.");
+      resetCupomForm();
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel salvar o cupom.");
+    } finally {
+      setSavingCupom(false);
+    }
+  };
+
+  const handleEditCupom = (cupom: CupomAdmin) => {
+    setEditingCupomId(cupom.id);
+    setActiveTab("cupons");
+    setCupomForm({
+      codigo: cupom.codigo,
+      produtoId: cupom.produtoId,
+      divulgadorNome: cupom.divulgadorNome,
+      divulgadorContato: cupom.divulgadorContato || "",
+      descricao: cupom.descricao || "",
+      descontoPercentual: String(cupom.descontoPercentual || ""),
+      ativo: cupom.ativo,
+    });
+  };
+
+  const handleDeleteCupom = async (cupomId: string) => {
+    try {
+      setDeletingCupomId(cupomId);
+      const response = await fetch(`/api/manhia/cupons/${cupomId}`, {
+        method: "DELETE",
+      });
+
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Nao foi possivel excluir o cupom.");
+      }
+
+      setCupons((current) => current.filter((item) => item.id !== cupomId));
+      if (editingCupomId === cupomId) {
+        resetCupomForm();
+      }
+      toast.success("Cupom removido.");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel excluir o cupom.");
+    } finally {
+      setDeletingCupomId(null);
+    }
+  };
+
+  const handleCopyCupom = async (codigo: string) => {
+    try {
+      await navigator.clipboard.writeText(codigo);
+      toast.success("Codigo copiado.");
+    } catch {
+      toast.error("Nao foi possivel copiar o codigo.");
     }
   };
 
@@ -506,7 +653,7 @@ export function ManhiaAdminDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Não foi possível atualizar o pedido.");
+        throw new Error(data?.error || "NÃ£o foi possÃ­vel atualizar o pedido.");
       }
 
       const pedido = data as PedidoAdmin;
@@ -631,10 +778,11 @@ export function ManhiaAdminDashboard({
             </div>
           </div>
 
-          <nav className="grid border-t border-[#e4edc9] bg-white sm:grid-cols-3">
+          <nav className="grid border-t border-[#e4edc9] bg-white sm:grid-cols-4">
             {[
               { id: "pedidos" as const, label: "Pedidos", icon: ShoppingBag },
               { id: "produtos" as const, label: "Produtos", icon: CheckCheck },
+              { id: "cupons" as const, label: "Cupons", icon: TicketPercent },
               { id: "configuracoes" as const, label: "Operação", icon: SlidersHorizontal },
             ].map((item) => {
               const Icon = item.icon;
@@ -789,7 +937,7 @@ export function ManhiaAdminDashboard({
                             </Badge>
                           </div>
                           <p className="text-sm text-slate-500">
-                            {pedido.clienteNome} • {pedido.clienteTelefone}
+                            {pedido.clienteNome} â€¢ {pedido.clienteTelefone}
                           </p>
                           <p className="text-sm text-slate-500">
                             Entrega: {formatDateTime(pedido.dataEntrega)}
@@ -814,7 +962,7 @@ export function ManhiaAdminDashboard({
                           </p>
                           <p className="mt-2 text-sm text-slate-700">{pedido.produtoNomeSnapshot}</p>
                           <p className="mt-1 text-sm text-slate-500">
-                            {pedido.totalUnidades} unidades • {pedido.totalTipos} tipos
+                            {pedido.totalUnidades} unidades â€¢ {pedido.totalTipos} tipos
                           </p>
                         </div>
 
@@ -833,10 +981,10 @@ export function ManhiaAdminDashboard({
 
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-[#1b7f31]">
-                            Observações
+                            ObservaÃ§Ãµes
                           </p>
                           <p className="mt-2 text-sm text-slate-700">
-                            {pedido.observacoes || "Sem observações."}
+                            {pedido.observacoes || "Sem observaÃ§Ãµes."}
                           </p>
                         </div>
                       </div>
@@ -890,6 +1038,246 @@ export function ManhiaAdminDashboard({
               </>
             )}
           </section>
+        ) : activeTab === "cupons" ? (
+          <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
+            <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
+              <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                  Divulgacao
+                </p>
+                <CardTitle className="text-[#0b3d18]">
+                  {editingCupomId ? "Editar cupom" : "Novo cupom"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-4" onSubmit={handleCupomSubmit}>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Codigo do cupom</label>
+                    <Input
+                      value={cupomForm.codigo}
+                      onChange={(event) =>
+                        setCupomForm((current) => ({ ...current, codigo: event.target.value }))
+                      }
+                      placeholder="Ex: JOAO10"
+                      className="uppercase"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Produto do cupom</label>
+                    <Select
+                      value={cupomForm.produtoId}
+                      onValueChange={(value) =>
+                        setCupomForm((current) => ({ ...current, produtoId: value }))
+                      }
+                    >
+                      <SelectTrigger className="h-10 w-full border-[#d6e7a2] bg-white text-sm text-slate-700">
+                        <SelectValue placeholder="Selecione o produto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {produtos.map((produto) => (
+                          <SelectItem key={produto.id} value={produto.id}>
+                            {produto.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Quem vai divulgar</label>
+                    <Input
+                      value={cupomForm.divulgadorNome}
+                      onChange={(event) =>
+                        setCupomForm((current) => ({
+                          ...current,
+                          divulgadorNome: event.target.value,
+                        }))
+                      }
+                      placeholder="Ex: Joao Silva"
+                    />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Desconto (%)</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="0.01"
+                        value={cupomForm.descontoPercentual}
+                        onChange={(event) =>
+                          setCupomForm((current) => ({
+                            ...current,
+                            descontoPercentual: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Contato</label>
+                      <Input
+                        value={cupomForm.divulgadorContato}
+                        onChange={(event) =>
+                          setCupomForm((current) => ({
+                            ...current,
+                            divulgadorContato: event.target.value,
+                          }))
+                        }
+                        placeholder="WhatsApp ou Instagram"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Observacao interna</label>
+                    <Textarea
+                      value={cupomForm.descricao}
+                      onChange={(event) =>
+                        setCupomForm((current) => ({ ...current, descricao: event.target.value }))
+                      }
+                      className="min-h-24"
+                    />
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
+                    <Checkbox
+                      id="cupom-ativo"
+                      checked={cupomForm.ativo}
+                      onCheckedChange={(checked) =>
+                        setCupomForm((current) => ({ ...current, ativo: Boolean(checked) }))
+                      }
+                    />
+                    <label htmlFor="cupom-ativo" className="text-sm leading-6 text-slate-600">
+                      Cupom ativo para clientes usarem no checkout.
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      type="submit"
+                      disabled={savingCupom}
+                      className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                    >
+                      {savingCupom ? (
+                        <>
+                          <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : editingCupomId ? (
+                        "Atualizar cupom"
+                      ) : (
+                        <>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Adicionar cupom
+                        </>
+                      )}
+                    </Button>
+
+                    {editingCupomId ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={resetCupomForm}
+                        className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                      >
+                        Cancelar edicao
+                      </Button>
+                    ) : null}
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+
+            <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
+              <div className="flex flex-col gap-2 border-b border-[#e4edc9] bg-[#0b3d18] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#f4d330]">
+                    Cupons
+                  </p>
+                  <h2 className="text-xl font-bold">Cupons cadastrados</h2>
+                </div>
+                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#0b3d18]">
+                  {cupons.length} cupom(ns)
+                </Badge>
+              </div>
+
+              {cupons.length === 0 ? (
+                <div className="p-10 text-center text-sm text-slate-500">
+                  Nenhum cupom cadastrado ainda.
+                </div>
+              ) : (
+                <div className="divide-y divide-[#e4edc9]">
+                  {cupons.map((cupom) => (
+                    <article
+                      key={cupom.id}
+                      className="grid gap-4 p-4 transition hover:bg-[#fbfff0] md:grid-cols-[1fr_auto] md:items-center"
+                    >
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-mono text-lg font-bold text-[#0b3d18]">
+                            {cupom.codigo}
+                          </h3>
+                          <Badge className={cupom.ativo ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-slate-200 bg-slate-100 text-slate-600"}>
+                            {cupom.ativo ? "Ativo" : "Inativo"}
+                          </Badge>
+                          <Badge className="border border-[#f4d330] bg-[#fff3a8] text-[#735600]">
+                            {Number(cupom.descontoPercentual)}%
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-[#48654f]">
+                          Produto: {cupom.produtoNome}
+                        </p>
+                        <p className="text-sm text-[#48654f]">
+                          Divulgador: {cupom.divulgadorNome}
+                          {cupom.divulgadorContato ? ` - ${cupom.divulgadorContato}` : ""}
+                        </p>
+                        {cupom.descricao ? (
+                          <p className="line-clamp-2 text-sm text-slate-500">{cupom.descricao}</p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 md:justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleCopyCupom(cupom.codigo)}
+                          className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copiar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditCupom(cupom)}
+                          className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={deletingCupomId === cupom.id}
+                          onClick={() => void handleDeleteCupom(cupom.id)}
+                          className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {deletingCupomId === cupom.id ? "Excluindo..." : "Excluir"}
+                        </Button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </section>
         ) : activeTab === "configuracoes" ? (
           <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
             <div className="grid lg:grid-cols-[1fr_340px]">
@@ -937,7 +1325,7 @@ export function ManhiaAdminDashboard({
                             minimumLeadHours: Number(event.target.value || 0),
                           }))
                         }
-                        className="h-12 max-w-40 border-[#d6e7a2] bg-white text-lg font-bold text-[#0b3d18]"
+                        className="h-12 max-w-30 mx-4 border-[#d6e7a2] bg-white text-lg font-bold text-[#0b3d18]"
                       />
                     </div>
                     <Button
@@ -1000,7 +1388,7 @@ export function ManhiaAdminDashboard({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Descrição</label>
+                    <label className="text-sm font-medium text-slate-700">DescriÃ§Ã£o</label>
                     <Textarea
                       value={form.descricao}
                       onChange={(event) =>
@@ -1064,7 +1452,7 @@ export function ManhiaAdminDashboard({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Máximo de tipos</label>
+                      <label className="text-sm font-medium text-slate-700">MÃ¡ximo de tipos</label>
                       <Input
                         type="number"
                         min="1"
@@ -1226,9 +1614,32 @@ export function ManhiaAdminDashboard({
                           setForm((current) => ({ ...current, emPromocao: Boolean(checked) }))
                         }
                       />
-                      <label htmlFor="produto-promocao" className="text-sm leading-6 text-slate-600">
-                        Destacar este produto como promoção.
-                      </label>
+                      <div className="flex-1 space-y-3">
+                        <label htmlFor="produto-promocao" className="text-sm leading-6 text-slate-600">
+                          Destacar este produto como promocao.
+                        </label>
+                        {form.emPromocao ? (
+                          <div className="grid gap-2 sm:max-w-48">
+                            <label className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                              Desconto (%)
+                            </label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={form.descontoPercentual}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  descontoPercentual: event.target.value,
+                                }))
+                              }
+                              className="border-[#d6e7a2] bg-white"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
@@ -1240,7 +1651,7 @@ export function ManhiaAdminDashboard({
                         }
                       />
                       <label htmlFor="produto-ativo" className="text-sm leading-6 text-slate-600">
-                        Deixar visível no cardápio.
+                        Deixar visivel no cardapio.
                       </label>
                     </div>
                   </div>
@@ -1249,7 +1660,7 @@ export function ManhiaAdminDashboard({
                     <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-[#d6e7a2] bg-[#f7fde7]">
                       <Image
                         src={form.imagemBase64}
-                        alt={form.nome || "Prévia do produto"}
+                        alt={form.nome || "PrÃ©via do produto"}
                         fill
                         unoptimized
                         className="object-cover"
@@ -1281,7 +1692,7 @@ export function ManhiaAdminDashboard({
                         onClick={resetForm}
                         className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
                       >
-                        Cancelar edição
+                        Cancelar ediÃ§Ã£o
                       </Button>
                     )}
                   </div>
@@ -1331,7 +1742,7 @@ export function ManhiaAdminDashboard({
                           </Badge>
                           {produto.emPromocao ? (
                             <Badge className="border border-[#f4d330] bg-[#fff3a8] text-[#735600]">
-                              Promocao
+                              Promoção {Number(produto.descontoPercentual || 0)}%
                             </Badge>
                           ) : null}
                         </div>
@@ -1345,9 +1756,23 @@ export function ManhiaAdminDashboard({
                       </div>
 
                       <div className="flex flex-col gap-3 md:items-end">
-                        <p className="text-xl font-bold text-[#0b3d18]">
-                          {formatCurrency(Number(produto.preco))}
-                        </p>
+                        {produto.emPromocao && Number(produto.descontoPercentual || 0) > 0 ? (
+                          <div className="text-left md:text-right">
+                            <p className="text-sm text-slate-400 line-through">
+                              {formatCurrency(Number(produto.preco))}
+                            </p>
+                            <p className="text-xl font-bold text-[#0b3d18]">
+                              {formatCurrency(
+                                Number(produto.preco) *
+                                  (1 - Number(produto.descontoPercentual || 0) / 100)
+                              )}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xl font-bold text-[#0b3d18]">
+                            {formatCurrency(Number(produto.preco))}
+                          </p>
+                        )}
                         <div className="flex flex-wrap gap-2 md:justify-end">
                           <Button
                             type="button"
