@@ -2,7 +2,7 @@ import { PedidoStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { getStoreSettings } from "@/lib/business-hours";
+import { getFullStoreStatus } from "@/lib/business-hours";
 import {
   calculateDiscountedSubtotal,
   normalizeCouponCode,
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
     const itens = normalizePedidoItems(payload.itens);
     const entrega = parseDeliveryDate(payload.dataEntrega);
-    const settings = await getStoreSettings();
+    const settings = await getFullStoreStatus();
 
     if (!settings.isOpen) {
       return NextResponse.json(
@@ -43,29 +43,33 @@ export async function POST(req: Request) {
       );
     }
 
-    validateDeliveryDate(entrega, new Date(), settings.minimumLeadHours);
-
-    const conflictingPedido = await prisma.pedido.findFirst({
-      where: {
-        dataEntrega: entrega,
-        status: {
-          not: PedidoStatus.CANCELADO,
-        },
-      },
-      select: {
-        id: true,
-        codigo: true,
-      },
+    validateDeliveryDate(entrega, new Date(), settings.minimumLeadHours, {
+      enforceBusinessHours: false,
     });
 
-    if (conflictingPedido) {
-      return NextResponse.json(
-        {
-          error:
-            "Esse horario ja esta reservado para outra encomenda. Escolha outro horario para continuar.",
+    if (!settings.allowMultipleOrdersPerSlot) {
+      const conflictingPedido = await prisma.pedido.findFirst({
+        where: {
+          dataEntrega: entrega,
+          status: {
+            not: PedidoStatus.CANCELADO,
+          },
         },
-        { status: 409 }
-      );
+        select: {
+          id: true,
+          codigo: true,
+        },
+      });
+
+      if (conflictingPedido) {
+        return NextResponse.json(
+          {
+            error:
+              "Esse horario ja esta reservado para outra encomenda. Escolha outro horario para continuar.",
+          },
+          { status: 409 }
+        );
+      }
     }
 
     if (payload.percentualPagamento === 50 && !produto.permitePagamentoParcial) {

@@ -210,6 +210,8 @@ model StoreSettings {
   isOpen            Boolean  @default(true)
   /// Horas mínimas de antecedência para pedidos (padrão: 2)
   minimumLeadHours  Int      @default(2)
+  /// Permite mais de um pedido no mesmo horário de entrega.
+  allowMultipleOrdersPerSlot Boolean @default(false)
   siteTheme         String   @default("COPA")
   featuredProductId String?
   updatedAt         DateTime @updatedAt

@@ -13,7 +13,13 @@ export async function GET(req: Request) {
     const settings = await prisma.storeSettings.upsert({
       where: { id: "singleton" },
       update: {},
-      create: { id: "singleton", isOpen: true, minimumLeadHours: 2, siteTheme: "COPA" },
+      create: {
+        id: "singleton",
+        isOpen: true,
+        minimumLeadHours: 2,
+        allowMultipleOrdersPerSlot: false,
+        siteTheme: "COPA",
+      },
     });
 
     return NextResponse.json(settings);
@@ -35,6 +41,7 @@ export async function PATCH(req: Request) {
     const body = (await req.json().catch(() => null)) as {
       isOpen?: boolean;
       minimumLeadHours?: number;
+      allowMultipleOrdersPerSlot?: boolean;
       siteTheme?: StoreSiteTheme;
       featuredProductId?: string | null;
     } | null;
@@ -46,6 +53,7 @@ export async function PATCH(req: Request) {
     const patch: {
       isOpen?: boolean;
       minimumLeadHours?: number;
+      allowMultipleOrdersPerSlot?: boolean;
       siteTheme?: StoreSiteTheme;
       featuredProductId?: string | null;
     } = {};
@@ -56,6 +64,10 @@ export async function PATCH(req: Request) {
 
     if (typeof body.minimumLeadHours === "number" && body.minimumLeadHours >= 0) {
       patch.minimumLeadHours = Math.round(body.minimumLeadHours);
+    }
+
+    if (typeof body.allowMultipleOrdersPerSlot === "boolean") {
+      patch.allowMultipleOrdersPerSlot = body.allowMultipleOrdersPerSlot;
     }
 
     if (typeof body.siteTheme === "string") {
@@ -75,6 +87,7 @@ export async function PATCH(req: Request) {
         id: "singleton",
         isOpen: patch.isOpen ?? true,
         minimumLeadHours: patch.minimumLeadHours ?? 2,
+        allowMultipleOrdersPerSlot: patch.allowMultipleOrdersPerSlot ?? false,
         siteTheme: patch.siteTheme ?? "COPA",
         featuredProductId: patch.featuredProductId ?? null,
       },

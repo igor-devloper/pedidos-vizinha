@@ -148,6 +148,7 @@ export default async function ManhiaPage() {
   const initialSettings: StoreSettingsData = {
     isOpen: settingsRaw.isOpen,
     minimumLeadHours: settingsRaw.minimumLeadHours,
+    allowMultipleOrdersPerSlot: settingsRaw.allowMultipleOrdersPerSlot,
     siteTheme: normalizeStoreSiteTheme(settingsRaw.siteTheme),
     featuredProductId: settingsRaw.featuredProductId,
   };

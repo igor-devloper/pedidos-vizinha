@@ -86,6 +86,7 @@ export async function getStoreSettings() {
       id: "singleton",
       isOpen: true,
       minimumLeadHours: BUSINESS_RULES.minimumLeadHours,
+      allowMultipleOrdersPerSlot: false,
       siteTheme: "COPA",
     },
   });
@@ -105,6 +106,7 @@ export async function getFullStoreStatus(now = new Date()) {
     return {
       isOpen: false,
       minimumLeadHours: settings.minimumLeadHours,
+      allowMultipleOrdersPerSlot: settings.allowMultipleOrdersPerSlot,
       siteTheme: normalizeStoreSiteTheme(settings.siteTheme),
       featuredProductId: settings.featuredProductId,
       message: "A loja está fechada no momento. Volte em breve!",
@@ -113,11 +115,14 @@ export async function getFullStoreStatus(now = new Date()) {
   }
 
   return {
-    isOpen: hoursStatus.isOpen,
+    isOpen: true,
     minimumLeadHours: settings.minimumLeadHours,
+    allowMultipleOrdersPerSlot: settings.allowMultipleOrdersPerSlot,
     siteTheme: normalizeStoreSiteTheme(settings.siteTheme),
     featuredProductId: settings.featuredProductId,
-    message: hoursStatus.message,
+    message: hoursStatus.isOpen
+      ? hoursStatus.message
+      : "A loja esta aberta para receber encomendas.",
     closedByOwner: false,
   };
 }

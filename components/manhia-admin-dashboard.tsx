@@ -118,6 +118,7 @@ export type PedidoAdmin = {
 export type StoreSettingsData = {
   isOpen: boolean;
   minimumLeadHours: number;
+  allowMultipleOrdersPerSlot: boolean;
   siteTheme: StoreSiteTheme;
   featuredProductId: string | null;
 };
@@ -710,6 +711,9 @@ export function ManhiaAdminDashboard({
       setSettings({
         isOpen: Boolean(data?.isOpen),
         minimumLeadHours: Number(data?.minimumLeadHours ?? nextSettings.minimumLeadHours),
+        allowMultipleOrdersPerSlot: Boolean(
+          data?.allowMultipleOrdersPerSlot ?? nextSettings.allowMultipleOrdersPerSlot
+        ),
         siteTheme: (data?.siteTheme ?? nextSettings.siteTheme) as StoreSiteTheme,
         featuredProductId: data?.featuredProductId ?? nextSettings.featuredProductId ?? null,
       });
@@ -1352,6 +1356,34 @@ export function ManhiaAdminDashboard({
                   </div>
                 </div>
 
+                <div className="rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-[#284a2e]">
+                        Pedidos no mesmo horario
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-[#48654f]">
+                        Quando desligado, cada horario aceita apenas uma encomenda ativa.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-[#48654f]">
+                        {settings.allowMultipleOrdersPerSlot ? "Varios por horario" : "Um por horario"}
+                      </span>
+                      <Checkbox
+                        id="allow-multiple-orders-per-slot"
+                        checked={settings.allowMultipleOrdersPerSlot}
+                        disabled={savingSettings}
+                        onCheckedChange={(checked) =>
+                          void handleSaveSettings({
+                            allowMultipleOrdersPerSlot: Boolean(checked),
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-4 rounded-[1.2rem] border border-[#f4b6c5] bg-[#fff5f8] p-4">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-[#b4234b]">
@@ -1486,6 +1518,11 @@ export function ManhiaAdminDashboard({
                   { label: "Pedidos no painel", value: pedidos.length, icon: ShoppingBag },
                   { label: "Vendido no valor base", value: formatCurrency(totalBaseVendido), icon: CheckCheck },
                   { label: "Antecedencia", value: `${settings.minimumLeadHours}h`, icon: Clock },
+                  {
+                    label: "Pedidos por horario",
+                    value: settings.allowMultipleOrdersPerSlot ? "Varios" : "Unico",
+                    icon: TicketPercent,
+                  },
                   {
                     label: "Tema do site",
                     value: settings.siteTheme === "NAMORADOS" ? "Namorados" : "Copa",

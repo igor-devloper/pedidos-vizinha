@@ -152,7 +152,7 @@ function buildDeliveryDateTime(date: string, time: string) {
   return `${date}T${time}`;
 }
 
-function getTimeSlots(dateValue: string, minDate: Date) {
+function getTimeSlots(dateValue: string, minDate: Date, allowExtendedHours: boolean) {
   if (!dateValue) {
     return [] as string[];
   }
@@ -163,26 +163,28 @@ function getTimeSlots(dateValue: string, minDate: Date) {
     weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday
   ];
 
-  if (!schedule) {
+  if (!schedule && !allowExtendedHours) {
     return [] as string[];
   }
 
   const slots: string[] = [];
   const selectedKey = dateValue;
   const minKey = formatDateInputValue(minDate);
+  const openHour = schedule?.openHour ?? 0;
+  const closeMinutes = allowExtendedHours ? 23 * 60 + 45 : (schedule?.closeHour ?? 0) * 60;
   const startMinutes =
-    schedule.openHour * 60 +
+    openHour * 60 +
     (selectedKey === minKey
       ? Math.max(
           0,
           Math.ceil(minDate.getMinutes() / BUSINESS_RULES.slotMinutes) *
             BUSINESS_RULES.slotMinutes -
-            schedule.openHour * 60 +
+            openHour * 60 +
             minDate.getHours() * 60
         )
       : 0);
-  const firstMinutes = Math.max(schedule.openHour * 60, startMinutes);
-  const lastMinutes = schedule.closeHour * 60;
+  const firstMinutes = Math.max(openHour * 60, startMinutes);
+  const lastMinutes = closeMinutes;
 
   for (let minutes = firstMinutes; minutes <= lastMinutes; minutes += BUSINESS_RULES.slotMinutes) {
     const hours = Math.floor(minutes / 60);
@@ -270,8 +272,8 @@ export function PedidoCheckout({
   const selectedMethod = paymentMethods.find((method) => method.id === metodoPagamento);
   const calendarDays = useMemo(() => getCalendarDays(displayMonth), [displayMonth]);
   const timeSlots = useMemo(
-    () => getTimeSlots(dataEntregaData, minDeliveryDate),
-    [dataEntregaData, minDeliveryDate]
+    () => getTimeSlots(dataEntregaData, minDeliveryDate, businessStatus.isOpen),
+    [dataEntregaData, minDeliveryDate, businessStatus.isOpen]
   );
   const dataEntrega = buildDeliveryDateTime(dataEntregaData, dataEntregaHora);
   const paymentPreview = useMemo(
@@ -288,13 +290,14 @@ export function PedidoCheckout({
     totalUnidades === requiredUnits &&
     activeTypes > 0 &&
     activeTypes <= maxAllowedTypes &&
+    businessStatus.isOpen &&
     !submitting;
 
   const selectedDateHasNoSchedule = Boolean(dataEntregaData) && timeSlots.length === 0;
 
   const selectDeliveryDate = (nextDate: string) => {
     setDataEntregaData(nextDate);
-    const nextSlots = getTimeSlots(nextDate, minDeliveryDate);
+    const nextSlots = getTimeSlots(nextDate, minDeliveryDate, businessStatus.isOpen);
     if (!nextSlots.includes(dataEntregaHora)) {
       setDataEntregaHora(nextSlots[0] || "");
     }
@@ -976,7 +979,7 @@ export function PedidoCheckout({
                   Redirecionando...
                 </>
               ) : (
-                "Ir para o pagamento"
+                businessStatus.isOpen ? "Ir para o pagamento" : "Loja fechada"
               )}
             </Button>
 

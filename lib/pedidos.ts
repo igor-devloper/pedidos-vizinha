@@ -117,9 +117,11 @@ export function parseDeliveryDate(input: string) {
 export function validateDeliveryDate(
   input: Date,
   now = new Date(),
-  minimumLeadHours: number = BUSINESS_RULES.minimumLeadHours
+  minimumLeadHours: number = BUSINESS_RULES.minimumLeadHours,
+  options: { enforceBusinessHours?: boolean } = {}
 ) {
   const minDate = new Date(now.getTime() + minimumLeadHours * 60 * 60 * 1000);
+  const enforceBusinessHours = options.enforceBusinessHours ?? true;
   const { isOpen: isWithinSchedule } = getBusinessHoursStatus(input);
   const weekday = getBusinessWeekday(input);
   const { hour, minute: minutes } = getBusinessTimeParts(input);
@@ -129,6 +131,14 @@ export function validateDeliveryDate(
 
   if (input.getTime() < minDate.getTime()) {
     throw new Error(`Escolha um horario com pelo menos ${minimumLeadHours} horas de antecedencia.`);
+  }
+
+  if (!enforceBusinessHours) {
+    if (minutes % BUSINESS_RULES.slotMinutes !== 0) {
+      throw new Error(`Escolha um horario em intervalos de ${BUSINESS_RULES.slotMinutes} minutos.`);
+    }
+
+    return;
   }
 
   if (!schedule) {
