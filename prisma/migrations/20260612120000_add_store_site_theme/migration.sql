@@ -1,0 +1,2 @@
+ALTER TABLE "StoreSettings"
+ADD COLUMN "siteTheme" TEXT NOT NULL DEFAULT 'COPA';

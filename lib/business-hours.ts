@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { BUSINESS_RULES } from "@/lib/site-config";
+import { normalizeStoreSiteTheme } from "@/lib/site-theme";
 
 const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 
@@ -85,6 +86,7 @@ export async function getStoreSettings() {
       id: "singleton",
       isOpen: true,
       minimumLeadHours: BUSINESS_RULES.minimumLeadHours,
+      siteTheme: "COPA",
     },
   });
 }
@@ -103,6 +105,8 @@ export async function getFullStoreStatus(now = new Date()) {
     return {
       isOpen: false,
       minimumLeadHours: settings.minimumLeadHours,
+      siteTheme: normalizeStoreSiteTheme(settings.siteTheme),
+      featuredProductId: settings.featuredProductId,
       message: "A loja está fechada no momento. Volte em breve!",
       closedByOwner: true,
     };
@@ -111,6 +115,8 @@ export async function getFullStoreStatus(now = new Date()) {
   return {
     isOpen: hoursStatus.isOpen,
     minimumLeadHours: settings.minimumLeadHours,
+    siteTheme: normalizeStoreSiteTheme(settings.siteTheme),
+    featuredProductId: settings.featuredProductId,
     message: hoursStatus.message,
     closedByOwner: false,
   };

@@ -8,6 +8,7 @@ import {
   CheckCheck,
   Clock,
   Copy,
+  Heart,
   LoaderCircle,
   LogOut,
   Pencil,
@@ -16,7 +17,9 @@ import {
   RefreshCcw,
   ShoppingBag,
   SlidersHorizontal,
+  Star,
   TicketPercent,
+  Trophy,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -40,6 +43,7 @@ import {
   type ProductCategory,
 } from "@/lib/produtos";
 import { normalizeSaboresList } from "@/lib/sabores";
+import type { StoreSiteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateTime, getPedidoStatusMeta } from "@/lib/pedidos";
 
@@ -114,6 +118,8 @@ export type PedidoAdmin = {
 export type StoreSettingsData = {
   isOpen: boolean;
   minimumLeadHours: number;
+  siteTheme: StoreSiteTheme;
+  featuredProductId: string | null;
 };
 
 type ProdutoFormState = {
@@ -704,6 +710,8 @@ export function ManhiaAdminDashboard({
       setSettings({
         isOpen: Boolean(data?.isOpen),
         minimumLeadHours: Number(data?.minimumLeadHours ?? nextSettings.minimumLeadHours),
+        siteTheme: (data?.siteTheme ?? nextSettings.siteTheme) as StoreSiteTheme,
+        featuredProductId: data?.featuredProductId ?? nextSettings.featuredProductId ?? null,
       });
       toast.success("Configuracoes salvas.");
       router.refresh();
@@ -738,12 +746,13 @@ export function ManhiaAdminDashboard({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 border-y border-[#e4edc9] bg-[#fbfff0] sm:grid-cols-4 lg:border-y-0">
+            <div className="grid grid-cols-2 border-y border-[#e4edc9] bg-[#fbfff0] sm:grid-cols-5 lg:border-y-0">
               {[
                 { label: "Pedidos", value: pedidos.length },
                 { label: "Valor base", value: formatCurrency(totalBaseVendido) },
                 { label: "Produtos", value: ativos },
                 { label: "Loja", value: settings.isOpen ? "Aberta" : "Fechada" },
+                { label: "Tema", value: settings.siteTheme === "NAMORADOS" ? "Namorados" : "Copa" },
               ].map((item) => (
                 <div key={item.label} className="border-r border-[#e4edc9] p-4">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-[#618038]">
@@ -1342,6 +1351,134 @@ export function ManhiaAdminDashboard({
                     </Button>
                   </div>
                 </div>
+
+                <div className="space-y-4 rounded-[1.2rem] border border-[#f4b6c5] bg-[#fff5f8] p-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#b4234b]">
+                      Tema do site
+                    </p>
+                    <h3 className="mt-1 text-xl font-bold text-[#5f1029]">
+                      {settings.siteTheme === "NAMORADOS"
+                        ? "Dia dos Namorados em destaque"
+                        : "Tema da Copa ativo"}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[#7a3149]">
+                      Troque a vitrine e a pagina do produto entre a campanha da Copa e a
+                      campanha romantica.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {[
+                      {
+                        value: "NAMORADOS" as const,
+                        title: "Dia dos Namorados",
+                        description: "Destaca combos para casal, presentes e clima romantico.",
+                        icon: Heart,
+                        activeClass: "border-[#e11d48] bg-[#ffe4ec] text-[#881337]",
+                      },
+                      {
+                        value: "COPA" as const,
+                        title: "Copa",
+                        description: "Volta para o visual verde e amarelo com combos especiais.",
+                        icon: Trophy,
+                        activeClass: "border-[#1b7f31] bg-[#f7fde7] text-[#0b3d18]",
+                      },
+                    ].map((themeOption) => {
+                      const Icon = themeOption.icon;
+                      const isActive = settings.siteTheme === themeOption.value;
+
+                      return (
+                        <button
+                          key={themeOption.value}
+                          type="button"
+                          disabled={savingSettings || isActive}
+                          onClick={() => void handleSaveSettings({ siteTheme: themeOption.value })}
+                          className={cn(
+                            "flex min-h-32 flex-col items-start gap-3 rounded-[1rem] border p-4 text-left transition",
+                            isActive
+                              ? themeOption.activeClass
+                              : "border-[#f4b6c5] bg-white text-[#7a3149] hover:bg-[#fff0f4]"
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                          <span className="text-base font-bold">{themeOption.title}</span>
+                          <span className="text-sm leading-5 opacity-80">
+                            {themeOption.description}
+                          </span>
+                          <span className="mt-auto text-xs font-bold uppercase tracking-wide">
+                            {isActive ? "Ativo agora" : "Aplicar tema"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {settings.siteTheme === "NAMORADOS" ? (
+                    <div className="rounded-[1rem] border border-[#e11d48] bg-white px-4 py-3 text-sm leading-6 text-[#7a3149]">
+                      <strong className="text-[#be123c]">No site:</strong> textos, etiquetas e
+                      destaques passam a falar de Dia dos Namorados, com cores em rosa e vinho.
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-4 rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                      Produto em destaque
+                    </p>
+                    <h3 className="mt-1 text-xl font-bold text-[#0b3d18]">
+                      Escolha o produto principal do cardapio
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[#48654f]">
+                      Esse produto aparece no bloco grande da vitrine. Produtos ocultos nao
+                      aparecem no cardapio publico.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-[#284a2e]">
+                        Destaque atual
+                      </label>
+                      <Select
+                        value={settings.featuredProductId ?? "AUTO"}
+                        onValueChange={(value) =>
+                          setSettings((current) => ({
+                            ...current,
+                            featuredProductId: value === "AUTO" ? null : value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-12 w-full border-[#d6e7a2] bg-white text-sm text-[#0b3d18]">
+                          <SelectValue placeholder="Selecione um produto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="AUTO">Automatico: primeiro produto ativo</SelectItem>
+                          {produtos.map((produto) => (
+                            <SelectItem key={produto.id} value={produto.id}>
+                              {produto.nome}
+                              {produto.ativo ? "" : " (oculto)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button
+                      type="button"
+                      disabled={savingSettings}
+                      onClick={() =>
+                        void handleSaveSettings({
+                          featuredProductId: settings.featuredProductId,
+                        })
+                      }
+                      className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]"
+                    >
+                      {savingSettings ? "Salvando..." : "Salvar destaque"}
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <aside className="grid border-t border-[#e4edc9] bg-[#0b3d18] text-white lg:border-l lg:border-t-0">
@@ -1349,6 +1486,18 @@ export function ManhiaAdminDashboard({
                   { label: "Pedidos no painel", value: pedidos.length, icon: ShoppingBag },
                   { label: "Vendido no valor base", value: formatCurrency(totalBaseVendido), icon: CheckCheck },
                   { label: "Antecedencia", value: `${settings.minimumLeadHours}h`, icon: Clock },
+                  {
+                    label: "Tema do site",
+                    value: settings.siteTheme === "NAMORADOS" ? "Namorados" : "Copa",
+                    icon: settings.siteTheme === "NAMORADOS" ? Heart : Trophy,
+                  },
+                  {
+                    label: "Produto destaque",
+                    value:
+                      produtos.find((produto) => produto.id === settings.featuredProductId)?.nome ||
+                      "Automatico",
+                    icon: Star,
+                  },
                 ].map((item) => {
                   const Icon = item.icon;
 
@@ -1388,7 +1537,7 @@ export function ManhiaAdminDashboard({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">DescriÃ§Ã£o</label>
+                    <label className="text-sm font-medium text-slate-700">Descrção</label>
                     <Textarea
                       value={form.descricao}
                       onChange={(event) =>
@@ -1452,7 +1601,7 @@ export function ManhiaAdminDashboard({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">MÃ¡ximo de tipos</label>
+                      <label className="text-sm font-medium text-slate-700">Máximo de tipos</label>
                       <Input
                         type="number"
                         min="1"
@@ -1692,7 +1841,7 @@ export function ManhiaAdminDashboard({
                         onClick={resetForm}
                         className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
                       >
-                        Cancelar ediÃ§Ã£o
+                        Cancelar edição
                       </Button>
                     )}
                   </div>

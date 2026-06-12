@@ -11,6 +11,7 @@ import {
   type StoreSettingsData,
 } from "@/components/manhia-admin-dashboard";
 import { getStoreSettings } from "@/lib/business-hours";
+import { normalizeStoreSiteTheme } from "@/lib/site-theme";
 
 type ProdutoWithPromocao = Awaited<
   ReturnType<typeof prisma.produto.findMany>
@@ -147,6 +148,8 @@ export default async function ManhiaPage() {
   const initialSettings: StoreSettingsData = {
     isOpen: settingsRaw.isOpen,
     minimumLeadHours: settingsRaw.minimumLeadHours,
+    siteTheme: normalizeStoreSiteTheme(settingsRaw.siteTheme),
+    featuredProductId: settingsRaw.featuredProductId,
   };
 
   return (

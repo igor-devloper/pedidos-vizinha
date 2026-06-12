@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Heart,
   LoaderCircle,
   Minus,
   Plus,
@@ -31,6 +32,7 @@ import { calculateDiscountedSubtotal } from "@/lib/descontos";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
 import { type ComboItem, PRODUCT_CATEGORY_LABEL, type ProductCategory } from "@/lib/produtos";
 import { BUSINESS_RULES } from "@/lib/site-config";
+import type { StoreSiteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
 
 type PaymentMethodOption = {
@@ -195,13 +197,16 @@ export function PedidoCheckout({
   produto,
   paymentMethods,
   businessStatus,
+  siteTheme,
 }: {
   produto: ProdutoCheckout;
   paymentMethods: PaymentMethodOption[];
   businessStatus: BusinessStatusData;
+  siteTheme: StoreSiteTheme;
 }) {
   const isCombo = produto.categoria === "COMBO" && produto.comboItens.length > 0;
   const isCentoProduct = produto.categoria === "CENTO";
+  const isValentinesTheme = siteTheme === "NAMORADOS";
   const minDeliveryDate = useMemo(
     () => getMinDeliveryDate(businessStatus.minimumLeadHours),
     [businessStatus.minimumLeadHours]
@@ -428,9 +433,23 @@ export function PedidoCheckout({
           </Card>
         ) : null}
 
-        <Card className="overflow-hidden border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
+        <Card
+          className={cn(
+            "overflow-hidden bg-white/95 shadow-lg",
+            isValentinesTheme
+              ? "border-[#f4b6c5] shadow-rose-200/30"
+              : "border-[#d8e8a4] shadow-green-200/30"
+          )}
+        >
           <div className="grid gap-0 md:grid-cols-[260px_1fr]">
-            <div className="relative min-h-72 bg-[linear-gradient(180deg,#1b5e20,#2e7d32_45%,#fdd835)]">
+            <div
+              className={cn(
+                "relative min-h-72",
+                isValentinesTheme
+                  ? "bg-[linear-gradient(180deg,#881337,#be123c_52%,#f9a8d4)]"
+                  : "bg-[linear-gradient(180deg,#1b5e20,#2e7d32_45%,#fdd835)]"
+              )}
+            >
               <Image
                 src={produto.imagemBase64}
                 alt={produto.nome}
@@ -439,20 +458,42 @@ export function PedidoCheckout({
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,32,12,0.08),rgba(7,32,12,0.22))]" />
-              <div className="absolute left-4 top-4 rounded-full bg-[#0b3d0b]/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-white">
-                Copa da Vizinha
+              <div
+                className={cn(
+                  "absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-white",
+                  isValentinesTheme ? "bg-[#5f1029]/85" : "bg-[#0b3d0b]/85"
+                )}
+              >
+                {isValentinesTheme ? "Dia dos Namorados" : "Copa da Vizinha"}
               </div>
             </div>
 
-            <CardContent className="space-y-4 bg-[radial-gradient(circle_at_top_right,#fff59d_0,transparent_28%),linear-gradient(180deg,#ffffff,#f7ffe7)] p-6">
+            <CardContent
+              className={cn(
+                "space-y-4 p-6",
+                isValentinesTheme
+                  ? "bg-[radial-gradient(circle_at_top_right,#fbcfe8_0,transparent_28%),linear-gradient(180deg,#ffffff,#fff1f5)]"
+                  : "bg-[radial-gradient(circle_at_top_right,#fff59d_0,transparent_28%),linear-gradient(180deg,#ffffff,#f7ffe7)]"
+              )}
+            >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[#0b5d1e] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white">
+                  <span
+                    className={cn(
+                      "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white",
+                      isValentinesTheme ? "bg-[#be123c]" : "bg-[#0b5d1e]"
+                    )}
+                  >
                     {PRODUCT_CATEGORY_LABEL[produto.categoria]}
                   </span>
                   {isCombo ? (
-                    <span className="rounded-full bg-[#fedf00] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#175c2b]">
-                      Combo fixo
+                    <span
+                      className={cn(
+                        "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em]",
+                        isValentinesTheme ? "bg-[#ffe4ec] text-[#9f1239]" : "bg-[#fedf00] text-[#175c2b]"
+                      )}
+                    >
+                      {isValentinesTheme ? "Especial para casal" : "Combo fixo"}
                     </span>
                   ) : null}
                 </div>
@@ -493,12 +534,28 @@ export function PedidoCheckout({
           </div>
         </Card>
 
-        <Card className="border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
+        <Card
+          className={cn(
+            "bg-white/95 shadow-lg",
+            isValentinesTheme
+              ? "border-[#f4b6c5] shadow-rose-200/30"
+              : "border-[#d8e8a4] shadow-green-200/30"
+          )}
+        >
           <CardContent className="space-y-6 p-6">
             <div>
               <div className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-[#1b7f31]" />
-                <h2 className="text-2xl font-semibold text-[#0b2d16]">
+                {isValentinesTheme ? (
+                  <Heart className="h-5 w-5 text-[#be123c]" />
+                ) : (
+                  <Trophy className="h-5 w-5 text-[#1b7f31]" />
+                )}
+                <h2
+                  className={cn(
+                    "text-2xl font-semibold",
+                    isValentinesTheme ? "text-[#5f1029]" : "text-[#0b2d16]"
+                  )}
+                >
                   {isCombo ? "Composição do combo" : "Monte os salgados"}
                 </h2>
               </div>

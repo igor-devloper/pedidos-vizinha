@@ -80,6 +80,7 @@ export default async function PedidoPage({
             message: businessStatus.message,
             minimumLeadHours: businessStatus.minimumLeadHours,
           }}
+          siteTheme={businessStatus.siteTheme}
         />
       </div>
     </main>
