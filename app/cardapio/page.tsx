@@ -290,7 +290,7 @@ export default async function CardapioPage() {
                       Horarios
                     </p>
                     <p className="mt-2 text-sm text-white/72">
-                      TerÃ§a a sabÃ¡do, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.
+                      Terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.
                     </p>
                   </div>
 
