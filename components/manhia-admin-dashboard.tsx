@@ -288,6 +288,10 @@ export function ManhiaAdminDashboard({
     }),
     [pedidos]
   );
+  const pedidosPendentes = useMemo(
+    () => pedidos.filter((pedido) => pedido.status === "PENDENTE_PAGAMENTO"),
+    [pedidos]
+  );
 
   useEffect(() => {
     const stored = window.localStorage.getItem("vizinha:auto-print");
@@ -673,6 +677,38 @@ export function ManhiaAdminDashboard({
     }
   };
 
+  const handleConfirmManualPayment = async (pedido: PedidoAdmin) => {
+    try {
+      setStatusLoadingId(pedido.id);
+      const response = await fetch(`/api/manhia/pedidos/${pedido.id}/pagamento-manual`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          valorPago: Number(pedido.totalCobrado),
+          observacao: "Pagamento em dinheiro confirmado pelo painel",
+        }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | (PedidoAdmin & { error?: string })
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Nao foi possivel confirmar o pagamento.");
+      }
+
+      const updatedPedido = data as PedidoAdmin;
+      setPedidos((current) =>
+        current.map((item) => (item.id === updatedPedido.id ? updatedPedido : item))
+      );
+      toast.success("Pagamento confirmado e mensagens enviadas.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao confirmar pagamento.");
+    } finally {
+      setStatusLoadingId(null);
+    }
+  };
+
   const handleDropPedido = (status: "PAGO" | "PRONTO" | "ENTREGUE") => {
     if (!draggedPedidoId) {
       return;
@@ -859,6 +895,77 @@ export function ManhiaAdminDashboard({
               </Card>
             ) : (
               <>
+                {pedidosPendentes.length > 0 ? (
+                  <section className="rounded-[1.6rem] border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
+                    <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="font-semibold text-amber-950">Aguardando pagamento</h3>
+                        <p className="text-sm text-amber-800">
+                          Confirme aqui pedidos pagos em dinheiro ou acertados fora do Mercado Pago.
+                        </p>
+                      </div>
+                      <Badge className="w-fit border-amber-300 bg-amber-100 text-amber-900">
+                        {pedidosPendentes.length} pendente(s)
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {pedidosPendentes.map((pedido) => (
+                        <article
+                          key={pedido.id}
+                          className="rounded-2xl border border-amber-200 bg-white p-4 shadow-sm"
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-slate-900">
+                                  Pedido {pedido.codigo}
+                                </span>
+                                <Badge className={getPedidoStatusMeta(pedido.status).tone}>
+                                  {getPedidoStatusMeta(pedido.status).label}
+                                </Badge>
+                              </div>
+                              <p className="mt-1 text-sm text-slate-500">
+                                {pedido.clienteNome} - {formatDateTime(pedido.dataEntrega)}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-500">
+                                {pedido.produtoNomeSnapshot} - {pedido.metodoPagamentoLabel}
+                              </p>
+                            </div>
+                            <div className="text-left sm:text-right">
+                              <p className="text-sm text-slate-400">Valor</p>
+                              <p className="text-xl font-bold text-[#0b3d18]">
+                                {formatCurrency(Number(pedido.totalCobrado))}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => handlePrint(pedido.id)}
+                              className="rounded-full border-amber-200 text-amber-800 hover:bg-amber-50"
+                            >
+                              <Printer className="mr-2 h-4 w-4" />
+                              Imprimir
+                            </Button>
+                            <Button
+                              type="button"
+                              disabled={statusLoadingId === pedido.id}
+                              onClick={() => void handleConfirmManualPayment(pedido)}
+                              className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                            >
+                              <CheckCheck className="mr-2 h-4 w-4" />
+                              {statusLoadingId === pedido.id ? "Confirmando..." : "Confirmar dinheiro"}
+                            </Button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
                 <div className="hidden gap-4 lg:grid lg:grid-cols-3">
                   {KANBAN_COLUMNS.map((column) => (
                     <div

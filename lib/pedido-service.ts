@@ -217,7 +217,10 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
 
     if (claim.count > 0) {
       try {
-        await sendWhatsappText(pedido.clienteTelefone, clientMessage);
+        const result = await sendWhatsappText(pedido.clienteTelefone, clientMessage);
+        if (!result.ok) {
+          throw new Error("Envio para cliente nao confirmado pelo servico de WhatsApp.");
+        }
       } catch (error) {
         await prisma.pedido.updateMany({
           where: {
@@ -252,7 +255,10 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
 
     if (claim.count > 0) {
       try {
-        await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
+        const result = await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
+        if (!result.ok) {
+          throw new Error("Envio para Vizinha nao confirmado pelo servico de WhatsApp.");
+        }
       } catch (error) {
         await prisma.pedido.updateMany({
           where: {
@@ -272,6 +278,48 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
       }
     }
   }
+}
+
+export async function markPedidoPaidManually({
+  id,
+  valorPago,
+  observacao,
+}: {
+  id: string;
+  valorPago?: number;
+  observacao?: string;
+}) {
+  const pedidoAtual = await loadPedidoById(id);
+
+  if (!pedidoAtual) {
+    throw new Error("Pedido nao encontrado.");
+  }
+
+  const manualPayload = {
+    source: "manual-payment",
+    paidAt: new Date().toISOString(),
+    valorPago: typeof valorPago === "number" ? valorPago : undefined,
+    observacao: observacao?.trim() || undefined,
+  };
+
+  const pedido = await prisma.pedido.update({
+    where: { id },
+    data: {
+      status: PedidoStatus.PAGO,
+      valorPago:
+        typeof valorPago === "number"
+          ? Number(valorPago.toFixed(2))
+          : Number(pedidoAtual.totalCobrado),
+      mpStatus: "manual_paid",
+      mpStatusDetail: observacao?.trim() || "Pagamento manual confirmado",
+      mpWebhookPayload: manualPayload,
+    } as never,
+    include: { itens: true },
+  } as never);
+
+  await notifyPaidPedido(pedido as PedidoWithItens);
+
+  return pedido;
 }
 
 export async function handleMercadoPagoPaymentUpdate({
@@ -435,6 +483,10 @@ export async function updatePedidoStatus(id: string, status: PedidoStatus) {
         },
       } as never);
     }
+  }
+
+  if (status === PedidoStatus.PAGO && pedidoAtual.status !== PedidoStatus.PAGO) {
+    await notifyPaidPedido(pedido as PedidoWithItens);
   }
 
   return pedido;

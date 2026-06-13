@@ -24,7 +24,11 @@ export const BUSINESS_INFO = {
   name: process.env.BUSINESS_NAME?.trim() || "Vizinha Salgateria",
   appUrl: process.env.APP_URL?.trim() || "http://localhost:3000",
   supportPhone: process.env.BUSINESS_WHATSAPP?.trim() || "(83) 99376-0485",
-  ownerPhone: process.env.VIZINHA_OWNER_PHONE?.trim() || process.env.BUSINESS_WHATSAPP?.trim() || "839",
+  ownerPhone:
+    process.env.VIZINHA_OWNER_PHONE?.trim() ||
+    process.env.OWNER_APPROVAL_NUMBER?.trim() ||
+    process.env.BUSINESS_WHATSAPP?.trim() ||
+    "558387137721",
 } as const;
 
 export type SupportedPaymentMethod = {

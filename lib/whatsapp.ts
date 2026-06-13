@@ -81,7 +81,7 @@ export async function sendWhatsappText(number: string, text: string) {
   const apiKey = getBotApiKey();
   const preferredInstanceId = getBotInstanceId();
 
-  if (!baseUrl || !apiKey || !preferredInstanceId) {
+  if (!baseUrl || !apiKey) {
     console.warn("WhatsApp notification skipped: bot service not configured.");
     return { ok: false, skipped: true };
   }
@@ -145,7 +145,7 @@ export async function sendWhatsappImage({
   const apiKey = getBotApiKey();
   const preferredInstanceId = getBotInstanceId();
 
-  if (!baseUrl || !apiKey || !preferredInstanceId) {
+  if (!baseUrl || !apiKey) {
     console.warn("WhatsApp image notification skipped: bot service not configured.");
     return { ok: false, skipped: true };
   }
