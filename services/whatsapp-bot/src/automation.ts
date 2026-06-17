@@ -10,7 +10,7 @@ import { runSalesAgent } from "./gemini-sales-agent.js";
 import { instanceManager } from "./instance-manager.js";
 import { getOrCreateLead, updateLead, type BotLead } from "./lead-repository.js";
 import { logger } from "./logger.js";
-import { listActiveProducts } from "./product-repository.js";
+import { formatProductPriceForCustomer, listActiveProducts } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
 import {
   buildAwaitingAnalysisMessage,
@@ -23,6 +23,7 @@ import {
   buildFallbackHelpMessage,
   buildHumanHandoffMessage,
   buildMediaRetryMessage,
+  buildNoDeliveryMessage,
   buildOwnerHandoffAlertMessage,
   buildOwnerApprovedAckMessage,
   buildOwnerCommandHelpMessage,
@@ -159,6 +160,27 @@ function isPaymentQuestion(text: string) {
   );
 }
 
+function isDeliveryRequest(text: string) {
+  return [
+    "entrega",
+    "entregar",
+    "entregam",
+    "entregaria",
+    "delivery",
+    "motoboy",
+    "mototaxi",
+    "mototaxi",
+    "uber",
+    "ifood",
+    "levar",
+    "leva",
+  ].some((term) => text.includes(term));
+}
+
+function alreadyWarnedNoDelivery(lead: BotLead) {
+  return normalizeText(lead.lastOutboundText || "").includes("nao fazemos entregas");
+}
+
 function tokenizeSearchTerms(text: string) {
   const ignoredTerms = new Set([
     "qual",
@@ -239,7 +261,7 @@ async function buildSupportReply(text: string) {
       return formatWhatsAppMessage([
         "💸 *Valores que encontrei no cardápio*",
         formatWhatsAppList(
-          matches.map((product) => `*${product.nome}* por *R$ ${product.preco}*`),
+          matches.map((product) => `*${product.nome}* por *${formatProductPriceForCustomer(product)}*`),
           "-"
         ),
         `📲 Se quiser ver tudo certinho, aqui está o cardápio completo:\n${config.cardapioUrl}`,
@@ -251,7 +273,7 @@ async function buildSupportReply(text: string) {
         "💸 *Sobre os valores*",
         "Posso te adiantar alguns itens do cardápio:",
         formatWhatsAppList(
-          products.slice(0, 3).map((product) => `*${product.nome}* por *R$ ${product.preco}*`),
+          products.slice(0, 3).map((product) => `*${product.nome}* por *${formatProductPriceForCustomer(product)}*`),
           "-"
         ),
         `📲 Cardápio completo: ${config.cardapioUrl}`,
@@ -281,6 +303,32 @@ async function maybeHandleSupportQuestion(job: InboundMessageJob, lead: BotLead)
   });
 
   await sendAndTrack(job, nextLead || lead, reply);
+  return true;
+}
+
+async function maybeHandleDeliveryRequest(job: InboundMessageJob, lead: BotLead) {
+  const normalized = normalizeText(job.text);
+
+  if (!isDeliveryRequest(normalized)) {
+    return false;
+  }
+
+  if (alreadyWarnedNoDelivery(lead)) {
+    return transferToHumanAttendant(
+      job,
+      lead,
+      "Como você insiste na entrega, vou encaminhar para atendimento humano. Só reforçando: no momento não fazemos entregas de jeito nenhum."
+    );
+  }
+
+  const nextLead = await updateLead(lead.id, {
+    lastInboundText: job.text,
+    stage: lead.stage === "new" ? "awaiting_intent" : lead.stage,
+    intent: "retirada",
+    observacoes: "Cliente perguntou sobre entrega; informado que nao fazemos entregas.",
+  });
+
+  await sendAndTrack(job, nextLead || lead, buildNoDeliveryMessage());
   return true;
 }
 
@@ -322,7 +370,7 @@ async function sendCatalogOverview(job: InboundMessageJob, lead: BotLead | null)
   const promoHighlights = products
     .filter((item) => item.emPromocao)
     .slice(0, 3)
-    .map((item) => ({ nome: item.nome, preco: item.preco }));
+    .map((item) => ({ nome: item.nome, preco: formatProductPriceForCustomer(item) }));
 
   await sendAndTrack(job, lead, buildCatalogOverviewMessage(config.cardapioUrl, promoHighlights));
 }
@@ -709,6 +757,10 @@ export async function processInboundMessage(job: InboundMessageJob) {
   }
 
   if (await handleExistingOpenOrder(job, lead)) {
+    return;
+  }
+
+  if (await maybeHandleDeliveryRequest(job, lead)) {
     return;
   }
 

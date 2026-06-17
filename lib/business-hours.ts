@@ -28,6 +28,16 @@ export function getBusinessTimeParts(input: Date) {
   };
 }
 
+export function getBusinessDateKey(input: Date) {
+  const { year, month, day } = getBusinessTimeParts(input);
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+export function isSameBusinessDate(a: Date, b: Date) {
+  return getBusinessDateKey(a) === getBusinessDateKey(b);
+}
+
 export function getBusinessWeekday(input: Date) {
   const weekday = new Intl.DateTimeFormat("en-US", {
     timeZone: BUSINESS_TIME_ZONE,

@@ -2,7 +2,7 @@ import { PedidoStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { getFullStoreStatus } from "@/lib/business-hours";
+import { getFullStoreStatus, isSameBusinessDate } from "@/lib/business-hours";
 import {
   calculateDiscountedSubtotal,
   normalizeCouponCode,
@@ -36,9 +36,9 @@ export async function POST(req: Request) {
     const entrega = parseDeliveryDate(payload.dataEntrega);
     const settings = await getFullStoreStatus();
 
-    if (!settings.isOpen) {
+    if (!settings.isOpen && isSameBusinessDate(entrega, new Date())) {
       return NextResponse.json(
-        { error: "A loja esta fechada no momento. Tente novamente mais tarde." },
+        { error: "A loja esta fechada para pedidos de hoje. Escolha uma data futura para continuar." },
         { status: 400 }
       );
     }

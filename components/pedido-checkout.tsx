@@ -94,6 +94,15 @@ function formatDateInputValue(value: Date) {
   return new Date(value.getTime() - timezoneOffset).toISOString().slice(0, 10);
 }
 
+function getBusinessDateInputValue(value = new Date()) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
 function formatTimeInputValue(value: Date) {
   return value.toTimeString().slice(0, 5);
 }
@@ -263,6 +272,8 @@ export function PedidoCheckout({
   const totalDiscountPercent = Math.min(productDiscountPercent + couponDiscountPercent, 100);
   const discountPreview = calculateDiscountedSubtotal(basePrice, totalDiscountPercent);
   const effectivePrice = discountPreview.subtotal;
+  const storeClosedBlocksSelectedDate =
+    !businessStatus.isOpen && dataEntregaData === getBusinessDateInputValue();
   const remaining = requiredUnits - totalUnidades;
   const activeTypes = useMemo(
     () => items.filter((item) => item.tipo.trim() && item.quantidade > 0).length,
@@ -290,7 +301,7 @@ export function PedidoCheckout({
     totalUnidades === requiredUnits &&
     activeTypes > 0 &&
     activeTypes <= maxAllowedTypes &&
-    businessStatus.isOpen &&
+    !storeClosedBlocksSelectedDate &&
     !submitting;
 
   const selectedDateHasNoSchedule = Boolean(dataEntregaData) && timeSlots.length === 0;
@@ -961,7 +972,7 @@ export function PedidoCheckout({
               </p>
               {!businessStatus.isOpen ? (
                 <p className="mt-1 font-medium text-amber-700">
-                  Aviso: o atendimento esta fechado neste momento.
+                  Aviso: o atendimento esta fechado neste momento. Pedidos para datas futuras continuam disponiveis.
                 </p>
               ) : null}
               <p className="mt-1">Tolerancia de {BUSINESS_RULES.toleranceMinutes} minutos.</p>
@@ -978,8 +989,10 @@ export function PedidoCheckout({
                   <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                   Redirecionando...
                 </>
+              ) : storeClosedBlocksSelectedDate ? (
+                "Loja fechada para hoje"
               ) : (
-                businessStatus.isOpen ? "Ir para o pagamento" : "Loja fechada"
+                "Ir para o pagamento"
               )}
             </Button>
 

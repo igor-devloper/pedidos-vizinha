@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import type { BotLead } from "./lead-repository.js";
-import { listActiveProducts } from "./product-repository.js";
+import { formatProductPriceForCustomer, listActiveProducts } from "./product-repository.js";
 import type { ProductRecord } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
 
@@ -83,7 +83,7 @@ function formatProductsForPrompt(products: Awaited<ReturnType<typeof listActiveP
   return products
     .map(
       (product: ProductRecord) =>
-        `- ${product.emPromocao ? "[PROMOÇÃO] " : ""}${product.nome} | R$ ${product.preco} | ${product.descricao}`
+        `- ${product.emPromocao ? "[PROMOÇÃO] " : ""}${product.nome} | ${formatProductPriceForCustomer(product)} | ${product.descricao}`
     )
     .join("\n");
 }
@@ -128,8 +128,10 @@ Regras importantes:
 - se a mensagem estiver ambígua, contraditória com o contexto salvo ou depender de um humano para entender melhor, responda com um texto curto dizendo que vai encaminhar para a Vizinha e defina status como "handoff";
 - se o cliente pedir o cardápio, mande primeiro o link oficial do cardápio: ${config.cardapioUrl};
 - junto com o link, você pode destacar poucas promoções em texto com preço, sem despejar o cardápio inteiro no WhatsApp;
+- quando informar valores, use o preço final com desconto dos produtos em promoção; não ofereça o preço cheio como se fosse o valor atual;
 - se o cliente quiser encomendar, deixe claro que o pedido deve ser feito no site;
 - nunca monte o pedido por mensagem, nunca colete o pedido completo por WhatsApp e nunca diga que vai fechar a encomenda por aqui;
+- não fazemos entrega de jeito nenhum; se o cliente pedir entrega, explique que o atendimento é somente para retirada; se o cliente insistir em entrega, defina status como "handoff" e encaminhe para atendimento humano;
 - se o cliente tiver dúvidas, responda de forma livre e útil;
 - se o cliente mandar comprovante, Pix, imagem ou áudio falando de pagamento, reconheça o contexto e explique que a confirmação chega no WhatsApp após a validação;
 - avise que há tolerância de 15 minutos de atraso para ambas as partes;

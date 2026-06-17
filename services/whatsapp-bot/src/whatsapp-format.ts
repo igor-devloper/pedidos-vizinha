@@ -11,7 +11,7 @@ type WhatsAppBlock =
 
 type PromoHighlight = {
   nome: string;
-  preco: string | number;
+  preco: string;
 };
 
 function cleanupLines(text: string) {
@@ -29,6 +29,14 @@ export function buildHumanHandoffMessage() {
     "🙏 *Vou te encaminhar para atendimento humano*",
     "Percebi que sua mensagem depende do contexto da conversa e não quero te responder algo sem nexo.",
     "A Vizinha vai continuar por aqui assim que puder.",
+  ]);
+}
+
+export function buildNoDeliveryMessage() {
+  return formatWhatsAppMessage([
+    "🚫 *Sobre entrega*",
+    "No momento não fazemos entregas de jeito nenhum. Os pedidos são somente para retirada no local combinado.",
+    "Se quiser, posso te passar o cardápio para montar a encomenda com retirada.",
   ]);
 }
 
@@ -138,7 +146,7 @@ export function buildWelcomeMessage(cardapioUrl: string) {
 
 export function buildCatalogOverviewMessage(cardapioUrl: string, promoHighlights: PromoHighlight[]) {
   const formattedPromos = formatWhatsAppList(
-    promoHighlights.map((item) => `*${item.nome}* por *R$ ${item.preco}*`),
+    promoHighlights.map((item) => `*${item.nome}* por *${item.preco}*`),
     "-"
   );
 
