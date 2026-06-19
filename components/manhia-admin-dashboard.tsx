@@ -6,6 +6,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCheck,
+  ChefHat,
   Clock,
   Copy,
   Heart,
@@ -247,7 +248,7 @@ export function ManhiaAdminDashboard({
   initialSettings: StoreSettingsData;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"pedidos" | "produtos" | "cupons" | "configuracoes">("pedidos");
+  const [activeTab, setActiveTab] = useState<"pedidos" | "salgados" | "produtos" | "cupons" | "configuracoes">("pedidos");
   const [produtos, setProdutos] = useState(initialProdutos);
   const [pedidos, setPedidos] = useState(initialPedidos);
   const [cupons, setCupons] = useState(initialCupons);
@@ -282,9 +283,15 @@ export function ManhiaAdminDashboard({
   );
   const pedidosPorStatus = useMemo(
     () => ({
-      PAGO: pedidos.filter((pedido) => pedido.status === "PAGO" || pedido.status === "EM_PREPARO"),
-      PRONTO: pedidos.filter((pedido) => pedido.status === "PRONTO"),
-      ENTREGUE: pedidos.filter((pedido) => pedido.status === "ENTREGUE"),
+      PAGO: pedidos
+        .filter((pedido) => pedido.status === "PAGO" || pedido.status === "EM_PREPARO")
+        .sort((a, b) => new Date(a.dataEntrega).getTime() - new Date(b.dataEntrega).getTime()),
+      PRONTO: pedidos
+        .filter((pedido) => pedido.status === "PRONTO")
+        .sort((a, b) => new Date(a.dataEntrega).getTime() - new Date(b.dataEntrega).getTime()),
+      ENTREGUE: pedidos
+        .filter((pedido) => pedido.status === "ENTREGUE")
+        .sort((a, b) => new Date(a.dataEntrega).getTime() - new Date(b.dataEntrega).getTime()),
     }),
     [pedidos]
   );
@@ -292,6 +299,41 @@ export function ManhiaAdminDashboard({
     () => pedidos.filter((pedido) => pedido.status === "PENDENTE_PAGAMENTO"),
     [pedidos]
   );
+
+  const pedidosAceitos = useMemo(
+    () =>
+      pedidos
+        .filter((p) => p.status !== "CANCELADO" && p.status !== "PENDENTE_PAGAMENTO")
+        .sort((a, b) => new Date(a.dataEntrega).getTime() - new Date(b.dataEntrega).getTime()),
+    [pedidos]
+  );
+
+  const pedidosParaProduzir = useMemo(
+    () => pedidosAceitos.filter((p) => p.status !== "ENTREGUE"),
+    [pedidosAceitos]
+  );
+
+  const salgadosPorDia = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    for (const pedido of pedidosParaProduzir) {
+      const dia = new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeZone: "America/Sao_Paulo",
+      }).format(new Date(pedido.dataEntrega));
+      if (!map.has(dia)) map.set(dia, new Map());
+      const tiposMap = map.get(dia)!;
+      for (const item of pedido.itens) {
+        tiposMap.set(item.tipo, (tiposMap.get(item.tipo) ?? 0) + item.quantidade);
+      }
+    }
+    return Array.from(map.entries()).map(([dia, tiposMap]) => ({
+      dia,
+      itens: Array.from(tiposMap.entries())
+        .map(([tipo, quantidade]) => ({ tipo, quantidade }))
+        .sort((a, b) => b.quantidade - a.quantidade),
+      total: Array.from(tiposMap.values()).reduce((s, q) => s + q, 0),
+    }));
+  }, [pedidosParaProduzir]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("vizinha:auto-print");
@@ -827,9 +869,10 @@ export function ManhiaAdminDashboard({
             </div>
           </div>
 
-          <nav className="grid border-t border-[#e4edc9] bg-white sm:grid-cols-4">
+          <nav className="grid border-t border-[#e4edc9] bg-white sm:grid-cols-5">
             {[
               { id: "pedidos" as const, label: "Pedidos", icon: ShoppingBag },
+              { id: "salgados" as const, label: "Salgados", icon: ChefHat },
               { id: "produtos" as const, label: "Produtos", icon: CheckCheck },
               { id: "cupons" as const, label: "Cupons", icon: TicketPercent },
               { id: "configuracoes" as const, label: "Operação", icon: SlidersHorizontal },
@@ -1033,8 +1076,7 @@ export function ManhiaAdminDashboard({
                   ))}
                 </div>
 
-                {pedidos
-                  .filter((pedido) => pedido.status !== "CANCELADO" && pedido.status !== "PENDENTE_PAGAMENTO")
+                {pedidosAceitos
                   .map((pedido) => {
                 const meta = getPedidoStatusMeta(pedido.status);
                 const nextStatus = getNextOperationalStatus(pedido.status);
@@ -1156,6 +1198,55 @@ export function ManhiaAdminDashboard({
                 );
               })}
               </>
+            )}
+          </section>
+        ) : activeTab === "salgados" ? (
+          <section className="space-y-4">
+            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-900">Salgados a produzir</h2>
+                <p className="text-sm text-slate-500">
+                  Quantidades consolidadas dos pedidos aceitos, agrupadas por dia de entrega.
+                </p>
+              </div>
+            </div>
+
+            {salgadosPorDia.length === 0 ? (
+              <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
+                <CardContent className="py-10 text-center text-sm text-slate-500">
+                  Nenhum pedido aceito com salgados ainda.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {salgadosPorDia.map(({ dia, itens, total }) => (
+                  <Card key={dia} className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
+                    <CardHeader className="border-b border-[#e4edc9] bg-[#f7fde7] pb-3 pt-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                          Entrega {dia}
+                        </p>
+                        <Badge className="border border-[#d6e7a2] bg-[#fff3a8] text-[#0b3d18]">
+                          {total} un total
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      <div className="space-y-2">
+                        {itens.map(({ tipo, quantidade }) => (
+                          <div
+                            key={tipo}
+                            className="flex items-center justify-between rounded-xl border border-[#e4edc9] bg-[#fbfff0] px-4 py-2"
+                          >
+                            <span className="text-sm font-medium text-slate-700">{tipo}</span>
+                            <span className="text-sm font-bold text-[#1b7f31]">{quantidade} un</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
           </section>
         ) : activeTab === "cupons" ? (
@@ -2110,7 +2201,3 @@ export function ManhiaAdminDashboard({
     </main>
   );
 }
-
-
-
-
