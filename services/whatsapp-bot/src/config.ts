@@ -39,6 +39,7 @@ export const config = {
   authDir: readOptional("AUTH_DIR", "./data/auth"),
   storeDir: readOptional("STORE_DIR", "./data/store"),
   instanceFile: readOptional("INSTANCE_FILE", "./data/instances.json"),
+  printJobsFile: readOptional("PRINT_JOBS_FILE", "./data/print-jobs.ndjson"),
   instanceBootIds: (process.env.INSTANCE_BOOT_IDS || "")
     .split(",")
     .map((item) => item.trim())

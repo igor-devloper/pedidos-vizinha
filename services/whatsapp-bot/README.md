@@ -8,6 +8,7 @@ Este servico cria uma base de bot WhatsApp no estilo "instancia + QR + webhook",
 - QR Code em data URL para conectar o WhatsApp.
 - Processamento inline das mensagens no proprio runtime da instancia.
 - Webhook de saida para seu backend principal.
+- Fila HTTP autenticada para jobs de impressao termica (`/print-jobs`).
 - Persistencia de credenciais por pasta, pronta para ser montada em Volume no Railway.
 - Leitura dos fluxos visuais cadastrados no banco principal via `DATABASE_URL`.
 
@@ -35,6 +36,8 @@ Este servico cria uma base de bot WhatsApp no estilo "instancia + QR + webhook",
 - `DELETE /instances/:id`
 - `GET /instances/:id/qr`
 - `POST /instances/:id/send-text`
+- `POST /print-jobs`
+- `GET /print-jobs`
 
 Todos os endpoints, exceto `/health`, exigem header:
 
@@ -79,6 +82,16 @@ Isso devolve a string do QR e um `dataUrl` pronto para renderizar no frontend.
   - `BASE_URL`
   - `WEBHOOK_URL` opcional
   - `INSTANCE_BOOT_IDS` opcional
+  - `PRINT_JOBS_FILE` opcional, padrao `./data/print-jobs.ndjson`
+
+## Impressora termica
+
+O app principal envia os recibos para este servico usando:
+
+- `PRINT_SERVICE_URL` ou `BOT_SERVICE_URL`/`BAILEYS_SERVICE_URL`
+- `PRINT_SERVICE_API_KEY` ou `BOT_API_KEY`
+
+A impressora Knup KP-IM607 da foto e ESC/POS 58 mm por USB. O Railway consegue receber e registrar o job, mas nao consegue acessar uma impressora USB local sozinho. Para imprimir fisicamente sem um PC com o painel aberto, conecte a impressora a um dispositivo sempre ligado no local (por exemplo um mini print server/Android/Raspberry Pi) que consuma `GET /print-jobs` e envie o texto para a USB/ESC-POS, ou use uma versao de impressora com interface de rede e um servico ponte na mesma rede.
 
 ## Railway e arquitetura
 

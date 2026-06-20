@@ -16,6 +16,7 @@ import {
   calculatePaymentAmounts,
 } from "@/lib/pedidos";
 import { BUSINESS_INFO, BUSINESS_RULES } from "@/lib/site-config";
+import { sendPedidoToPrintService } from "@/lib/print-service";
 import { sendWhatsappImage, sendWhatsappText } from "@/lib/whatsapp";
 
 type PedidoWithItens = Pedido & {
@@ -280,6 +281,31 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
   }
 }
 
+async function printAcceptedPedido(pedido: PedidoWithItens) {
+  if (pedido.impressoAutomaticamenteAt) {
+    return pedido;
+  }
+
+  try {
+    await sendPedidoToPrintService(pedido, "auto-accepted");
+
+    return prisma.pedido.update({
+      where: { id: pedido.id },
+      data: {
+        impressoAutomaticamenteAt: new Date(),
+      },
+      include: { itens: true },
+    });
+  } catch (error) {
+    console.error("Falha ao imprimir pedido aceito", {
+      pedidoId: pedido.id,
+      codigo: pedido.codigo,
+      error,
+    });
+    return pedido;
+  }
+}
+
 export async function markPedidoPaidManually({
   id,
   valorPago,
@@ -318,8 +344,7 @@ export async function markPedidoPaidManually({
   } as never);
 
   await notifyPaidPedido(pedido as PedidoWithItens);
-
-  return pedido;
+  return printAcceptedPedido(pedido as PedidoWithItens);
 }
 
 export async function handleMercadoPagoPaymentUpdate({
@@ -387,6 +412,7 @@ export async function handleMercadoPagoPaymentUpdate({
 
   if (!isBalancePayment && status === "approved") {
     await notifyPaidPedido(updated as PedidoWithItens);
+    return printAcceptedPedido(updated as PedidoWithItens);
   }
 
   return updated;
@@ -487,6 +513,7 @@ export async function updatePedidoStatus(id: string, status: PedidoStatus) {
 
   if (status === PedidoStatus.PAGO && pedidoAtual.status !== PedidoStatus.PAGO) {
     await notifyPaidPedido(pedido as PedidoWithItens);
+    return printAcceptedPedido(pedido as PedidoWithItens);
   }
 
   return pedido;
@@ -507,6 +534,24 @@ export async function markPedidoPrinted(id: string) {
     where: { id },
     data: {
       impressoAutomaticamenteAt: new Date(),
+    },
+    include: { itens: true },
+  });
+}
+
+export async function printPedidoReceipt(id: string) {
+  const pedido = await loadPedidoById(id);
+
+  if (!pedido) {
+    throw new Error("Pedido nao encontrado.");
+  }
+
+  await sendPedidoToPrintService(pedido, "manual");
+
+  return prisma.pedido.update({
+    where: { id },
+    data: {
+      impressoAutomaticamenteAt: pedido.impressoAutomaticamenteAt || new Date(),
     },
     include: { itens: true },
   });

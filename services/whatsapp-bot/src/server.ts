@@ -8,6 +8,7 @@ import { ensureDir, ensureParent } from "./fs-utils.js";
 import { instanceManager } from "./instance-manager.js";
 import { instanceStore } from "./instance-store.js";
 import { logger } from "./logger.js";
+import { createPrintJob, listPrintJobs } from "./print-job-store.js";
 import { qrStore } from "./qr-store.js";
 
 const createInstanceSchema = z.object({
@@ -25,6 +26,28 @@ const sendImageSchema = z.object({
   number: z.string().min(8),
   imageUrl: z.string().url(),
   caption: z.string().optional(),
+});
+
+const printJobSchema = z.object({
+  orderId: z.string().min(1),
+  code: z.string().min(1),
+  reason: z.enum(["auto-accepted", "manual"]),
+  printer: z.object({
+    model: z.string().min(1),
+    widthMm: z.number(),
+    dpi: z.number(),
+    commandSet: z.string().min(1),
+  }),
+  receipt: z.string().min(1),
+  order: z
+    .object({
+      customerName: z.string().optional(),
+      customerPhone: z.string().optional(),
+      deliveryAt: z.string().optional(),
+      productName: z.string().optional(),
+      total: z.number().optional(),
+    })
+    .optional(),
 });
 
 async function bootstrap() {
@@ -104,6 +127,34 @@ async function bootstrap() {
     });
 
     res.json({ ok: true, result });
+  });
+
+  app.post("/print-jobs", async (req, res) => {
+    const payload = printJobSchema.parse(req.body);
+    const job = await createPrintJob(payload);
+
+    logger.info(
+      {
+        printJobId: job.id,
+        orderId: job.orderId,
+        code: job.code,
+        reason: job.reason,
+        printer: job.printer,
+      },
+      "Thermal print job queued"
+    );
+
+    res.status(201).json({ ok: true, job });
+  });
+
+  app.get("/print-jobs", async (req, res) => {
+    const limitParam = Number(req.query.limit || 20);
+    const limit = Number.isFinite(limitParam)
+      ? Math.min(Math.max(limitParam, 1), 100)
+      : 20;
+
+    const jobs = await listPrintJobs(limit);
+    res.json({ ok: true, jobs });
   });
 
   app.use(

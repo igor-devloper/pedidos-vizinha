@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCheck,
@@ -267,8 +267,7 @@ export function ManhiaAdminDashboard({
   const [draggedPedidoId, setDraggedPedidoId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<"PAGO" | "PRONTO" | "ENTREGUE" | null>(null);
   const [refreshingPedidos, setRefreshingPedidos] = useState(false);
-  const [autoPrintEnabled, setAutoPrintEnabled] = useState(false);
-  const printedRef = useRef<Set<string>>(new Set());
+  const [printingPedidoId, setPrintingPedidoId] = useState<string | null>(null);
 
   const ativos = useMemo(
     () => produtos.filter((produto) => produto.ativo).length,
@@ -335,17 +334,6 @@ export function ManhiaAdminDashboard({
     }));
   }, [pedidosParaProduzir]);
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem("vizinha:auto-print");
-    if (stored === "true") {
-      setAutoPrintEnabled(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("vizinha:auto-print", String(autoPrintEnabled));
-  }, [autoPrintEnabled]);
-
   const refreshPedidos = async () => {
     try {
       setRefreshingPedidos(true);
@@ -356,24 +344,6 @@ export function ManhiaAdminDashboard({
 
       const data = (await response.json()) as PedidoAdmin[];
       setPedidos(data);
-
-      if (autoPrintEnabled) {
-        for (const pedido of data) {
-          if (
-            pedido.status === "PAGO" &&
-            !pedido.impressoAutomaticamenteAt &&
-            !printedRef.current.has(pedido.id)
-          ) {
-            printedRef.current.add(pedido.id);
-            window.open(`/manhia/pedidos/${pedido.id}/imprimir?auto=1`, "_blank", "noopener,noreferrer");
-            void fetch(`/api/manhia/pedidos/${pedido.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ printed: true }),
-            });
-          }
-        }
-      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Falha ao carregar pedidos.";
@@ -393,7 +363,7 @@ export function ManhiaAdminDashboard({
     }, 20000);
 
     return () => window.clearInterval(interval);
-  }, [autoPrintEnabled]);
+  }, []);
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -804,8 +774,34 @@ export function ManhiaAdminDashboard({
     }
   };
 
-  const handlePrint = (pedidoId: string) => {
-    window.open(`/manhia/pedidos/${pedidoId}/imprimir`, "_blank", "noopener,noreferrer");
+  const handlePrint = async (pedidoId: string) => {
+    try {
+      setPrintingPedidoId(pedidoId);
+      const response = await fetch(`/api/manhia/pedidos/${pedidoId}/imprimir`, {
+        method: "POST",
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | (PedidoAdmin & { error?: string })
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Nao foi possivel enviar para a impressora.");
+      }
+
+      const pedido = data as PedidoAdmin;
+      setPedidos((current) => current.map((item) => (item.id === pedido.id ? pedido : item)));
+      toast.success("Pedido enviado para a impressora.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? `${error.message} Abrindo impressao pelo navegador.`
+          : "Falha ao imprimir. Abrindo impressao pelo navegador."
+      );
+      window.open(`/manhia/pedidos/${pedidoId}/imprimir`, "_blank", "noopener,noreferrer");
+    } finally {
+      setPrintingPedidoId(null);
+    }
   };
 
   const handleLogout = async () => {
@@ -910,14 +906,9 @@ export function ManhiaAdminDashboard({
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 rounded-full border border-[#d6e7a2] bg-[#f7fde7] px-4 py-2 text-sm text-[#284a2e]">
-                  <input
-                    type="checkbox"
-                    checked={autoPrintEnabled}
-                    onChange={(event) => setAutoPrintEnabled(event.target.checked)}
-                  />
-                  Impressão automática no PC
-                </label>
+                <Badge className="border-[#d6e7a2] bg-[#f7fde7] px-4 py-2 text-[#284a2e]">
+                  Impressao automatica via servico
+                </Badge>
                 <Button
                   type="button"
                   variant="outline"
@@ -987,11 +978,12 @@ export function ManhiaAdminDashboard({
                             <Button
                               type="button"
                               variant="outline"
-                              onClick={() => handlePrint(pedido.id)}
+                              disabled={printingPedidoId === pedido.id}
+                              onClick={() => void handlePrint(pedido.id)}
                               className="rounded-full border-amber-200 text-amber-800 hover:bg-amber-50"
                             >
-                              <Printer className="mr-2 h-4 w-4" />
-                              Imprimir
+                              <Printer className={cn("mr-2 h-4 w-4", printingPedidoId === pedido.id && "animate-pulse")} />
+                              {printingPedidoId === pedido.id ? "Enviando..." : "Imprimir"}
                             </Button>
                             <Button
                               type="button"
@@ -1048,7 +1040,7 @@ export function ManhiaAdminDashboard({
                               setDraggedPedidoId(null);
                               setDragOverStatus(null);
                             }}
-                            onClick={() => handlePrint(pedido.id)}
+                            onClick={() => void handlePrint(pedido.id)}
                             className={cn(
                               "w-full cursor-grab rounded-2xl border border-[#d6e7a2] bg-[#fffaf3] p-3 text-left shadow-sm transition hover:border-[#f4d330] active:cursor-grabbing",
                               draggedPedidoId === pedido.id && "opacity-60"
@@ -1175,11 +1167,12 @@ export function ManhiaAdminDashboard({
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => handlePrint(pedido.id)}
+                            disabled={printingPedidoId === pedido.id}
+                            onClick={() => void handlePrint(pedido.id)}
                             className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
                           >
-                            <Printer className="mr-2 h-4 w-4" />
-                            Imprimir
+                            <Printer className={cn("mr-2 h-4 w-4", printingPedidoId === pedido.id && "animate-pulse")} />
+                            {printingPedidoId === pedido.id ? "Enviando..." : "Imprimir"}
                           </Button>
                           <Button
                             type="button"
