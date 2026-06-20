@@ -8,7 +8,7 @@ import { config } from "./config.js";
 import type { PrintJob } from "./types.js";
 
 const execFileAsync = promisify(execFile);
-const RECEIPT_COLUMNS = 32;
+const RECEIPT_COLUMNS = 38;
 const RECEIPT_FONT_SIZE = 10;
 
 const windowsThermalPrintScript = String.raw`
