@@ -419,7 +419,7 @@ export function buildWhatsappReadyToleranceReminder(
   ]);
 }
 
-const THERMAL_RECEIPT_COLUMNS = 38;
+const THERMAL_RECEIPT_COLUMNS = 30;
 
 function stripReceiptDiacritics(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
