@@ -108,15 +108,28 @@ Confira nesta ordem:
 curl.exe https://sua-url-publica-do-railway.up.railway.app/print-jobs -H "Authorization: Bearer sua-chave"
 ```
 
+## Qualidade da impressao no Windows
+
+Por padrao, no Windows o agente nao usa `Out-Printer` para imprimir texto cru. Ele gera um recibo temporario em texto, quebra as linhas para bobina 58 mm e usa a API de impressao do Windows com:
+
+- papel de 58 mm;
+- fonte monoespacada `Consolas` tamanho 10;
+- margem pequena;
+- secoes em negrito para pedido, cliente, itens e total.
+
+Isso evita o problema de o driver imprimir o pedido minusculo no meio da bobina.
+
+Se uma impressao sair ruim e voce precisar testar o mesmo pedido outra vez, clique novamente em `Imprimir` no painel. Se estiver testando diretamente a fila antiga, remova o ID correspondente de `data/printed-jobs.json` antes de rodar o agente novamente.
+
 ## Comando personalizado
 
-Por padrao, no Windows o agente usa:
+Use `PRINT_COMMAND` somente se voce quiser substituir completamente o comando padrao de impressao:
 
 ```powershell
-Get-Content -Raw arquivo.txt | Out-Printer -Name "NOME_DA_IMPRESSORA"
+powershell -NoProfile -Command "Get-Content -Raw '{file}' | Out-Printer -Name '{printer}'"
 ```
 
-Se o driver da Knup exigir outro comando, configure:
+Exemplo no `.env`:
 
 ```env
 PRINT_COMMAND=powershell -NoProfile -Command "Get-Content -Raw '{file}' | Out-Printer -Name '{printer}'"

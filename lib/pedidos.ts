@@ -419,25 +419,102 @@ export function buildWhatsappReadyToleranceReminder(
   ]);
 }
 
-export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
+const THERMAL_RECEIPT_COLUMNS = 32;
+
+function stripReceiptDiacritics(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function centerReceiptLine(value: string) {
+  const normalized = stripReceiptDiacritics(value).trim();
+  const padding = Math.max(0, Math.floor((THERMAL_RECEIPT_COLUMNS - normalized.length) / 2));
+
+  return `${" ".repeat(padding)}${normalized}`;
+}
+
+function wrapReceiptText(value: string, columns = THERMAL_RECEIPT_COLUMNS) {
+  const normalized = stripReceiptDiacritics(value).trim();
+
+  if (!normalized) {
+    return [];
+  }
+
+  if (normalized.length <= columns) {
+    return [normalized];
+  }
+
+  const lines: string[] = [];
+  let remaining = normalized;
+
+  while (remaining.length > columns) {
+    let breakAt = remaining.lastIndexOf(" ", columns);
+
+    if (breakAt < Math.floor(columns * 0.6)) {
+      breakAt = columns;
+    }
+
+    lines.push(remaining.slice(0, breakAt).trimEnd());
+    remaining = remaining.slice(breakAt).trimStart();
+  }
+
+  if (remaining) {
+    lines.push(remaining);
+  }
+
+  return lines;
+}
+
+function receiptField(label: string, value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return [];
+  }
+
+  const prefix = `${label}: `;
+  const normalizedValue = stripReceiptDiacritics(String(value)).trim();
+  const fullLine = `${prefix}${normalizedValue}`;
+
+  if (fullLine.length <= THERMAL_RECEIPT_COLUMNS) {
+    return [fullLine];
+  }
+
   return [
-    BUSINESS_INFO.name,
-    `Pedido ${pedido.codigo}`,
-    `${formatDateTime(pedido.dataEntrega)}`,
-    "------------------------------",
-    `Cliente: ${pedido.clienteNome}`,
-    `Telefone: ${pedido.clienteTelefone}`,
-    pedido.clienteEmail ? `E-mail: ${pedido.clienteEmail}` : null,
-    `Produto: ${pedido.produtoNomeSnapshot}`,
-    `Pagamento: ${pedido.percentualPagamento}% - ${pedido.metodoPagamentoLabel}`,
-    "------------------------------",
-    ...pedido.itens.map((item) => `${item.tipo} x ${item.quantidade}`),
-    "------------------------------",
-    `Subtotal: ${formatCurrency(Number(pedido.subtotal))}`,
-    `Taxa de servico: ${formatCurrency(Number(pedido.taxaValor))}`,
-    `Total: ${formatCurrency(Number(pedido.totalCobrado))}`,
-    pedido.observacoes ? "------------------------------" : null,
-    pedido.observacoes ? `Obs: ${pedido.observacoes}` : null,
+    prefix.trimEnd(),
+    ...wrapReceiptText(normalizedValue, THERMAL_RECEIPT_COLUMNS - 2).map((line) => `  ${line}`),
+  ];
+}
+
+export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
+  const separator = "-".repeat(THERMAL_RECEIPT_COLUMNS);
+
+  return [
+    `#${centerReceiptLine(BUSINESS_INFO.name)}`,
+    `#${centerReceiptLine(`PEDIDO ${pedido.codigo}`)}`,
+    centerReceiptLine(formatDateTime(pedido.dataEntrega)),
+    separator,
+    "#CLIENTE",
+    ...receiptField("Nome", pedido.clienteNome),
+    ...receiptField("WhatsApp", pedido.clienteTelefone),
+    ...receiptField("E-mail", pedido.clienteEmail),
+    separator,
+    "#PRODUTO",
+    ...wrapReceiptText(pedido.produtoNomeSnapshot),
+    ...receiptField("Entrega", formatDateTime(pedido.dataEntrega)),
+    separator,
+    "#ITENS",
+    ...pedido.itens.flatMap((item) => [
+      ...wrapReceiptText(`- ${item.tipo}`),
+      `  Quantidade: ${item.quantidade}`,
+    ]),
+    separator,
+    "#PAGAMENTO",
+    ...receiptField("Forma", pedido.metodoPagamentoLabel),
+    ...receiptField("Pago agora", `${pedido.percentualPagamento}%`),
+    ...receiptField("Subtotal", formatCurrency(Number(pedido.subtotal))),
+    ...receiptField("Taxa servico", formatCurrency(Number(pedido.taxaValor))),
+    `TOTAL: ${formatCurrency(Number(pedido.totalCobrado))}`,
+    pedido.observacoes ? separator : null,
+    pedido.observacoes ? "#OBS" : null,
+    ...(pedido.observacoes ? wrapReceiptText(pedido.observacoes) : []),
   ]
     .filter(Boolean)
     .join("\n");
