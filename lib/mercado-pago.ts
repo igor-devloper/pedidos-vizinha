@@ -188,6 +188,69 @@ export async function createMercadoPagoPreference({
   });
 }
 
+export async function createCartMercadoPagoPreference({
+  order,
+  items,
+  payer,
+}: {
+  order: {
+    id: string;
+    externalReference: string;
+    customerName?: string | null;
+    customerEmail?: string | null;
+    customerPhone?: string | null;
+  };
+  items: Array<{
+    id: string;
+    title: string;
+    quantity: number;
+    unitPrice: number | string | Prisma.Decimal;
+  }>;
+  payer: {
+    email?: string | null;
+    name?: string | null;
+    phone?: string | null;
+  };
+}) {
+  const payload = {
+    items: items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      quantity: item.quantity,
+      currency_id: "BRL",
+      unit_price: Number(item.unitPrice),
+    })),
+    external_reference: order.externalReference,
+    notification_url:
+      process.env.MP_WEBHOOK_URL?.trim() ||
+      `${BUSINESS_INFO.appUrl}/api/mercadopago/webhook`,
+    back_urls: {
+      success: `${BUSINESS_INFO.appUrl}/pedido/confirmacao?ref=${encodeURIComponent(order.externalReference)}`,
+      pending: `${BUSINESS_INFO.appUrl}/pedido/confirmacao?ref=${encodeURIComponent(order.externalReference)}`,
+      failure: `${BUSINESS_INFO.appUrl}/pedido/confirmacao?ref=${encodeURIComponent(order.externalReference)}`,
+    },
+    auto_return: "approved",
+    statement_descriptor: BUSINESS_INFO.name.slice(0, 13),
+    payer: {
+      name: payer.name || order.customerName || undefined,
+      email: payer.email || order.customerEmail || undefined,
+      phone: payer.phone || order.customerPhone
+        ? {
+            number: String(payer.phone || order.customerPhone).replace(/\D/g, ""),
+          }
+        : undefined,
+    },
+    metadata: {
+      cartOrderId: order.id,
+    },
+  };
+
+  return mercadoPagoRequest<MercadoPagoPreferenceResponse>("/checkout/preferences", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getMercadoPagoPayment(paymentId: string) {
   return mercadoPagoRequest<MercadoPagoPaymentResponse>(`/v1/payments/${paymentId}`);
 }

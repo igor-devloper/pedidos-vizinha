@@ -7,7 +7,9 @@ import {
   ManhiaAdminDashboard,
   type CupomAdmin,
   type PedidoAdmin,
+  type ProductTypeAdmin,
   type ProdutoAdmin,
+  type SimpleOrderAdmin,
   type StoreSettingsData,
 } from "@/components/manhia-admin-dashboard";
 import { getStoreSettings } from "@/lib/business-hours";
@@ -17,12 +19,14 @@ type ProdutoWithPromocao = Awaited<
   ReturnType<typeof prisma.produto.findMany>
 >[number] & {
   emPromocao?: boolean;
+  productType?: { name: string } | null;
 };
 
 async function getProdutos(): Promise<ProdutoAdmin[]> {
   try {
     const produtos = (await prisma.produto.findMany({
       orderBy: { createdAt: "desc" },
+      include: { productType: true },
     })) as ProdutoWithPromocao[];
 
     return produtos.map((produto) => ({
@@ -33,6 +37,8 @@ async function getProdutos(): Promise<ProdutoAdmin[]> {
       preco: Number(produto.preco),
       imagemBase64: produto.imagemBase64,
       categoria: produto.categoria as "CENTO" | "LANCHONETE" | "COMBO",
+      productTypeId: produto.productTypeId,
+      productTypeName: produto.productType?.name || null,
       totalUnidades: produto.totalUnidades,
       maxTiposSalgado: produto.maxTiposSalgado,
       permitePagamentoParcial: produto.permitePagamentoParcial,
@@ -45,6 +51,58 @@ async function getProdutos(): Promise<ProdutoAdmin[]> {
     }));
   } catch (error) {
     console.error("GET produtos manhia page error", error);
+    return [];
+  }
+}
+
+async function getProductTypes(): Promise<ProductTypeAdmin[]> {
+  try {
+    const types = await prisma.productType.findMany({
+      orderBy: { createdAt: "asc" },
+      include: { _count: { select: { products: true } } },
+    });
+
+    return types.map((type) => ({
+      id: type.id,
+      name: type.name,
+      description: type.description,
+      minQuantity: type.minQuantity,
+      allowsMultiple: type.allowsMultiple,
+      productsCount: type._count.products,
+      createdAt: type.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    console.error("GET productTypes manhia page error", error);
+    return [];
+  }
+}
+
+async function getSimpleOrders(): Promise<SimpleOrderAdmin[]> {
+  try {
+    const orders = await prisma.order.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { items: true },
+      take: 50,
+    });
+
+    return orders.map((order) => ({
+      id: order.id,
+      status: order.status,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      totalAmount: Number(order.totalAmount),
+      createdAt: order.createdAt.toISOString(),
+      items: order.items.map((item) => ({
+        id: item.id,
+        productName: item.productName,
+        productType: item.productType,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice),
+        subtotal: Number(item.subtotal),
+      })),
+    }));
+  } catch (error) {
+    console.error("GET simple orders manhia page error", error);
     return [];
   }
 }
@@ -138,9 +196,11 @@ export default async function ManhiaPage() {
     return <ManhiaLoginForm isConfigured={isConfigured} />;
   }
 
-  const [produtos, pedidos, cupons, settingsRaw] = await Promise.all([
+  const [produtos, pedidos, simpleOrders, productTypes, cupons, settingsRaw] = await Promise.all([
     getProdutos(),
     getPedidos(),
+    getSimpleOrders(),
+    getProductTypes(),
     getCupons(),
     getStoreSettings(),
   ]);
@@ -157,6 +217,8 @@ export default async function ManhiaPage() {
     <ManhiaAdminDashboard
       initialProdutos={produtos}
       initialPedidos={pedidos}
+      initialSimpleOrders={simpleOrders}
+      initialProductTypes={productTypes}
       initialCupons={cupons}
       initialSettings={initialSettings}
     />

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { handleMercadoPagoPaymentUpdate } from "@/lib/pedido-service";
+import { prisma } from "@/lib/db";
 import {
   getMercadoPagoPayment,
   verifyMercadoPagoWebhookSignature,
@@ -97,22 +98,51 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, ignored: true }, { status: 200 });
       }
 
-      const pedido = await handleMercadoPagoPaymentUpdate({
-        externalReference: payment.external_reference,
-        paymentId: String(payment.id),
-        merchantOrderId: payment.order?.id,
-        status: payment.status,
-        statusDetail: payment.status_detail,
-        transactionAmount: payment.transaction_amount,
-        payload: body,
-      });
+      if (payment.external_reference.startsWith("cart-")) {
+        const orderStatus =
+          payment.status === "approved"
+            ? "PAID"
+            : payment.status === "cancelled" || payment.status === "rejected"
+              ? "CANCELLED"
+              : "PENDING";
 
-      console.log("[MP webhook] Pedido atualizado com sucesso:", {
-        pedidoId: pedido.id,
-        codigo: pedido.codigo,
-        status: pedido.status,
-        paymentId,
-      });
+        const order = await prisma.order.update({
+          where: { externalReference: payment.external_reference },
+          data: {
+            status: orderStatus,
+            mercadoPagoPaymentId: String(payment.id),
+          },
+        });
+
+        if (orderStatus === "PAID" && order.cartId) {
+          await prisma.cartItem.deleteMany({
+            where: { cartId: order.cartId },
+          });
+        }
+
+        console.log("[MP webhook] Order do carrinho atualizado com sucesso:", {
+          orderId: order.id,
+          status: order.status,
+          paymentId,
+        });
+      } else {
+        const pedido = await handleMercadoPagoPaymentUpdate({
+          externalReference: payment.external_reference,
+          paymentId: String(payment.id),
+          merchantOrderId: payment.order?.id,
+          status: payment.status,
+          statusDetail: payment.status_detail,
+          transactionAmount: payment.transaction_amount,
+          payload: body,
+        });
+
+        console.log("[MP webhook] Pedido atualizado com sucesso:", {
+          pedidoId: pedido.id,
+          codigo: pedido.codigo,
+          status: pedido.status,
+          paymentId,
+        });
+      }
     } catch (processingErr) {
       console.error("[MP webhook] Erro ao processar pagamento:", processingErr);
     }

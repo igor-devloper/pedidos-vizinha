@@ -51,9 +51,10 @@ export async function PATCH(
             ? `${slugBase}-${Date.now().toString(36)}`
             : slugBase,
       } as never,
+      include: { productType: true },
     });
 
-    return NextResponse.json(produto);
+    return NextResponse.json({ ...produto, productTypeName: produto.productType?.name || null });
   } catch (error) {
     console.error("PATCH /api/manhia/produtos/[id] error", error);
     return NextResponse.json({ error: "Erro ao atualizar produto." }, { status: 500 });

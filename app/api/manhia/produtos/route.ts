@@ -27,9 +27,15 @@ export async function GET(req: Request) {
   try {
     const produtos = await prisma.produto.findMany({
       orderBy: { createdAt: "desc" },
+      include: { productType: true },
     });
 
-    return NextResponse.json(produtos);
+    return NextResponse.json(
+      produtos.map((produto) => ({
+        ...produto,
+        productTypeName: produto.productType?.name || null,
+      }))
+    );
   } catch (error) {
     console.error("GET /api/manhia/produtos error", error);
     return NextResponse.json({ error: "Erro ao carregar produtos." }, { status: 500 });
@@ -60,9 +66,13 @@ export async function POST(req: Request) {
         ...validation.data,
         slug: existing ? `${slugBase}-${Date.now().toString(36)}` : slugBase,
       } as never,
+      include: { productType: true },
     });
 
-    return NextResponse.json(produto, { status: 201 });
+    return NextResponse.json(
+      { ...produto, productTypeName: produto.productType?.name || null },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("POST /api/manhia/produtos error", error);
     return NextResponse.json({ error: "Erro ao criar produto." }, { status: 500 });

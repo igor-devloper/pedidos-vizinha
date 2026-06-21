@@ -1,7 +1,11 @@
-export const STORE_SITE_THEMES = ["COPA", "NAMORADOS"] as const;
+export const STORE_SITE_THEMES = ["COPA", "NAMORADOS", "SAO_JOAO"] as const;
 
 export type StoreSiteTheme = (typeof STORE_SITE_THEMES)[number];
 
 export function normalizeStoreSiteTheme(value: unknown): StoreSiteTheme {
-  return value === "NAMORADOS" ? "NAMORADOS" : "COPA";
+  if (value === "NAMORADOS" || value === "SAO_JOAO") {
+    return value;
+  }
+
+  return "COPA";
 }

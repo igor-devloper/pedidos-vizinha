@@ -22,6 +22,7 @@ export type ProdutoPayloadInput = {
   preco?: number | string;
   imagemBase64?: string;
   categoria?: ProductCategory;
+  productTypeId?: string | null;
   totalUnidades?: number | string;
   maxTiposSalgado?: number | string;
   permitePagamentoParcial?: boolean;
@@ -69,6 +70,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
   const preco = Number(body.preco);
   const imagemBase64 = body.imagemBase64?.trim() || "";
   const categoria = normalizeCategoria(body.categoria);
+  const productTypeId = body.productTypeId?.trim() || null;
   const permitePagamentoParcial = body.permitePagamentoParcial ?? true;
   const saboresSugeridos = normalizeSaboresList(body.saboresSugeridos);
   const comboItens = normalizeComboItens(body.comboItens);
@@ -115,6 +117,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
         preco: Number(preco.toFixed(2)),
         imagemBase64,
         categoria,
+        productTypeId,
         totalUnidades,
         maxTiposSalgado,
         permitePagamentoParcial,
@@ -145,6 +148,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
       preco: Number(preco.toFixed(2)),
       imagemBase64,
       categoria,
+      productTypeId,
       totalUnidades,
       maxTiposSalgado,
       permitePagamentoParcial,

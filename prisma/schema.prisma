@@ -39,6 +39,7 @@ model Produto {
   preco        Decimal  @db.Decimal(10, 2)
   imagemBase64 String
   categoria    CategoriaProduto @default(CENTO)
+  productTypeId String?
   totalUnidades Int     @default(100)
   maxTiposSalgado Int   @default(5)
   permitePagamentoParcial Boolean @default(true)
@@ -50,8 +51,82 @@ model Produto {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  productType  ProductType? @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
   pedidos      Pedido[]
   cupons       CupomDesconto[]
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+}
+
+model ProductType {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  minQuantity    Int?
+  allowsMultiple Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products       Produto[]
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  sessionId String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  items     CartItem[]
+  orders    Order[]
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  quantity  Int      @default(1)
+  unitPrice Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Produto  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id                       String      @id @default(cuid())
+  status                   OrderStatus @default(PENDING)
+  mercadoPagoId            String?
+  mercadoPagoPreferenceId  String?
+  mercadoPagoInitPoint     String?
+  mercadoPagoPaymentId     String?
+  externalReference        String      @unique
+  customerName             String?
+  customerEmail            String?
+  customerPhone            String?
+  totalAmount              Decimal     @db.Decimal(10, 2)
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  cartId                   String?
+  cart                     Cart?       @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  items                    OrderItem[]
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  productName String
+  productType String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  subtotal    Decimal  @db.Decimal(10, 2)
+
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Produto  @relation(fields: [productId], references: [id], onDelete: Restrict)
 }
 
 model CupomDesconto {
@@ -245,4 +320,10 @@ enum PedidoStatus {
   PRONTO
   ENTREGUE
   CANCELADO
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
 }

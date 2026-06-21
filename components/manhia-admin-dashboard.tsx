@@ -9,6 +9,7 @@ import {
   ChefHat,
   Clock,
   Copy,
+  FerrisWheel,
   Heart,
   LoaderCircle,
   LogOut,
@@ -56,6 +57,8 @@ export type ProdutoAdmin = {
   preco: string | number;
   imagemBase64: string;
   categoria: ProductCategory;
+  productTypeId: string | null;
+  productTypeName: string | null;
   totalUnidades: number;
   maxTiposSalgado: number;
   permitePagamentoParcial: boolean;
@@ -65,6 +68,33 @@ export type ProdutoAdmin = {
   descontoPercentual: string | number;
   ativo: boolean;
   createdAt: string;
+};
+
+export type ProductTypeAdmin = {
+  id: string;
+  name: string;
+  description: string | null;
+  minQuantity: number | null;
+  allowsMultiple: boolean;
+  productsCount: number;
+  createdAt: string;
+};
+
+export type SimpleOrderAdmin = {
+  id: string;
+  status: "PENDING" | "PAID" | "CANCELLED";
+  customerName: string | null;
+  customerPhone: string | null;
+  totalAmount: string | number;
+  createdAt: string;
+  items: {
+    id: string;
+    productName: string;
+    productType: string;
+    quantity: number;
+    unitPrice: string | number;
+    subtotal: string | number;
+  }[];
 };
 
 export type CupomAdmin = {
@@ -130,6 +160,7 @@ type ProdutoFormState = {
   preco: string;
   imagemBase64: string;
   categoria: ProductCategory;
+  productTypeId: string;
   totalUnidades: string;
   maxTiposSalgado: string;
   permitePagamentoParcial: boolean;
@@ -156,6 +187,7 @@ const EMPTY_FORM: ProdutoFormState = {
   preco: "",
   imagemBase64: "",
   categoria: "CENTO",
+  productTypeId: "",
   totalUnidades: "100",
   maxTiposSalgado: "5",
   permitePagamentoParcial: true,
@@ -164,6 +196,20 @@ const EMPTY_FORM: ProdutoFormState = {
   emPromocao: false,
   descontoPercentual: "",
   ativo: true,
+};
+
+type ProductTypeFormState = {
+  name: string;
+  description: string;
+  minQuantity: string;
+  allowsMultiple: boolean;
+};
+
+const EMPTY_PRODUCT_TYPE_FORM: ProductTypeFormState = {
+  name: "",
+  description: "",
+  minQuantity: "",
+  allowsMultiple: true,
 };
 
 const EMPTY_CUPOM_FORM: CupomFormState = {
@@ -239,29 +285,39 @@ function getNextOperationalStatus(status: PedidoAdmin["status"]) {
 export function ManhiaAdminDashboard({
   initialProdutos,
   initialPedidos,
+  initialSimpleOrders,
+  initialProductTypes,
   initialCupons,
   initialSettings,
 }: {
   initialProdutos: ProdutoAdmin[];
   initialPedidos: PedidoAdmin[];
+  initialSimpleOrders: SimpleOrderAdmin[];
+  initialProductTypes: ProductTypeAdmin[];
   initialCupons: CupomAdmin[];
   initialSettings: StoreSettingsData;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"pedidos" | "salgados" | "produtos" | "cupons" | "configuracoes">("pedidos");
+  const [activeTab, setActiveTab] = useState<"pedidos" | "salgados" | "produtos" | "tipos" | "cupons" | "configuracoes">("pedidos");
   const [produtos, setProdutos] = useState(initialProdutos);
   const [pedidos, setPedidos] = useState(initialPedidos);
+  const [simpleOrders] = useState(initialSimpleOrders);
+  const [productTypes, setProductTypes] = useState(initialProductTypes);
   const [cupons, setCupons] = useState(initialCupons);
   const [settings, setSettings] = useState(initialSettings);
   const [form, setForm] = useState<ProdutoFormState>(EMPTY_FORM);
+  const [productTypeForm, setProductTypeForm] = useState<ProductTypeFormState>(EMPTY_PRODUCT_TYPE_FORM);
   const [cupomForm, setCupomForm] = useState<CupomFormState>(EMPTY_CUPOM_FORM);
   const [saving, setSaving] = useState(false);
+  const [savingProductType, setSavingProductType] = useState(false);
   const [savingCupom, setSavingCupom] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingProductTypeId, setEditingProductTypeId] = useState<string | null>(null);
   const [editingCupomId, setEditingCupomId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingProductTypeId, setDeletingProductTypeId] = useState<string | null>(null);
   const [deletingCupomId, setDeletingCupomId] = useState<string | null>(null);
   const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
   const [draggedPedidoId, setDraggedPedidoId] = useState<string | null>(null);
@@ -370,6 +426,11 @@ export function ManhiaAdminDashboard({
     setEditingId(null);
   };
 
+  const resetProductTypeForm = () => {
+    setProductTypeForm(EMPTY_PRODUCT_TYPE_FORM);
+    setEditingProductTypeId(null);
+  };
+
   const resetCupomForm = () => {
     setCupomForm(EMPTY_CUPOM_FORM);
     setEditingCupomId(null);
@@ -470,6 +531,7 @@ export function ManhiaAdminDashboard({
             preco: form.preco,
             imagemBase64: form.imagemBase64,
             categoria: form.categoria,
+            productTypeId: form.productTypeId || null,
             totalUnidades: form.totalUnidades,
             maxTiposSalgado: form.maxTiposSalgado,
             permitePagamentoParcial: form.permitePagamentoParcial,
@@ -522,6 +584,7 @@ export function ManhiaAdminDashboard({
       preco: Number(produto.preco).toFixed(2),
       imagemBase64: produto.imagemBase64,
       categoria: produto.categoria,
+      productTypeId: produto.productTypeId || "",
       totalUnidades: String(produto.totalUnidades),
       maxTiposSalgado: String(produto.maxTiposSalgado),
       permitePagamentoParcial: produto.permitePagamentoParcial,
@@ -540,6 +603,83 @@ export function ManhiaAdminDashboard({
       descontoPercentual: String(produto.descontoPercentual || ""),
       ativo: produto.ativo,
     });
+  };
+
+  const handleProductTypeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      setSavingProductType(true);
+      const response = await fetch(
+        editingProductTypeId
+          ? `/api/manhia/product-types/${editingProductTypeId}`
+          : "/api/manhia/product-types",
+        {
+          method: editingProductTypeId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: productTypeForm.name,
+            description: productTypeForm.description,
+            minQuantity: productTypeForm.minQuantity || null,
+            allowsMultiple: productTypeForm.allowsMultiple,
+          }),
+        }
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | (ProductTypeAdmin & { error?: string })
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Nao foi possivel salvar o tipo.");
+      }
+
+      const productType = data as ProductTypeAdmin;
+      setProductTypes((current) =>
+        editingProductTypeId
+          ? current.map((item) => (item.id === productType.id ? productType : item))
+          : [...current, productType]
+      );
+      toast.success(editingProductTypeId ? "Tipo atualizado." : "Tipo criado.");
+      resetProductTypeForm();
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel salvar o tipo.");
+    } finally {
+      setSavingProductType(false);
+    }
+  };
+
+  const handleEditProductType = (productType: ProductTypeAdmin) => {
+    setEditingProductTypeId(productType.id);
+    setProductTypeForm({
+      name: productType.name,
+      description: productType.description || "",
+      minQuantity: productType.minQuantity ? String(productType.minQuantity) : "",
+      allowsMultiple: productType.allowsMultiple,
+    });
+  };
+
+  const handleDeleteProductType = async (productTypeId: string) => {
+    try {
+      setDeletingProductTypeId(productTypeId);
+      const response = await fetch(`/api/manhia/product-types/${productTypeId}`, {
+        method: "DELETE",
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Nao foi possivel excluir o tipo.");
+      }
+
+      setProductTypes((current) => current.filter((item) => item.id !== productTypeId));
+      toast.success("Tipo removido.");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel excluir o tipo.");
+    } finally {
+      setDeletingProductTypeId(null);
+    }
   };
 
   const handleDelete = async (produtoId: string) => {
@@ -830,7 +970,15 @@ export function ManhiaAdminDashboard({
                 { label: "Valor base", value: formatCurrency(totalBaseVendido) },
                 { label: "Produtos", value: ativos },
                 { label: "Loja", value: settings.isOpen ? "Aberta" : "Fechada" },
-                { label: "Tema", value: settings.siteTheme === "NAMORADOS" ? "Namorados" : "Copa" },
+                {
+                  label: "Tema",
+                  value:
+                    settings.siteTheme === "NAMORADOS"
+                      ? "Namorados"
+                      : settings.siteTheme === "SAO_JOAO"
+                        ? "São João"
+                        : "Copa",
+                },
               ].map((item) => (
                 <div key={item.label} className="border-r border-[#e4edc9] p-4">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-[#618038]">
@@ -865,11 +1013,12 @@ export function ManhiaAdminDashboard({
             </div>
           </div>
 
-          <nav className="grid border-t border-[#e4edc9] bg-white sm:grid-cols-5">
+          <nav className="grid border-t border-[#e4edc9] bg-white sm:grid-cols-6">
             {[
               { id: "pedidos" as const, label: "Pedidos", icon: ShoppingBag },
               { id: "salgados" as const, label: "Salgados", icon: ChefHat },
               { id: "produtos" as const, label: "Produtos", icon: CheckCheck },
+              { id: "tipos" as const, label: "Tipos", icon: FerrisWheel },
               { id: "cupons" as const, label: "Cupons", icon: TicketPercent },
               { id: "configuracoes" as const, label: "Operação", icon: SlidersHorizontal },
             ].map((item) => {
@@ -920,6 +1069,63 @@ export function ManhiaAdminDashboard({
                 </Button>
               </div>
             </div>
+
+            {simpleOrders.length > 0 ? (
+              <section className="rounded-[1.6rem] border border-[#d6e7a2] bg-white/95 p-4 shadow-sm">
+                <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Pedidos do carrinho</h3>
+                    <p className="text-sm text-slate-500">
+                      Pedidos recentes criados pelo novo checkout com múltiplos itens.
+                    </p>
+                  </div>
+                  <Badge className="w-fit border-[#f4d330] bg-[#fff3a8] text-[#735600]">
+                    {simpleOrders.length} pedido(s)
+                  </Badge>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {simpleOrders.map((order) => (
+                    <article
+                      key={order.id}
+                      className="rounded-2xl border border-[#e4edc9] bg-[#fbfff0] p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-slate-900">
+                              Pedido {order.id.slice(0, 8)}
+                            </span>
+                            <Badge className="border border-[#d6e7a2] bg-white text-[#0b3d18]">
+                              {order.status}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {order.customerName || "Cliente nao informado"} -{" "}
+                            {formatDateTime(order.createdAt)}
+                          </p>
+                          {order.customerPhone ? (
+                            <p className="mt-1 text-sm text-slate-500">{order.customerPhone}</p>
+                          ) : null}
+                        </div>
+                        <p className="text-xl font-bold text-[#0b3d18]">
+                          {formatCurrency(Number(order.totalAmount))}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 space-y-1 text-sm text-slate-700">
+                        {order.items.map((item) => (
+                          <p key={item.id}>
+                            {item.productName} ({item.productType}) - {item.quantity} x{" "}
+                            {formatCurrency(Number(item.unitPrice))}
+                          </p>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {pedidos.length === 0 ? (
               <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
@@ -1241,6 +1447,175 @@ export function ManhiaAdminDashboard({
                 ))}
               </div>
             )}
+          </section>
+        ) : activeTab === "tipos" ? (
+          <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
+            <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
+              <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                  Tipos de produto
+                </p>
+                <CardTitle className="text-[#0b3d18]">
+                  {editingProductTypeId ? "Editar tipo" : "Novo tipo"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-4" onSubmit={handleProductTypeSubmit}>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Nome</label>
+                    <Input
+                      value={productTypeForm.name}
+                      onChange={(event) =>
+                        setProductTypeForm((current) => ({ ...current, name: event.target.value }))
+                      }
+                      placeholder="Ex: Meio Cento"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Descrição</label>
+                    <Textarea
+                      value={productTypeForm.description}
+                      onChange={(event) =>
+                        setProductTypeForm((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      className="min-h-24"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Quantidade mínima</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={productTypeForm.minQuantity}
+                      onChange={(event) =>
+                        setProductTypeForm((current) => ({
+                          ...current,
+                          minQuantity: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
+                    <Checkbox
+                      id="product-type-allows-multiple"
+                      checked={productTypeForm.allowsMultiple}
+                      onCheckedChange={(checked) =>
+                        setProductTypeForm((current) => ({
+                          ...current,
+                          allowsMultiple: Boolean(checked),
+                        }))
+                      }
+                    />
+                    <label
+                      htmlFor="product-type-allows-multiple"
+                      className="text-sm leading-6 text-slate-600"
+                    >
+                      Cliente pode pedir mais de uma unidade deste tipo.
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      type="submit"
+                      disabled={savingProductType}
+                      className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                    >
+                      {savingProductType ? "Salvando..." : editingProductTypeId ? "Atualizar tipo" : "Adicionar tipo"}
+                    </Button>
+                    {editingProductTypeId ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={resetProductTypeForm}
+                        className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                      >
+                        Cancelar edição
+                      </Button>
+                    ) : null}
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+
+            <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
+              <div className="flex flex-col gap-2 border-b border-[#e4edc9] bg-[#0b3d18] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#f4d330]">
+                    Catálogo
+                  </p>
+                  <h2 className="text-xl font-bold">Tipos cadastrados</h2>
+                </div>
+                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#0b3d18]">
+                  {productTypes.length} tipo(s)
+                </Badge>
+              </div>
+
+              {productTypes.length === 0 ? (
+                <div className="p-10 text-center text-sm text-slate-500">
+                  Nenhum tipo cadastrado ainda.
+                </div>
+              ) : (
+                <div className="divide-y divide-[#e4edc9]">
+                  {productTypes.map((productType) => (
+                    <article
+                      key={productType.id}
+                      className="grid gap-4 p-4 transition hover:bg-[#fbfff0] md:grid-cols-[1fr_auto] md:items-center"
+                    >
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-bold text-[#0b3d18]">{productType.name}</h3>
+                          <Badge className="border border-[#d6e7a2] bg-[#f7fde7] text-[#1b5e20]">
+                            {productType.minQuantity ? `${productType.minQuantity} un` : "Sem mínimo"}
+                          </Badge>
+                          <Badge className="border border-[#f4d330] bg-[#fff3a8] text-[#735600]">
+                            {productType.productsCount} produto(s)
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-[#48654f]">
+                          {productType.description || "Sem descrição."}
+                        </p>
+                        {productType.productsCount > 0 ? (
+                          <p className="text-sm font-medium text-amber-700">
+                            Há produtos vinculados. Remova ou altere esses produtos antes de excluir.
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 md:justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditProductType(productType)}
+                          className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={deletingProductTypeId === productType.id || productType.productsCount > 0}
+                          onClick={() => void handleDeleteProductType(productType.id)}
+                          className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {deletingProductTypeId === productType.id ? "Excluindo..." : "Excluir"}
+                        </Button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </section>
         ) : activeTab === "cupons" ? (
           <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
@@ -1583,15 +1958,17 @@ export function ManhiaAdminDashboard({
                     <h3 className="mt-1 text-xl font-bold text-[#5f1029]">
                       {settings.siteTheme === "NAMORADOS"
                         ? "Dia dos Namorados em destaque"
-                        : "Tema da Copa ativo"}
+                        : settings.siteTheme === "SAO_JOAO"
+                          ? "São João em destaque"
+                          : "Tema da Copa ativo"}
                     </h3>
                     <p className="mt-2 text-sm leading-6 text-[#7a3149]">
-                      Troque a vitrine e a pagina do produto entre a campanha da Copa e a
-                      campanha romantica.
+                      Troque a vitrine e a pagina do produto entre Copa, Dia dos Namorados
+                      e São João.
                     </p>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-3">
                     {[
                       {
                         value: "NAMORADOS" as const,
@@ -1606,6 +1983,13 @@ export function ManhiaAdminDashboard({
                         description: "Volta para o visual verde e amarelo com combos especiais.",
                         icon: Trophy,
                         activeClass: "border-[#1b7f31] bg-[#f7fde7] text-[#0b3d18]",
+                      },
+                      {
+                        value: "SAO_JOAO" as const,
+                        title: "São João",
+                        description: "Bandeirinhas, milho, estrelas e clima de arraia.",
+                        icon: FerrisWheel,
+                        activeClass: "border-[#ff8c00] bg-[#fff3a8] text-[#8b4513]",
                       },
                     ].map((themeOption) => {
                       const Icon = themeOption.icon;
@@ -1641,6 +2025,11 @@ export function ManhiaAdminDashboard({
                     <div className="rounded-[1rem] border border-[#e11d48] bg-white px-4 py-3 text-sm leading-6 text-[#7a3149]">
                       <strong className="text-[#be123c]">No site:</strong> textos, etiquetas e
                       destaques passam a falar de Dia dos Namorados, com cores em rosa e vinho.
+                    </div>
+                  ) : settings.siteTheme === "SAO_JOAO" ? (
+                    <div className="rounded-[1rem] border border-[#ff8c00] bg-white px-4 py-3 text-sm leading-6 text-[#8b4513]">
+                      <strong className="text-[#cc0000]">No site:</strong> bandeirinhas, textura
+                      xadrez, fonte Lobster nos titulos e emojis 🎪 🌽 ⭐ 🎉 entram no cardapio.
                     </div>
                   ) : null}
                 </div>
@@ -1716,8 +2105,18 @@ export function ManhiaAdminDashboard({
                   },
                   {
                     label: "Tema do site",
-                    value: settings.siteTheme === "NAMORADOS" ? "Namorados" : "Copa",
-                    icon: settings.siteTheme === "NAMORADOS" ? Heart : Trophy,
+                    value:
+                      settings.siteTheme === "NAMORADOS"
+                        ? "Namorados"
+                        : settings.siteTheme === "SAO_JOAO"
+                          ? "São João"
+                          : "Copa",
+                    icon:
+                      settings.siteTheme === "NAMORADOS"
+                        ? Heart
+                        : settings.siteTheme === "SAO_JOAO"
+                          ? FerrisWheel
+                          : Trophy,
                   },
                   {
                     label: "Produto destaque",
@@ -1790,23 +2189,38 @@ export function ManhiaAdminDashboard({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Categoria</label>
+                      <label className="text-sm font-medium text-slate-700">Tipo</label>
                       <Select
-                        value={form.categoria}
-                        onValueChange={(value) =>
+                        value={form.productTypeId || "NONE"}
+                        onValueChange={(value) => {
+                          const selectedType = productTypes.find((type) => type.id === value);
+                          const selectedName = selectedType?.name.toLowerCase() || "";
+                          const categoria = selectedName.includes("combo")
+                            ? "COMBO"
+                            : selectedName.includes("avulso")
+                              ? "LANCHONETE"
+                              : "CENTO";
+
                           setForm((current) => ({
                             ...current,
-                            categoria: value as ProductCategory,
-                          }))
-                        }
+                            productTypeId: value === "NONE" ? "" : value,
+                            categoria,
+                            totalUnidades: selectedType?.minQuantity
+                              ? String(selectedType.minQuantity)
+                              : current.totalUnidades,
+                          }));
+                        }}
                       >
                         <SelectTrigger className="h-10 w-full border-[#d6e7a2] bg-white text-sm text-slate-700">
-                          <SelectValue placeholder="Selecione a categoria" />
+                          <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="CENTO">Cento</SelectItem>
-                          <SelectItem value="LANCHONETE">Lanchonete</SelectItem>
-                          <SelectItem value="COMBO">Combo</SelectItem>
+                          <SelectItem value="NONE">Sem tipo</SelectItem>
+                          {productTypes.map((productType) => (
+                            <SelectItem key={productType.id} value={productType.id}>
+                              {productType.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -2125,7 +2539,7 @@ export function ManhiaAdminDashboard({
                         </div>
                         <p className="line-clamp-2 text-sm leading-6 text-[#48654f]">{produto.descricao}</p>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[#618038]">
-                          <span>{produto.categoria}</span>
+                          <span>{produto.productTypeName || produto.categoria}</span>
                           <span>{produto.totalUnidades} un</span>
                           <span>Ate {produto.maxTiposSalgado} tipos</span>
                           <span>{produto.permitePagamentoParcial ? "50% ou 100%" : "100%"}</span>
