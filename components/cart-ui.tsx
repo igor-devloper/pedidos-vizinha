@@ -45,6 +45,12 @@ type CartData = {
   totalAmount: number;
 };
 
+type CartBusinessStatusData = {
+  isOpen: boolean;
+  message: string;
+  minimumLeadHours: number;
+};
+
 const EMPTY_CART: CartData = {
   items: [],
   itemCount: 0,
@@ -123,6 +129,15 @@ function buildDeliveryDateTime(date: string, time: string) {
   // Horário escolhido na loja em America/Sao_Paulo.
   // Enviar com offset evita o bug de selecionar 10:00 e salvar 07:00 no servidor em UTC.
   return `${date}T${time}:00-03:00`;
+}
+
+function getBusinessDateInputValue(value = new Date()) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
 }
 
 function getTimeSlots(dateValue: string, minDate: Date) {
@@ -224,17 +239,23 @@ export function AddToCartControls({ productId }: { productId: string }) {
   );
 }
 
-export function FloatingCart() {
+export function FloatingCart({
+  businessStatus,
+}: {
+  businessStatus: CartBusinessStatusData;
+}) {
   const [cart, setCart] = useState<CartData>(EMPTY_CART);
   const [open, setOpen] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
   const [paymentPercentage, setPaymentPercentage] = useState<50 | 100>(50);
   const [paymentMethod, setPaymentMethod] = useState<MetodoPagamento>(MetodoPagamento.PIX);
-  const minDeliveryDate = useMemo(() => getMinDeliveryDate(BUSINESS_RULES.minimumLeadHours), []);
+  const minDeliveryDate = useMemo(
+    () => getMinDeliveryDate(businessStatus.minimumLeadHours),
+    [businessStatus.minimumLeadHours]
+  );
   const minDeliveryDateKey = useMemo(() => formatDateInputValue(minDeliveryDate), [minDeliveryDate]);
   const [deliveryDate, setDeliveryDate] = useState(formatDateInputValue(minDeliveryDate));
   const [deliveryTime, setDeliveryTime] = useState(formatTimeInputValue(minDeliveryDate));
@@ -314,13 +335,24 @@ export function FloatingCart() {
   const timeSlots = useMemo(() => getTimeSlots(deliveryDate, minDeliveryDate), [deliveryDate, minDeliveryDate]);
   const scheduledAt = buildDeliveryDateTime(deliveryDate, deliveryTime);
   const selectedDateHasNoSchedule = Boolean(deliveryDate) && timeSlots.length === 0;
+  const storeClosedBlocksSelectedDate = !businessStatus.isOpen && deliveryDate === getBusinessDateInputValue();
   const selectDeliveryDate = (nextDate: string) => {
     setDeliveryDate(nextDate);
     const nextSlots = getTimeSlots(nextDate, minDeliveryDate);
     if (!nextSlots.includes(deliveryTime)) setDeliveryTime(nextSlots[0] || "");
     setCalendarOpen(false);
   };
-  const canCheckout = useMemo(() => cart.items.length > 0 && !checkingOut && Boolean(deliveryDate) && Boolean(deliveryTime), [cart.items.length, checkingOut, deliveryDate, deliveryTime]);
+  const canCheckout = useMemo(
+    () =>
+      cart.items.length > 0 &&
+      !checkingOut &&
+      customerName.trim().length >= 2 &&
+      customerPhone.replace(/\D/g, "").length >= 10 &&
+      Boolean(deliveryDate) &&
+      Boolean(deliveryTime) &&
+      !storeClosedBlocksSelectedDate,
+    [cart.items.length, checkingOut, customerName, customerPhone, deliveryDate, deliveryTime, storeClosedBlocksSelectedDate]
+  );
   const allowsPartialPayment = useMemo(
     () => cart.items.length > 0 && cart.items.every((item) => item.permitePagamentoParcial),
     [cart.items]
@@ -383,7 +415,6 @@ export function FloatingCart() {
         body: JSON.stringify({
           customerName,
           customerPhone,
-          customerEmail,
           paymentPercentage,
           paymentMethod,
           scheduledAt,
@@ -650,10 +681,9 @@ export function FloatingCart() {
                 </div>
               ))}
 
-              <div className="grid gap-3 rounded-2xl border border-[#d6e7a2] bg-white p-4 sm:grid-cols-3">
-                <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nome" />
-                <Input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="WhatsApp" />
-                <Input value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="E-mail" />
+              <div className="grid gap-3 rounded-2xl border border-[#d6e7a2] bg-white p-4 sm:grid-cols-2">
+                <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nome" required />
+                <Input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="WhatsApp" required />
               </div>
 
               <div className="rounded-2xl border border-[#d6e7a2] bg-[#fbfff0] p-4">
@@ -731,6 +761,8 @@ export function FloatingCart() {
                 </div>
                 {selectedDateHasNoSchedule ? (
                   <p className="mt-2 text-sm text-amber-700">Nao atendemos nessa data. Escolha de terca a sabado, das 10h as 17h, ou domingo, das 9h as 13h.</p>
+                ) : storeClosedBlocksSelectedDate ? (
+                  <p className="mt-2 text-sm text-amber-700">A loja esta fechada para pedidos de hoje. Escolha uma data futura para continuar.</p>
                 ) : (
                   <p className="mt-2 text-sm text-[#48654f]">Esse horario acompanha o pedido no dashboard, WhatsApp, Mercado Pago e impressao.</p>
                 )}

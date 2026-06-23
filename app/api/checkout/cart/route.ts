@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { MetodoPagamento, Prisma } from "@prisma/client";
+import { MetodoPagamento, OrderStatus, PedidoStatus, Prisma } from "@prisma/client";
 
 import {
   getCartProductUnitPrice,
@@ -9,10 +9,12 @@ import {
   serializeCart,
   setCartSessionCookie,
 } from "@/lib/cart";
+import { getFullStoreStatus, isSameBusinessDate } from "@/lib/business-hours";
 import { prisma } from "@/lib/db";
 import { createCartMercadoPagoPreference } from "@/lib/mercado-pago";
 import {
   calculatePaymentAmounts,
+  validateDeliveryDate,
   validatePedidoAgainstProduto,
 } from "@/lib/pedidos";
 import { getProdutoComboItens } from "@/lib/produtos";
@@ -47,11 +49,21 @@ function parseLocalScheduledAt(value?: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function fixedUtcLocalToBusinessDate(value: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const localIso = `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(
+    value.getUTCDate(),
+  )}T${pad(value.getUTCHours())}:${pad(value.getUTCMinutes())}:${pad(
+    value.getUTCSeconds(),
+  )}-03:00`;
+
+  return new Date(localIso);
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
       customerName?: string;
-      customerEmail?: string;
       customerPhone?: string;
       paymentPercentage?: number;
       paymentMethod?: MetodoPagamento;
@@ -62,6 +74,23 @@ export async function POST(req: Request) {
 
     if (snapshot.items.length === 0) {
       return NextResponse.json({ error: "Carrinho vazio." }, { status: 400 });
+    }
+
+    const customerName = body.customerName?.trim() || "";
+    const customerPhone = body.customerPhone?.trim() || "";
+
+    if (customerName.length < 2) {
+      return NextResponse.json(
+        { error: "Informe o nome para finalizar o pedido." },
+        { status: 400 },
+      );
+    }
+
+    if (customerPhone.replace(/\D/g, "").length < 10) {
+      return NextResponse.json(
+        { error: "Informe um WhatsApp valido para finalizar o pedido." },
+        { status: 400 },
+      );
     }
 
     const paymentPercentage = body.paymentPercentage === 50 ? 50 : 100;
@@ -107,6 +136,50 @@ export async function POST(req: Request) {
       );
     }
 
+    const settings = await getFullStoreStatus();
+    const scheduledAtForRules = fixedUtcLocalToBusinessDate(scheduledAt);
+
+    if (!settings.isOpen && isSameBusinessDate(scheduledAtForRules, new Date())) {
+      return NextResponse.json(
+        {
+          error:
+            "A loja esta fechada para pedidos de hoje. Escolha uma data futura para continuar.",
+        },
+        { status: 400 },
+      );
+    }
+
+    validateDeliveryDate(scheduledAtForRules, new Date(), settings.minimumLeadHours);
+
+    if (!settings.allowMultipleOrdersPerSlot) {
+      const [conflictingPedido, conflictingOrder] = await Promise.all([
+        prisma.pedido.findFirst({
+          where: {
+            dataEntrega: scheduledAtForRules,
+            status: { not: PedidoStatus.CANCELADO },
+          },
+          select: { id: true, codigo: true },
+        }),
+        prisma.order.findFirst({
+          where: {
+            scheduledAt,
+            status: { not: OrderStatus.CANCELLED },
+          },
+          select: { id: true, code: true },
+        }),
+      ]);
+
+      if (conflictingPedido || conflictingOrder) {
+        return NextResponse.json(
+          {
+            error:
+              "Esse horario ja esta reservado para outro pedido. Escolha outro horario para continuar.",
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const payment = calculatePaymentAmounts(
       snapshot.totalAmount,
       paymentPercentage,
@@ -121,9 +194,9 @@ export async function POST(req: Request) {
         externalReference,
         code: orderCode,
         scheduledAt,
-        customerName: body.customerName?.trim() || null,
-        customerEmail: body.customerEmail?.trim() || null,
-        customerPhone: body.customerPhone?.trim() || null,
+        customerName,
+        customerEmail: null,
+        customerPhone,
         totalAmount: snapshot.totalAmount,
         paymentPercentage,
         paymentMethod,
@@ -195,9 +268,12 @@ export async function POST(req: Request) {
     return response;
   } catch (error) {
     console.error("POST /api/checkout/cart error", error);
+    const message =
+      error instanceof Error ? error.message : "Erro ao finalizar carrinho.";
+
     return NextResponse.json(
-      { error: "Erro ao finalizar carrinho." },
-      { status: 500 },
+      { error: message },
+      { status: 400 },
     );
   }
 }

@@ -6,6 +6,7 @@ import { ArrowLeft, BadgePercent, CheckCircle2, ShoppingCart } from "lucide-reac
 import { AddToCartControls, FloatingCart } from "@/components/cart-ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getFullStoreStatus } from "@/lib/business-hours";
 import { prisma } from "@/lib/db";
 import { formatCurrency } from "@/lib/pedidos";
 import { getProdutoComboItens, PRODUCT_CATEGORY_LABEL } from "@/lib/produtos";
@@ -35,6 +36,7 @@ export default async function PedidoPage({
   const price = Number(produto.preco);
   const promotionalPrice = Number((price * (1 - discountPercent / 100)).toFixed(2));
   const displayPrice = discountPercent > 0 ? promotionalPrice : price;
+  const businessStatus = await getFullStoreStatus();
 
   return (
     <main className="px-4 py-6 sm:px-6 lg:px-8">
@@ -149,7 +151,13 @@ export default async function PedidoPage({
           </Card>
         </section>
       </div>
-      <FloatingCart />
+      <FloatingCart
+        businessStatus={{
+          isOpen: businessStatus.isOpen,
+          message: businessStatus.message,
+          minimumLeadHours: businessStatus.minimumLeadHours,
+        }}
+      />
     </main>
   );
 }

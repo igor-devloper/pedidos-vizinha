@@ -1700,6 +1700,8 @@ export function ManhiaAdminDashboard({
                           <button
                             key={order.id}
                             type="button"
+                            title="Clique para imprimir o pedido do carrinho"
+                            aria-label={`Imprimir pedido do carrinho ${getSimpleOrderCode(order)}`}
                             draggable={statusLoadingId !== order.id}
                             onClick={() => void handlePrintSimpleOrder(order.id)}
                             onDragStart={() =>

@@ -411,7 +411,13 @@ export default async function CardapioPage() {
           </section>
         )}
       </div>
-      <FloatingCart />
+      <FloatingCart
+        businessStatus={{
+          isOpen: businessStatus.isOpen,
+          message: businessStatus.message,
+          minimumLeadHours: businessStatus.minimumLeadHours,
+        }}
+      />
     </main>
   );
 }

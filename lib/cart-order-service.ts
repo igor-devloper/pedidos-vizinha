@@ -1,5 +1,4 @@
 import {
-  Prisma,
   type Order,
   type OrderItem,
   type OrderStatus,
