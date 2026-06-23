@@ -91,6 +91,9 @@ async function getSimpleOrders(): Promise<SimpleOrderAdmin[]> {
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       totalAmount: Number(order.totalAmount),
+      paymentPercentage: order.paymentPercentage,
+      paymentMethodLabel: order.paymentMethodLabel,
+      chargedAmount: Number(order.chargedAmount),
       createdAt: order.createdAt.toISOString(),
       items: order.items.map((item) => ({
         id: item.id,

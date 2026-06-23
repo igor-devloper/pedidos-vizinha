@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { applyCartOrderPayment } from "@/lib/cart-order-payment";
 import { handleMercadoPagoPaymentUpdate } from "@/lib/pedido-service";
-import { prisma } from "@/lib/db";
 import {
   getMercadoPagoPayment,
   verifyMercadoPagoWebhookSignature,
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       const payment = await Promise.race([
         getMercadoPagoPayment(paymentId),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout ao buscar pagamento no Mercado Pago")), 20000)
+          setTimeout(() => reject(new Error("Timeout ao buscar pagamento no Mercado Pago")), 8000)
         ),
       ]);
 
@@ -99,30 +99,11 @@ export async function POST(req: Request) {
       }
 
       if (payment.external_reference.startsWith("cart-")) {
-        const orderStatus =
-          payment.status === "approved"
-            ? "PAID"
-            : payment.status === "cancelled" || payment.status === "rejected"
-              ? "CANCELLED"
-              : "PENDING";
-
-        const order = await prisma.order.update({
-          where: { externalReference: payment.external_reference },
-          data: {
-            status: orderStatus,
-            mercadoPagoPaymentId: String(payment.id),
-          },
-        });
-
-        if (orderStatus === "PAID" && order.cartId) {
-          await prisma.cartItem.deleteMany({
-            where: { cartId: order.cartId },
-          });
-        }
+        const order = await applyCartOrderPayment(payment);
 
         console.log("[MP webhook] Order do carrinho atualizado com sucesso:", {
-          orderId: order.id,
-          status: order.status,
+          orderId: order?.id,
+          status: order?.status,
           paymentId,
         });
       } else {

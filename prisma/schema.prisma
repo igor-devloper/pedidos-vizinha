@@ -84,6 +84,7 @@ model CartItem {
   id        String   @id @default(cuid())
   quantity  Int      @default(1)
   unitPrice Decimal  @db.Decimal(10, 2)
+  selectedItems Json  @default("[]")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -107,6 +108,12 @@ model Order {
   customerEmail            String?
   customerPhone            String?
   totalAmount              Decimal     @db.Decimal(10, 2)
+  paymentPercentage        Int         @default(100)
+  paymentMethod            MetodoPagamento @default(PIX)
+  paymentMethodLabel       String      @default("Pix")
+  feePercent               Decimal     @default(0) @db.Decimal(5, 2)
+  feeAmount                Decimal     @default(0) @db.Decimal(10, 2)
+  chargedAmount            Decimal     @default(0) @db.Decimal(10, 2)
   createdAt                DateTime    @default(now())
   updatedAt                DateTime    @updatedAt
 
@@ -122,6 +129,7 @@ model OrderItem {
   quantity    Int
   unitPrice   Decimal  @db.Decimal(10, 2)
   subtotal    Decimal  @db.Decimal(10, 2)
+  selectedItems Json    @default("[]")
 
   orderId     String
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)

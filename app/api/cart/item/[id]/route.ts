@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentCart, serializeCart, setCartSessionCookie } from "@/lib/cart";
+import { getCurrentCart, normalizeCartSelectedItems, serializeCart, setCartSessionCookie } from "@/lib/cart";
 import { prisma } from "@/lib/db";
 
 async function loadUpdatedCart(cartId: string) {
@@ -21,13 +21,21 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const body = (await req.json()) as { quantity?: number };
+    const body = (await req.json()) as { quantity?: number; selectedItems?: unknown };
     const quantity = Math.max(1, Math.floor(Number(body.quantity || 1)));
     const { cart, isNew, sessionId } = await getCurrentCart();
+    const patch: {
+      quantity: number;
+      selectedItems?: ReturnType<typeof normalizeCartSelectedItems>;
+    } = { quantity };
+
+    if ("selectedItems" in body) {
+      patch.selectedItems = normalizeCartSelectedItems(body.selectedItems);
+    }
 
     await prisma.cartItem.updateMany({
       where: { id, cartId: cart.id },
-      data: { quantity },
+      data: patch,
     });
 
     const updated = await loadUpdatedCart(cart.id);

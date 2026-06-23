@@ -17,7 +17,7 @@ type MercadoPagoPreferenceResponse = {
   sandbox_init_point?: string;
 };
 
-type MercadoPagoPaymentResponse = {
+export type MercadoPagoPaymentResponse = {
   id: number;
   status: string;
   status_detail?: string;
@@ -192,6 +192,8 @@ export async function createCartMercadoPagoPreference({
   order,
   items,
   payer,
+  paymentMethod,
+  chargedAmount,
 }: {
   order: {
     id: string;
@@ -211,15 +213,30 @@ export async function createCartMercadoPagoPreference({
     name?: string | null;
     phone?: string | null;
   };
+  paymentMethod: Pedido["metodoPagamento"];
+  chargedAmount: number;
 }) {
+  const methods = await listMercadoPagoMethods();
+  const selected = methods.find((method) => method.id === paymentMethod);
+
+  if (!selected) {
+    throw new Error("Metodo de pagamento indisponivel no Mercado Pago.");
+  }
+
+  const excludedPaymentTypes = methods
+    .filter((method) => method.id !== paymentMethod)
+    .map((method) => ({ id: method.paymentTypeId }));
+
   const payload = {
-    items: items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      quantity: item.quantity,
-      currency_id: "BRL",
-      unit_price: Number(item.unitPrice),
-    })),
+    items: [
+      {
+        id: order.id,
+        title: items.length === 1 ? items[0].title : `Pedido ${order.id.slice(0, 8)} - carrinho`,
+        quantity: 1,
+        currency_id: "BRL",
+        unit_price: Number(chargedAmount),
+      },
+    ],
     external_reference: order.externalReference,
     notification_url:
       process.env.MP_WEBHOOK_URL?.trim() ||
@@ -240,8 +257,13 @@ export async function createCartMercadoPagoPreference({
           }
         : undefined,
     },
+    payment_methods: {
+      excluded_payment_types: excludedPaymentTypes,
+      installments: 1,
+    },
     metadata: {
       cartOrderId: order.id,
+      metodoPagamento: paymentMethod,
     },
   };
 

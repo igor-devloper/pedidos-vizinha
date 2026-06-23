@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentCart, serializeCart, setCartSessionCookie } from "@/lib/cart";
+import {
+  buildInitialSelectedItems,
+  getCartProductUnitPrice,
+  getCurrentCart,
+  serializeCart,
+  setCartSessionCookie,
+} from "@/lib/cart";
 import { prisma } from "@/lib/db";
+import { getProdutoComboItens } from "@/lib/produtos";
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +22,15 @@ export async function POST(req: Request) {
 
     const product = await prisma.produto.findFirst({
       where: { id: productId, ativo: true },
-      select: { id: true, preco: true },
+      select: {
+        id: true,
+        preco: true,
+        emPromocao: true,
+        descontoPercentual: true,
+        categoria: true,
+        comboItens: true,
+        saboresSugeridos: true,
+      },
     });
 
     if (!product) {
@@ -23,8 +38,9 @@ export async function POST(req: Request) {
     }
 
     const { cart, isNew, sessionId } = await getCurrentCart();
+    const unitPrice = getCartProductUnitPrice(product);
 
-    await prisma.cartItem.upsert({
+    const cartItem = await prisma.cartItem.upsert({
       where: {
         cartId_productId: {
           cartId: cart.id,
@@ -33,14 +49,29 @@ export async function POST(req: Request) {
       },
       update: {
         quantity: { increment: quantity },
+        unitPrice,
       },
       create: {
         cartId: cart.id,
         productId: product.id,
         quantity,
-        unitPrice: product.preco,
+        unitPrice,
+        selectedItems: buildInitialSelectedItems(product),
       },
     });
+
+    const comboItens = getProdutoComboItens(product);
+    if (String(product.categoria) === "COMBO" && comboItens.length > 0) {
+      await prisma.cartItem.update({
+        where: { id: cartItem.id },
+        data: {
+          selectedItems: comboItens.map((item) => ({
+            tipo: item.nome,
+            quantidade: item.quantidade * cartItem.quantity,
+          })),
+        },
+      });
+    }
 
     const updated = await prisma.cart.findUniqueOrThrow({
       where: { id: cart.id },

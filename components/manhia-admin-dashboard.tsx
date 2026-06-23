@@ -86,6 +86,9 @@ export type SimpleOrderAdmin = {
   customerName: string | null;
   customerPhone: string | null;
   totalAmount: string | number;
+  paymentPercentage: number;
+  paymentMethodLabel: string;
+  chargedAmount: string | number;
   createdAt: string;
   items: {
     id: string;
@@ -301,7 +304,7 @@ export function ManhiaAdminDashboard({
   const [activeTab, setActiveTab] = useState<"pedidos" | "salgados" | "produtos" | "tipos" | "cupons" | "configuracoes">("pedidos");
   const [produtos, setProdutos] = useState(initialProdutos);
   const [pedidos, setPedidos] = useState(initialPedidos);
-  const [simpleOrders] = useState(initialSimpleOrders);
+  const [simpleOrders, setSimpleOrders] = useState(initialSimpleOrders);
   const [productTypes, setProductTypes] = useState(initialProductTypes);
   const [cupons, setCupons] = useState(initialCupons);
   const [settings, setSettings] = useState(initialSettings);
@@ -944,6 +947,38 @@ export function ManhiaAdminDashboard({
     }
   };
 
+  const handleConfirmSimpleOrderManualPayment = async (order: SimpleOrderAdmin) => {
+    try {
+      setStatusLoadingId(order.id);
+      const response = await fetch(`/api/manhia/orders/${order.id}/pagamento-manual`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          valorPago: Number(order.chargedAmount || order.totalAmount),
+          observacao: "Pagamento em dinheiro confirmado pelo painel",
+        }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | (SimpleOrderAdmin & { error?: string })
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Nao foi possivel confirmar o pagamento.");
+      }
+
+      const updatedOrder = data as SimpleOrderAdmin;
+      setSimpleOrders((current) =>
+        current.map((item) => (item.id === updatedOrder.id ? updatedOrder : item))
+      );
+      toast.success("Pagamento do carrinho confirmado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao confirmar pagamento.");
+    } finally {
+      setStatusLoadingId(null);
+    }
+  };
+
   const handleLogout = async () => {
     await fetch("/api/manhia/logout", { method: "POST" });
     router.refresh();
@@ -1109,9 +1144,13 @@ export function ManhiaAdminDashboard({
                           ) : null}
                         </div>
                         <p className="text-xl font-bold text-[#0b3d18]">
-                          {formatCurrency(Number(order.totalAmount))}
+                          {formatCurrency(Number(order.chargedAmount || order.totalAmount))}
                         </p>
                       </div>
+                      <p className="mt-2 text-sm text-slate-500">
+                        Total: {formatCurrency(Number(order.totalAmount))} - {order.paymentMethodLabel} (
+                        {order.paymentPercentage}% agora)
+                      </p>
 
                       <div className="mt-3 space-y-1 text-sm text-slate-700">
                         {order.items.map((item) => (
@@ -1120,6 +1159,24 @@ export function ManhiaAdminDashboard({
                             {formatCurrency(Number(item.unitPrice))}
                           </p>
                         ))}
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {order.status === "PENDING" ? (
+                          <Button
+                            type="button"
+                            disabled={statusLoadingId === order.id}
+                            onClick={() => void handleConfirmSimpleOrderManualPayment(order)}
+                            className="rounded-full bg-[#188038] text-white hover:bg-[#12642c]"
+                          >
+                            <CheckCheck className="mr-2 h-4 w-4" />
+                            {statusLoadingId === order.id ? "Confirmando..." : "Confirmar dinheiro"}
+                          </Button>
+                        ) : (
+                          <Badge className="border-emerald-200 bg-emerald-50 text-emerald-800">
+                            {order.status === "PAID" ? "Pagamento confirmado" : "Pedido cancelado"}
+                          </Badge>
+                        )}
                       </div>
                     </article>
                   ))}
