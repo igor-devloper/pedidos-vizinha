@@ -17,16 +17,33 @@ import {
 } from "@/lib/pedidos";
 import { getProdutoComboItens } from "@/lib/produtos";
 
-function parseSaoPauloScheduledAt(value?: string) {
+function parseLocalScheduledAt(value?: string) {
   if (!value) return null;
 
-  // Quando vier só "YYYY-MM-DDTHH:mm", esse horário é local de Brasília/São Paulo.
-  // Sem o offset, o Node interpreta no fuso do servidor e pode salvar 3h errado.
-  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
-    ? value
-    : `${value.length === 16 ? `${value}:00` : value}-03:00`;
+  // O datetime-local do front vem como "YYYY-MM-DDTHH:mm".
+  // Para o banco manter exatamente o horário escolhido, salvamos esse horário
+  // como UTC "fixo", sem aplicar conversão de fuso (+3h).
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/,
+  );
 
-  const date = new Date(normalized);
+  if (!match) {
+    const fallback = new Date(value);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  const date = new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    ),
+  );
+
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -81,7 +98,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const scheduledAt = parseSaoPauloScheduledAt(body.scheduledAt);
+    const scheduledAt = parseLocalScheduledAt(body.scheduledAt);
 
     if (!scheduledAt) {
       return NextResponse.json(

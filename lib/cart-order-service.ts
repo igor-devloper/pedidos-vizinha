@@ -28,20 +28,34 @@ function cartOrderCode(
   return order.code || order.id.slice(0, 10).toUpperCase();
 }
 
+function getScheduledAtDate(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function formatScheduledAt(order: Pick<CartOrderWithItems, "scheduledAt">) {
-  if (!order.scheduledAt) return null;
+  const date = getScheduledAtDate(order.scheduledAt);
+  if (!date) return null;
 
-  const date =
-    order.scheduledAt instanceof Date
-      ? order.scheduledAt
-      : new Date(order.scheduledAt);
-  if (Number.isNaN(date.getTime())) return null;
-
+  // O carrinho salva o horário local como UTC fixo para não somar/subtrair 3h.
+  // Por isso formatamos pelos campos UTC, sem conversão de fuso.
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
-    timeZone: "America/Sao_Paulo",
+    timeZone: "UTC",
   }).format(date);
+}
+
+function scheduledAtToLocalIso(value: Date | string | null | undefined) {
+  const date = getScheduledAtDate(value);
+  if (!date) return null;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(
+    date.getUTCDate(),
+  )}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:00`;
 }
 
 function formatCartOrderItems(order: CartOrderWithItems) {
@@ -256,9 +270,7 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
       receipt: buildCartOrderPrintableReceipt(order),
       customerName: order.customerName,
       customerPhone: order.customerPhone,
-      deliveryAt: order.scheduledAt
-        ? new Date(order.scheduledAt).toISOString()
-        : undefined,
+      deliveryAt: scheduledAtToLocalIso(order.scheduledAt) || undefined,
       total: Number(order.chargedAmount || order.totalAmount),
     });
 
@@ -311,13 +323,11 @@ export async function printCartOrderReceipt(id: string) {
   await sendCartOrderToPrintService({
     orderId: order.id,
     code: cartOrderCode(order),
-    reason: "manual-reprint",
+    reason: "manual",
     receipt: buildCartOrderPrintableReceipt(order),
     customerName: order.customerName,
     customerPhone: order.customerPhone,
-    deliveryAt: order.scheduledAt
-      ? new Date(order.scheduledAt).toISOString()
-      : undefined,
+    deliveryAt: scheduledAtToLocalIso(order.scheduledAt) || undefined,
     total: Number(order.chargedAmount || order.totalAmount),
   });
 
@@ -436,9 +446,7 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     code: cartOrderCode(order),
-    scheduledAt: order.scheduledAt
-      ? new Date(order.scheduledAt).toISOString()
-      : null,
+    scheduledAt: scheduledAtToLocalIso(order.scheduledAt),
     totalAmount: Number(order.totalAmount),
     paymentPercentage: order.paymentPercentage,
     paymentMethodLabel: order.paymentMethodLabel,
