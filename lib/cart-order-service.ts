@@ -1,0 +1,316 @@
+import { Prisma, type Order, type OrderItem, type OrderStatus } from "@prisma/client";
+
+import { prisma } from "@/lib/db";
+import { formatCurrency } from "@/lib/pedidos";
+import { sendCartOrderToPrintService } from "@/lib/print-service";
+import { BUSINESS_INFO } from "@/lib/site-config";
+import { sendWhatsappText } from "@/lib/whatsapp";
+import { formatWhatsAppList, formatWhatsAppMessage, WHATSAPP_SECTION_DIVIDER } from "@/lib/whatsapp-message";
+
+type CartOrderWithItems = Order & {
+  items: OrderItem[];
+};
+
+function cartOrderCode(order: Pick<Order, "id">) {
+  return order.id.slice(0, 10).toUpperCase();
+}
+
+function formatCartOrderItems(order: CartOrderWithItems) {
+  return order.items.flatMap((item) => {
+    const selectedItems = Array.isArray(item.selectedItems)
+      ? item.selectedItems
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return null;
+            }
+
+            const typed = entry as { tipo?: unknown; quantidade?: unknown };
+            const tipo = typeof typed.tipo === "string" ? typed.tipo.trim() : "";
+            const quantidade = Number(typed.quantidade);
+
+            if (!tipo || !Number.isFinite(quantidade) || quantidade <= 0) {
+              return null;
+            }
+
+            return `  - ${tipo}: ${quantidade} un`;
+          })
+          .filter((entry): entry is string => Boolean(entry))
+      : [];
+
+    return [
+      `${item.quantity}x ${item.productName} (${item.productType}) - ${formatCurrency(Number(item.subtotal))}`,
+      ...selectedItems,
+    ];
+  });
+}
+
+export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
+  const lines = [
+    `#${BUSINESS_INFO.name}`,
+    `#PEDIDO CARRINHO ${cartOrderCode(order)}`,
+    "-".repeat(30),
+    "#CLIENTE",
+    `Nome: ${order.customerName || "Nao informado"}`,
+    order.customerPhone ? `WhatsApp: ${order.customerPhone}` : null,
+    order.customerEmail ? `E-mail: ${order.customerEmail}` : null,
+    "-".repeat(30),
+    "#ITENS",
+    ...formatCartOrderItems(order),
+    "-".repeat(30),
+    "#PAGAMENTO",
+    `Forma: ${order.paymentMethodLabel}`,
+    `Pago agora: ${order.paymentPercentage}%`,
+    `Total pedido: ${formatCurrency(Number(order.totalAmount))}`,
+    `Taxa: ${formatCurrency(Number(order.feeAmount))}`,
+    `COBRADO: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
+  ];
+
+  return lines.filter(Boolean).join("\n");
+}
+
+function buildCartOrderClientMessage(order: CartOrderWithItems) {
+  return formatWhatsAppMessage([
+    "✅ *Pedido Confirmado!*",
+    [
+      `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
+      order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
+    ],
+    [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${cartOrderCode(order)}*`, WHATSAPP_SECTION_DIVIDER],
+    [
+      "📦 *Itens:*",
+      ...formatWhatsAppList(formatCartOrderItems(order)).map((item) => `  ${item}`),
+      `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
+      `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
+      `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
+    ],
+    [
+      WHATSAPP_SECTION_DIVIDER,
+      "Obrigada pela preferência!",
+      `_${BUSINESS_INFO.name}_`,
+    ],
+  ]);
+}
+
+function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
+  return formatWhatsAppMessage([
+    "🔔 *Novo Pedido Pago!*",
+    [
+      `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
+      order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
+      order.customerEmail ? `✉️ *E-mail:* ${order.customerEmail}` : null,
+    ],
+    [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${cartOrderCode(order)}*`, WHATSAPP_SECTION_DIVIDER],
+    [
+      "📦 *Itens:*",
+      ...formatWhatsAppList(formatCartOrderItems(order)).map((item) => `  ${item}`),
+      `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
+      `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
+      `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
+    ],
+  ]);
+}
+
+function buildCartOrderReadyMessage(order: Pick<Order, "id" | "customerName">) {
+  return formatWhatsAppMessage([
+    "🍽️ *Seu pedido está pronto!*",
+    [
+      `Oi, ${order.customerName || "cliente"}!`,
+      `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* já está pronto.`,
+    ],
+    `📲 Se precisar falar com a equipe, chame no WhatsApp: ${BUSINESS_INFO.supportPhone}`,
+  ]);
+}
+
+async function loadCartOrder(id: string) {
+  return prisma.order.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+}
+
+async function notifyPaidCartOrder(order: CartOrderWithItems) {
+  if (!order.notificadoClienteAt && order.customerPhone) {
+    const claimedAt = new Date();
+    const claim = await prisma.order.updateMany({
+      where: { id: order.id, notificadoClienteAt: null },
+      data: { notificadoClienteAt: claimedAt },
+    });
+
+    if (claim.count > 0) {
+      try {
+        const result = await sendWhatsappText(order.customerPhone, buildCartOrderClientMessage(order));
+        if (!result.ok) {
+          throw new Error("Envio para cliente nao confirmado pelo servico de WhatsApp.");
+        }
+      } catch (error) {
+        await prisma.order.updateMany({
+          where: { id: order.id, notificadoClienteAt: claimedAt },
+          data: { notificadoClienteAt: null },
+        });
+        console.error("Falha ao notificar cliente do carrinho via WhatsApp", { orderId: order.id, error });
+      }
+    }
+  }
+
+  if (!order.notificadoVizinhaAt && BUSINESS_INFO.ownerPhone) {
+    const claimedAt = new Date();
+    const claim = await prisma.order.updateMany({
+      where: { id: order.id, notificadoVizinhaAt: null },
+      data: { notificadoVizinhaAt: claimedAt },
+    });
+
+    if (claim.count > 0) {
+      try {
+        const result = await sendWhatsappText(BUSINESS_INFO.ownerPhone, buildCartOrderOwnerMessage(order));
+        if (!result.ok) {
+          throw new Error("Envio para Vizinha nao confirmado pelo servico de WhatsApp.");
+        }
+      } catch (error) {
+        await prisma.order.updateMany({
+          where: { id: order.id, notificadoVizinhaAt: claimedAt },
+          data: { notificadoVizinhaAt: null },
+        });
+        console.error("Falha ao notificar Vizinha sobre carrinho via WhatsApp", { orderId: order.id, error });
+      }
+    }
+  }
+}
+
+async function printAcceptedCartOrder(order: CartOrderWithItems) {
+  if (order.impressoAutomaticamenteAt) {
+    return order;
+  }
+
+  try {
+    await sendCartOrderToPrintService({
+      orderId: order.id,
+      code: cartOrderCode(order),
+      reason: "auto-accepted",
+      receipt: buildCartOrderPrintableReceipt(order),
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      total: Number(order.chargedAmount || order.totalAmount),
+    });
+
+    return prisma.order.update({
+      where: { id: order.id },
+      data: { impressoAutomaticamenteAt: new Date() },
+      include: { items: true },
+    });
+  } catch (error) {
+    console.error("Falha ao imprimir pedido do carrinho aceito", { orderId: order.id, error });
+    return order;
+  }
+}
+
+export async function acceptPaidCartOrder(order: CartOrderWithItems) {
+  await notifyPaidCartOrder(order);
+  return printAcceptedCartOrder(order);
+}
+
+export async function updateCartOrderStatus(id: string, status: OrderStatus) {
+  const current = await loadCartOrder(id);
+
+  if (!current) {
+    throw new Error("Pedido do carrinho nao encontrado.");
+  }
+
+  const enteringReady = status === "READY" && current.status !== "READY";
+  const leavingReady = status !== "READY" && current.status === "READY";
+
+  const order = await prisma.order.update({
+    where: { id },
+    data: {
+      status,
+      prontoAt: enteringReady ? new Date() : leavingReady ? null : current.prontoAt,
+      notificadoProntoClienteAt: enteringReady ? null : current.notificadoProntoClienteAt,
+    },
+    include: { items: true },
+  });
+
+  if (enteringReady && order.customerPhone) {
+    const claimedAt = new Date();
+    const claim = await prisma.order.updateMany({
+      where: { id: order.id, notificadoProntoClienteAt: null },
+      data: { notificadoProntoClienteAt: claimedAt },
+    });
+
+    if (claim.count > 0) {
+      try {
+        const result = await sendWhatsappText(order.customerPhone, buildCartOrderReadyMessage(order));
+        if (!result.ok) {
+          throw new Error("Envio de pronto para cliente nao confirmado pelo servico de WhatsApp.");
+        }
+      } catch (error) {
+        await prisma.order.updateMany({
+          where: { id: order.id, notificadoProntoClienteAt: claimedAt },
+          data: { notificadoProntoClienteAt: null },
+        });
+        console.error("Falha ao notificar pedido do carrinho pronto", { orderId: order.id, error });
+      }
+    }
+  }
+
+  if (status === "PAID" && current.status !== "PAID") {
+    return acceptPaidCartOrder(order);
+  }
+
+  return order;
+}
+
+export async function markCartOrderPaidManually({
+  id,
+}: {
+  id: string;
+  valorPago?: number;
+  observacao?: string;
+}) {
+  const order = await loadCartOrder(id);
+
+  if (!order) {
+    throw new Error("Pedido do carrinho nao encontrado.");
+  }
+
+  if (order.status === "CANCELLED") {
+    throw new Error("Pedido cancelado nao pode ser confirmado.");
+  }
+
+  const updated = await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      status: "PAID",
+      mercadoPagoPaymentId: `manual-cash-${order.id}`,
+    },
+    include: { items: true },
+  });
+
+  if (order.cartId) {
+    await prisma.cartItem.deleteMany({ where: { cartId: order.cartId } });
+  }
+
+  return acceptPaidCartOrder(updated);
+}
+
+export type SerializedCartOrderAdmin = ReturnType<typeof serializeCartOrderForAdmin>;
+
+export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
+  return {
+    id: order.id,
+    status: order.status,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    totalAmount: Number(order.totalAmount),
+    paymentPercentage: order.paymentPercentage,
+    paymentMethodLabel: order.paymentMethodLabel,
+    chargedAmount: Number(order.chargedAmount),
+    createdAt: order.createdAt.toISOString(),
+    items: order.items.map((item) => ({
+      id: item.id,
+      productName: item.productName,
+      productType: item.productType,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+      subtotal: Number(item.subtotal),
+    })),
+  };
+}

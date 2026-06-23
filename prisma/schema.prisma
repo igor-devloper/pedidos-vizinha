@@ -114,6 +114,11 @@ model Order {
   feePercent               Decimal     @default(0) @db.Decimal(5, 2)
   feeAmount                Decimal     @default(0) @db.Decimal(10, 2)
   chargedAmount            Decimal     @default(0) @db.Decimal(10, 2)
+  notificadoClienteAt      DateTime?
+  notificadoVizinhaAt      DateTime?
+  notificadoProntoClienteAt DateTime?
+  prontoAt                 DateTime?
+  impressoAutomaticamenteAt DateTime?
   createdAt                DateTime    @default(now())
   updatedAt                DateTime    @updatedAt
 
@@ -333,5 +338,7 @@ enum PedidoStatus {
 enum OrderStatus {
   PENDING
   PAID
+  READY
+  DELIVERED
   CANCELLED
 }

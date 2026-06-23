@@ -13,6 +13,7 @@ import {
   type StoreSettingsData,
 } from "@/components/manhia-admin-dashboard";
 import { getStoreSettings } from "@/lib/business-hours";
+import { serializeCartOrderForAdmin } from "@/lib/cart-order-service";
 import { normalizeStoreSiteTheme } from "@/lib/site-theme";
 
 type ProdutoWithPromocao = Awaited<
@@ -85,25 +86,7 @@ async function getSimpleOrders(): Promise<SimpleOrderAdmin[]> {
       take: 50,
     });
 
-    return orders.map((order) => ({
-      id: order.id,
-      status: order.status,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      totalAmount: Number(order.totalAmount),
-      paymentPercentage: order.paymentPercentage,
-      paymentMethodLabel: order.paymentMethodLabel,
-      chargedAmount: Number(order.chargedAmount),
-      createdAt: order.createdAt.toISOString(),
-      items: order.items.map((item) => ({
-        id: item.id,
-        productName: item.productName,
-        productType: item.productType,
-        quantity: item.quantity,
-        unitPrice: Number(item.unitPrice),
-        subtotal: Number(item.subtotal),
-      })),
-    }));
+    return orders.map(serializeCartOrderForAdmin);
   } catch (error) {
     console.error("GET simple orders manhia page error", error);
     return [];

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { acceptPaidCartOrder } from "@/lib/cart-order-service";
 import { findLatestMercadoPagoPaymentByExternalReference } from "@/lib/mercado-pago";
 
 type MercadoPagoCartPayment = {
@@ -42,12 +43,17 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
       status: orderStatus,
       mercadoPagoPaymentId: String(payment.id),
     },
+    include: { items: true },
   });
 
   if (orderStatus === "PAID" && order.cartId) {
     await prisma.cartItem.deleteMany({
       where: { cartId: order.cartId },
     });
+  }
+
+  if (orderStatus === "PAID") {
+    return acceptPaidCartOrder(order);
   }
 
   return order;
