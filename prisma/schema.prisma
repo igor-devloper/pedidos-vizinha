@@ -4,58 +4,57 @@ generator client {
   provider = "prisma-client-js"
 }
 
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Encomenda {
-  id           String        @id @default(cuid())
-  txid         String        @unique
-  nome         String
-  email        String
-  telefone     String
-  observacoes  String?
+  id          String  @id @default(cuid())
+  txid        String  @unique
+  nome        String
+  email       String
+  telefone    String
+  observacoes String?
 
-  itens        EncomendaItem[]
+  itens EncomendaItem[]
 
-  totalItens   Int
-  valorTotal   Decimal       @db.Decimal(10, 2)
-  valorPago    Decimal?      @db.Decimal(10, 2) // quanto o cliente declarou pagar (metade ou total)
+  totalItens Int
+  valorTotal Decimal  @db.Decimal(10, 2)
+  valorPago  Decimal? @db.Decimal(10, 2) // quanto o cliente declarou pagar (metade ou total)
 
-  status       StatusEncomenda @default(AGUARDANDO_PAGAMENTO)
+  status            StatusEncomenda @default(AGUARDANDO_PAGAMENTO)
   comprovanteBase64 String?
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Produto {
-  id           String   @id @default(cuid())
-  slug         String   @unique
-  nome         String
-  descricao    String
-  preco        Decimal  @db.Decimal(10, 2)
-  imagemBase64 String
-  categoria    CategoriaProduto @default(CENTO)
-  productTypeId String?
-  totalUnidades Int     @default(100)
-  maxTiposSalgado Int   @default(5)
-  permitePagamentoParcial Boolean @default(true)
-  saboresSugeridos String[] @default([])
-  comboItens    Json    @default("[]")
-  emPromocao   Boolean  @default(false)
-  descontoPercentual Decimal @default(0) @db.Decimal(5, 2)
-  ativo        Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                      String           @id @default(cuid())
+  slug                    String           @unique
+  nome                    String
+  descricao               String
+  preco                   Decimal          @db.Decimal(10, 2)
+  imagemBase64            String
+  categoria               CategoriaProduto @default(CENTO)
+  productTypeId           String?
+  totalUnidades           Int              @default(100)
+  maxTiposSalgado         Int              @default(5)
+  permitePagamentoParcial Boolean          @default(true)
+  saboresSugeridos        String[]         @default([])
+  comboItens              Json             @default("[]")
+  emPromocao              Boolean          @default(false)
+  descontoPercentual      Decimal          @default(0) @db.Decimal(5, 2)
+  ativo                   Boolean          @default(true)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
 
-  productType  ProductType? @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
-  pedidos      Pedido[]
-  cupons       CupomDesconto[]
-  cartItems    CartItem[]
-  orderItems   OrderItem[]
+  productType ProductType?    @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
+  pedidos     Pedido[]
+  cupons      CupomDesconto[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
 }
 
 model ProductType {
@@ -67,79 +66,81 @@ model ProductType {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  products       Produto[]
+  products Produto[]
 }
 
 model Cart {
-  id        String     @id @default(cuid())
-  sessionId String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  items     CartItem[]
-  orders    Order[]
-}
-
-model CartItem {
   id        String   @id @default(cuid())
-  quantity  Int      @default(1)
-  unitPrice Decimal  @db.Decimal(10, 2)
-  selectedItems Json  @default("[]")
+  sessionId String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  items  CartItem[]
+  orders Order[]
+}
+
+model CartItem {
+  id            String   @id @default(cuid())
+  quantity      Int      @default(1)
+  unitPrice     Decimal  @db.Decimal(10, 2)
+  selectedItems Json     @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   cartId    String
-  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
   productId String
-  product   Produto  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  product   Produto @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@unique([cartId, productId])
 }
 
 model Order {
-  id                       String      @id @default(cuid())
-  status                   OrderStatus @default(PENDING)
-  mercadoPagoId            String?
-  mercadoPagoPreferenceId  String?
-  mercadoPagoInitPoint     String?
-  mercadoPagoPaymentId     String?
-  externalReference        String      @unique
-  customerName             String?
-  customerEmail            String?
-  customerPhone            String?
-  totalAmount              Decimal     @db.Decimal(10, 2)
-  paymentPercentage        Int         @default(100)
-  paymentMethod            MetodoPagamento @default(PIX)
-  paymentMethodLabel       String      @default("Pix")
-  feePercent               Decimal     @default(0) @db.Decimal(5, 2)
-  feeAmount                Decimal     @default(0) @db.Decimal(10, 2)
-  chargedAmount            Decimal     @default(0) @db.Decimal(10, 2)
-  notificadoClienteAt      DateTime?
-  notificadoVizinhaAt      DateTime?
+  id                        String          @id @default(cuid())
+  status                    OrderStatus     @default(PENDING)
+  mercadoPagoId             String?
+  mercadoPagoPreferenceId   String?
+  mercadoPagoInitPoint      String?
+  mercadoPagoPaymentId      String?
+  externalReference         String          @unique
+  customerName              String?
+  customerEmail             String?
+  customerPhone             String?
+  totalAmount               Decimal         @db.Decimal(10, 2)
+  paymentPercentage         Int             @default(100)
+  paymentMethod             MetodoPagamento @default(PIX)
+  paymentMethodLabel        String          @default("Pix")
+  feePercent                Decimal         @default(0) @db.Decimal(5, 2)
+  feeAmount                 Decimal         @default(0) @db.Decimal(10, 2)
+  chargedAmount             Decimal         @default(0) @db.Decimal(10, 2)
+  notificadoClienteAt       DateTime?
+  notificadoVizinhaAt       DateTime?
   notificadoProntoClienteAt DateTime?
-  prontoAt                 DateTime?
+  prontoAt                  DateTime?
   impressoAutomaticamenteAt DateTime?
-  createdAt                DateTime    @default(now())
-  updatedAt                DateTime    @updatedAt
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  code                      String          @unique
+  scheduledAt               DateTime?
 
-  cartId                   String?
-  cart                     Cart?       @relation(fields: [cartId], references: [id], onDelete: SetNull)
-  items                    OrderItem[]
+  cartId String?
+  cart   Cart?       @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  items  OrderItem[]
 }
 
 model OrderItem {
-  id          String   @id @default(cuid())
-  productName String
-  productType String
-  quantity    Int
-  unitPrice   Decimal  @db.Decimal(10, 2)
-  subtotal    Decimal  @db.Decimal(10, 2)
+  id            String  @id @default(cuid())
+  productName   String
+  productType   String
+  quantity      Int
+  unitPrice     Decimal @db.Decimal(10, 2)
+  subtotal      Decimal @db.Decimal(10, 2)
   selectedItems Json    @default("[]")
 
-  orderId     String
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Produto  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Produto @relation(fields: [productId], references: [id], onDelete: Restrict)
 }
 
 model CupomDesconto {
@@ -153,50 +154,50 @@ model CupomDesconto {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  produtoId          String
-  produto            Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
-  pedidos            Pedido[]
+  produtoId String
+  produto   Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  pedidos   Pedido[]
 }
 
 model BotFlow {
-  id            String   @id @default(cuid())
-  nome          String
-  descricao     String?
-  instanceId    String?
-  gatilho       String
-  resposta      String
-  ativo         Boolean  @default(true)
-  prioridade    Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id         String   @id @default(cuid())
+  nome       String
+  descricao  String?
+  instanceId String?
+  gatilho    String
+  resposta   String
+  ativo      Boolean  @default(true)
+  prioridade Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model BotLead {
-  id              String   @id @default(cuid())
-  instanceId      String
-  remoteJid       String
-  pushName        String?
-  phoneNumber     String?
-  nome            String?
-  menuCategoria   CategoriaProduto?
-  horarioEntrega  String?
-  stage           String   @default("new")
-  status          String   @default("open")
-  intent          String?
-  eventoDetalhes  String?
-  bairroRetirada  String?
-  observacoes     String?
-  lastInboundText String?
+  id               String            @id @default(cuid())
+  instanceId       String
+  remoteJid        String
+  pushName         String?
+  phoneNumber      String?
+  nome             String?
+  menuCategoria    CategoriaProduto?
+  horarioEntrega   String?
+  stage            String            @default("new")
+  status           String            @default("open")
+  intent           String?
+  eventoDetalhes   String?
+  bairroRetirada   String?
+  observacoes      String?
+  lastInboundText  String?
   lastOutboundText String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@unique([instanceId, remoteJid])
 }
 
 model BotOrder {
-  id                  String   @id @default(cuid())
-  code                String   @unique
+  id                  String           @id @default(cuid())
+  code                String           @unique
   instanceId          String
   leadId              String?
   customerRemoteJid   String
@@ -207,85 +208,85 @@ model BotOrder {
   horarioEntrega      String
   observacoes         String?
   summary             String
-  status              String   @default("PENDING_OWNER_APPROVAL")
+  status              String           @default("PENDING_OWNER_APPROVAL")
   ownerReason         String?
-  paymentStatus       String   @default("PENDING")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  paymentStatus       String           @default("PENDING")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 }
 
 model EncomendaItem {
-  id          String     @id @default(cuid())
-  tipo        String
-  quantidade  Int
+  id         String @id @default(cuid())
+  tipo       String
+  quantidade Int
 
   encomendaId String
-  encomenda   Encomenda  @relation(fields: [encomendaId], references: [id], onDelete: Cascade)
+  encomenda   Encomenda @relation(fields: [encomendaId], references: [id], onDelete: Cascade)
 }
 
 model Pedido {
-  id                    String             @id @default(cuid())
-  codigo                String             @unique
-  clienteNome           String
-  clienteTelefone       String
-  clienteEmail          String?
-  observacoes           String?
-  dataEntrega           DateTime
-  percentualPagamento   Int
-  metodoPagamento       MetodoPagamento
-  metodoPagamentoLabel  String
-  taxaPercentual        Decimal            @db.Decimal(5, 2)
-  taxaValor             Decimal            @db.Decimal(10, 2)
-  subtotal              Decimal            @db.Decimal(10, 2)
-  totalCobrado          Decimal            @db.Decimal(10, 2)
-  valorPago             Decimal?           @db.Decimal(10, 2)
-  descontoPercentual    Decimal            @default(0) @db.Decimal(5, 2)
-  descontoValor         Decimal            @default(0) @db.Decimal(10, 2)
-  cupomCodigoSnapshot   String?
-  cupomDivulgadorSnapshot String?
-  totalUnidades         Int
-  totalTipos            Int
-  status                PedidoStatus       @default(PENDENTE_PAGAMENTO)
-  produtoNomeSnapshot   String
-  produtoPrecoSnapshot  Decimal            @db.Decimal(10, 2)
-  mpPreferenceId        String?
-  mpPaymentId           String?
-  mpMerchantOrderId     String?
-  mpExternalReference   String             @unique
-  mpInitPoint           String?
-  saldoExternalReference String?           @unique
-  saldoPreferenceId     String?
-  saldoInitPoint        String?
-  saldoTotalCobrado     Decimal?           @db.Decimal(10, 2)
-  saldoPagoAt           DateTime?
-  saldoCobrancaEnviadaAt DateTime?
-  mpStatus              String?
-  mpStatusDetail        String?
-  mpWebhookPayload      Json?
-  notificadoClienteAt   DateTime?
-  notificadoVizinhaAt   DateTime?
-  prontoAt              DateTime?
+  id                        String          @id @default(cuid())
+  codigo                    String          @unique
+  clienteNome               String
+  clienteTelefone           String
+  clienteEmail              String?
+  observacoes               String?
+  dataEntrega               DateTime
+  percentualPagamento       Int
+  metodoPagamento           MetodoPagamento
+  metodoPagamentoLabel      String
+  taxaPercentual            Decimal         @db.Decimal(5, 2)
+  taxaValor                 Decimal         @db.Decimal(10, 2)
+  subtotal                  Decimal         @db.Decimal(10, 2)
+  totalCobrado              Decimal         @db.Decimal(10, 2)
+  valorPago                 Decimal?        @db.Decimal(10, 2)
+  descontoPercentual        Decimal         @default(0) @db.Decimal(5, 2)
+  descontoValor             Decimal         @default(0) @db.Decimal(10, 2)
+  cupomCodigoSnapshot       String?
+  cupomDivulgadorSnapshot   String?
+  totalUnidades             Int
+  totalTipos                Int
+  status                    PedidoStatus    @default(PENDENTE_PAGAMENTO)
+  produtoNomeSnapshot       String
+  produtoPrecoSnapshot      Decimal         @db.Decimal(10, 2)
+  mpPreferenceId            String?
+  mpPaymentId               String?
+  mpMerchantOrderId         String?
+  mpExternalReference       String          @unique
+  mpInitPoint               String?
+  saldoExternalReference    String?         @unique
+  saldoPreferenceId         String?
+  saldoInitPoint            String?
+  saldoTotalCobrado         Decimal?        @db.Decimal(10, 2)
+  saldoPagoAt               DateTime?
+  saldoCobrancaEnviadaAt    DateTime?
+  mpStatus                  String?
+  mpStatusDetail            String?
+  mpWebhookPayload          Json?
+  notificadoClienteAt       DateTime?
+  notificadoVizinhaAt       DateTime?
+  prontoAt                  DateTime?
   notificadoProntoClienteAt DateTime?
-  notificadoToleranciaAt DateTime?
+  notificadoToleranciaAt    DateTime?
   impressoAutomaticamenteAt DateTime?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
 
-  produtoId             String
-  produto               Produto            @relation(fields: [produtoId], references: [id], onDelete: Restrict)
-  cupomId               String?
-  cupom                 CupomDesconto?      @relation(fields: [cupomId], references: [id], onDelete: SetNull)
-  itens                 PedidoItem[]
+  produtoId String
+  produto   Produto        @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  cupomId   String?
+  cupom     CupomDesconto? @relation(fields: [cupomId], references: [id], onDelete: SetNull)
+  itens     PedidoItem[]
 }
 
 model PedidoItem {
-  id         String @id @default(cuid())
+  id         String   @id @default(cuid())
   tipo       String
   quantidade Int
   createdAt  DateTime @default(now())
 
-  pedidoId   String
-  pedido     Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  pedidoId String
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
 
 // ============================================================
@@ -293,23 +294,23 @@ model PedidoItem {
 // Há sempre exatamente 1 registro com id = "singleton".
 // ============================================================
 model StoreSettings {
-  id                String   @id @default("singleton")
+  id                         String   @id @default("singleton")
   /// Loja aberta manualmente (true = aberta, false = fechada forçada)
-  isOpen            Boolean  @default(true)
+  isOpen                     Boolean  @default(true)
   /// Horas mínimas de antecedência para pedidos (padrão: 2)
-  minimumLeadHours  Int      @default(2)
+  minimumLeadHours           Int      @default(2)
   /// Permite mais de um pedido no mesmo horário de entrega.
-  allowMultipleOrdersPerSlot Boolean @default(false)
-  siteTheme         String   @default("COPA")
-  featuredProductId String?
-  updatedAt         DateTime @updatedAt
+  allowMultipleOrdersPerSlot Boolean  @default(false)
+  siteTheme                  String   @default("COPA")
+  featuredProductId          String?
+  updatedAt                  DateTime @updatedAt
 }
 
 enum StatusEncomenda {
   AGUARDANDO_PAGAMENTO
   AGUARDANDO_VALIDACAO
-  PAGO_METADE      // meio pagamento confirmado
-  CONFIRMADO       // pagamento total confirmado
+  PAGO_METADE // meio pagamento confirmado
+  CONFIRMADO // pagamento total confirmado
   CANCELADO
 }
 

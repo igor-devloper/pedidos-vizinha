@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { MetodoPagamento } from "@prisma/client";
+import { MetodoPagamento, Prisma } from "@prisma/client";
 
 import {
   getCartProductUnitPrice,
@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       customerPhone?: string;
       paymentPercentage?: number;
       paymentMethod?: MetodoPagamento;
+      scheduledAt?: string;
     };
     const { cart, isNew, sessionId } = await getCurrentCart();
     const snapshot = serializeCart(cart);
@@ -58,13 +59,22 @@ export async function POST(req: Request) {
       );
     }
 
+    const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+
+    if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
+      return NextResponse.json({ error: "Informe uma data e horario validos." }, { status: 400 });
+    }
+
     const payment = calculatePaymentAmounts(snapshot.totalAmount, paymentPercentage, paymentMethod);
     const externalReference = `cart-${randomUUID()}`;
+    const orderCode = `C${Date.now().toString(36).toUpperCase()}${randomUUID().slice(0, 4).toUpperCase()}`;
 
     const order = await prisma.order.create({
       data: {
         cartId: cart.id,
         externalReference,
+        code: orderCode,
+        scheduledAt,
         customerName: body.customerName?.trim() || null,
         customerEmail: body.customerEmail?.trim() || null,
         customerPhone: body.customerPhone?.trim() || null,
@@ -94,7 +104,7 @@ export async function POST(req: Request) {
             };
           }),
         },
-      },
+      } as Prisma.OrderUncheckedCreateInput,
       include: { items: true },
     });
 

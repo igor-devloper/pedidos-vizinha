@@ -9,10 +9,25 @@ import { formatWhatsAppList, formatWhatsAppMessage, WHATSAPP_SECTION_DIVIDER } f
 
 type CartOrderWithItems = Order & {
   items: OrderItem[];
+  code?: string | null;
+  scheduledAt?: Date | string | null;
 };
 
-function cartOrderCode(order: Pick<Order, "id">) {
-  return order.id.slice(0, 10).toUpperCase();
+function cartOrderCode(order: Pick<CartOrderWithItems, "id"> & { code?: string | null }) {
+  return order.code || order.id.slice(0, 10).toUpperCase();
+}
+
+function formatScheduledAt(order: Pick<CartOrderWithItems, "scheduledAt">) {
+  if (!order.scheduledAt) return null;
+
+  const date = order.scheduledAt instanceof Date ? order.scheduledAt : new Date(order.scheduledAt);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
 }
 
 function formatCartOrderItems(order: CartOrderWithItems) {
@@ -53,6 +68,7 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
     `Nome: ${order.customerName || "Nao informado"}`,
     order.customerPhone ? `WhatsApp: ${order.customerPhone}` : null,
     order.customerEmail ? `E-mail: ${order.customerEmail}` : null,
+    formatScheduledAt(order) ? `Entrega/retirada: ${formatScheduledAt(order)}` : null,
     "-".repeat(30),
     "#ITENS",
     ...formatCartOrderItems(order),
@@ -74,6 +90,7 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
     [
       `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
       order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
+      formatScheduledAt(order) ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}` : null,
     ],
     [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${cartOrderCode(order)}*`, WHATSAPP_SECTION_DIVIDER],
     [
@@ -98,6 +115,7 @@ function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
       `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
       order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
       order.customerEmail ? `✉️ *E-mail:* ${order.customerEmail}` : null,
+      formatScheduledAt(order) ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}` : null,
     ],
     [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${cartOrderCode(order)}*`, WHATSAPP_SECTION_DIVIDER],
     [
@@ -189,6 +207,7 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
       receipt: buildCartOrderPrintableReceipt(order),
       customerName: order.customerName,
       customerPhone: order.customerPhone,
+      deliveryAt: order.scheduledAt ? new Date(order.scheduledAt).toISOString() : undefined,
       total: Number(order.chargedAmount || order.totalAmount),
     });
 
@@ -299,6 +318,8 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
     status: order.status,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    code: cartOrderCode(order),
+    scheduledAt: order.scheduledAt ? new Date(order.scheduledAt).toISOString() : null,
     totalAmount: Number(order.totalAmount),
     paymentPercentage: order.paymentPercentage,
     paymentMethodLabel: order.paymentMethodLabel,

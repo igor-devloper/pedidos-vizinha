@@ -82,7 +82,9 @@ export type ProductTypeAdmin = {
 
 export type SimpleOrderAdmin = {
   id: string;
-  status: "PENDING" | "PAID" | "CANCELLED";
+  code?: string | null;
+  scheduledAt?: string | null;
+  status: "PENDING" | "PAID" | "READY" | "DELIVERED" | "CANCELLED";
   customerName: string | null;
   customerPhone: string | null;
   totalAmount: string | number;
@@ -401,8 +403,16 @@ export function ManhiaAdminDashboard({
         throw new Error("NÃ£o foi possÃ­vel atualizar os pedidos.");
       }
 
-      const data = (await response.json()) as PedidoAdmin[];
-      setPedidos(data);
+      const data = (await response.json()) as
+        | PedidoAdmin[]
+        | { pedidos?: PedidoAdmin[]; simpleOrders?: SimpleOrderAdmin[] };
+
+      if (Array.isArray(data)) {
+        setPedidos(data);
+      } else {
+        setPedidos(data.pedidos || []);
+        setSimpleOrders(data.simpleOrders || []);
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Falha ao carregar pedidos.";
@@ -1129,7 +1139,7 @@ export function ManhiaAdminDashboard({
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-semibold text-slate-900">
-                              Pedido {order.id.slice(0, 8)}
+                              Pedido {order.code || order.id.slice(0, 8).toUpperCase()}
                             </span>
                             <Badge className="border border-[#d6e7a2] bg-white text-[#0b3d18]">
                               {order.status}
@@ -1137,7 +1147,7 @@ export function ManhiaAdminDashboard({
                           </div>
                           <p className="mt-1 text-sm text-slate-500">
                             {order.customerName || "Cliente nao informado"} -{" "}
-                            {formatDateTime(order.createdAt)}
+                            {formatDateTime(order.scheduledAt || order.createdAt)}
                           </p>
                           {order.customerPhone ? (
                             <p className="mt-1 text-sm text-slate-500">{order.customerPhone}</p>
@@ -1148,6 +1158,9 @@ export function ManhiaAdminDashboard({
                         </p>
                       </div>
                       <p className="mt-2 text-sm text-slate-500">
+                        Entrega/retirada: {formatDateTime(order.scheduledAt || order.createdAt)}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
                         Total: {formatCurrency(Number(order.totalAmount))} - {order.paymentMethodLabel} (
                         {order.paymentPercentage}% agora)
                       </p>

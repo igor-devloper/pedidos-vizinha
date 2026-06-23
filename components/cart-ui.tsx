@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MetodoPagamento } from "@prisma/client";
-import { LoaderCircle, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, LoaderCircle, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
-import { SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
+import { BUSINESS_RULES, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
+import { cn } from "@/lib/utils";
 
 type CartItem = {
   id: string;
@@ -58,6 +59,95 @@ type SelectedItem = {
 const PAYMENT_PERCENTAGES = [50, 100] as const;
 
 let notifyCartChanged: (() => void) | null = null;
+
+function getMinDeliveryDate(minimumLeadHours: number) {
+  const minDate = new Date(Date.now() + minimumLeadHours * 60 * 60 * 1000);
+  minDate.setMinutes(
+    Math.ceil(minDate.getMinutes() / BUSINESS_RULES.slotMinutes) * BUSINESS_RULES.slotMinutes,
+    0,
+    0
+  );
+
+  return minDate;
+}
+
+function formatDateInputValue(value: Date) {
+  const timezoneOffset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - timezoneOffset).toISOString().slice(0, 10);
+}
+
+function formatTimeInputValue(value: Date) {
+  return value.toTimeString().slice(0, 5);
+}
+
+function formatDateLabel(value: string) {
+  if (!value) return "Selecione a data";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "full",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(`${value}T12:00:00`));
+}
+
+function startOfMonth(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
+}
+
+function addMonths(value: Date, amount: number) {
+  return new Date(value.getFullYear(), value.getMonth() + amount, 1);
+}
+
+function getCalendarDays(month: Date) {
+  const firstDay = startOfMonth(month);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells: Array<{ date: Date; currentMonth: boolean }> = [];
+
+  for (let index = startWeekday - 1; index >= 0; index -= 1) {
+    cells.push({ date: new Date(month.getFullYear(), month.getMonth(), -index), currentMonth: false });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push({ date: new Date(month.getFullYear(), month.getMonth(), day), currentMonth: true });
+  }
+
+  while (cells.length % 7 !== 0) {
+    const nextDay = cells.length - (startWeekday + daysInMonth) + 1;
+    cells.push({ date: new Date(month.getFullYear(), month.getMonth() + 1, nextDay), currentMonth: false });
+  }
+
+  return cells;
+}
+
+function buildDeliveryDateTime(date: string, time: string) {
+  return `${date}T${time}`;
+}
+
+function getTimeSlots(dateValue: string, minDate: Date) {
+  if (!dateValue) return [] as string[];
+
+  const selectedDate = new Date(`${dateValue}T12:00:00`);
+  const weekday = selectedDate.getDay();
+  const schedule = BUSINESS_RULES.scheduleByWeekday[weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday];
+
+  if (!schedule) return [] as string[];
+
+  const slots: string[] = [];
+  const selectedKey = dateValue;
+  const minKey = formatDateInputValue(minDate);
+  const openMinutes = schedule.openHour * 60;
+  const closeMinutes = schedule.closeHour * 60;
+  const minMinutes = minDate.getHours() * 60 + Math.ceil(minDate.getMinutes() / BUSINESS_RULES.slotMinutes) * BUSINESS_RULES.slotMinutes;
+  const firstMinutes = Math.max(openMinutes, selectedKey === minKey ? minMinutes : openMinutes);
+
+  for (let minutes = firstMinutes; minutes <= closeMinutes; minutes += BUSINESS_RULES.slotMinutes) {
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    slots.push(`${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`);
+  }
+
+  return slots;
+}
 
 async function readCart() {
   const response = await fetch("/api/cart", { cache: "no-store" });
@@ -142,6 +232,12 @@ export function FloatingCart() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [paymentPercentage, setPaymentPercentage] = useState<50 | 100>(50);
   const [paymentMethod, setPaymentMethod] = useState<MetodoPagamento>(MetodoPagamento.PIX);
+  const minDeliveryDate = useMemo(() => getMinDeliveryDate(BUSINESS_RULES.minimumLeadHours), []);
+  const minDeliveryDateKey = useMemo(() => formatDateInputValue(minDeliveryDate), [minDeliveryDate]);
+  const [deliveryDate, setDeliveryDate] = useState(formatDateInputValue(minDeliveryDate));
+  const [deliveryTime, setDeliveryTime] = useState(formatTimeInputValue(minDeliveryDate));
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(minDeliveryDate));
   const selectedItemsSavePromises = useRef(new Set<Promise<void>>());
 
   const loadCart = async () => {
@@ -212,7 +308,17 @@ export function FloatingCart() {
     }
   };
 
-  const canCheckout = useMemo(() => cart.items.length > 0 && !checkingOut, [cart.items.length, checkingOut]);
+  const calendarDays = useMemo(() => getCalendarDays(displayMonth), [displayMonth]);
+  const timeSlots = useMemo(() => getTimeSlots(deliveryDate, minDeliveryDate), [deliveryDate, minDeliveryDate]);
+  const scheduledAt = buildDeliveryDateTime(deliveryDate, deliveryTime);
+  const selectedDateHasNoSchedule = Boolean(deliveryDate) && timeSlots.length === 0;
+  const selectDeliveryDate = (nextDate: string) => {
+    setDeliveryDate(nextDate);
+    const nextSlots = getTimeSlots(nextDate, minDeliveryDate);
+    if (!nextSlots.includes(deliveryTime)) setDeliveryTime(nextSlots[0] || "");
+    setCalendarOpen(false);
+  };
+  const canCheckout = useMemo(() => cart.items.length > 0 && !checkingOut && Boolean(deliveryDate) && Boolean(deliveryTime), [cart.items.length, checkingOut, deliveryDate, deliveryTime]);
   const allowsPartialPayment = useMemo(
     () => cart.items.length > 0 && cart.items.every((item) => item.permitePagamentoParcial),
     [cart.items]
@@ -278,6 +384,7 @@ export function FloatingCart() {
           customerEmail,
           paymentPercentage,
           paymentMethod,
+          scheduledAt,
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -545,6 +652,86 @@ export function FloatingCart() {
                 <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nome" />
                 <Input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="WhatsApp" />
                 <Input value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="E-mail" />
+              </div>
+
+              <div className="rounded-2xl border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                <label className="text-sm font-bold text-[#0b3d18]">Data e horario de entrega/retirada</label>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setCalendarOpen((current) => !current)}
+                      className="h-11 w-full justify-between border-[#d6e7a2] bg-white px-3 text-left text-[#284a2e] hover:bg-[#f7fde3]"
+                    >
+                      <span className="truncate">{formatDateLabel(deliveryDate)}</span>
+                      <CalendarDays className="h-4 w-4 shrink-0" />
+                    </Button>
+
+                    {calendarOpen ? (
+                      <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-[18rem] rounded-2xl border border-[#d8e8a4] bg-white p-4 shadow-[0_24px_60px_rgba(27,94,32,0.18)]">
+                        <div className="mb-4 flex items-center justify-between">
+                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, -1))} className="h-9 w-9 rounded-full text-[#1b5e20] hover:bg-[#f7fde3]">
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <p className="text-sm font-semibold capitalize text-[#0b2d16]">
+                            {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(displayMonth)}
+                          </p>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, 1))} className="h-9 w-9 rounded-full text-[#1b5e20] hover:bg-[#f7fde3]">
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#6f8a55]">
+                          {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"].map((day) => (<span key={day} className="py-1">{day}</span>))}
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1">
+                          {calendarDays.map(({ date, currentMonth }) => {
+                            const dateKey = formatDateInputValue(date);
+                            const isSelected = dateKey === deliveryDate;
+                            const isDisabled = dateKey < minDeliveryDateKey;
+
+                            return (
+                              <button
+                                key={`${dateKey}-${currentMonth ? "current" : "other"}`}
+                                type="button"
+                                disabled={isDisabled}
+                                onClick={() => selectDeliveryDate(dateKey)}
+                                className={cn(
+                                  "h-10 rounded-xl text-sm transition",
+                                  isSelected ? "bg-[#1b7f31] font-semibold text-white" : "text-[#284a2e] hover:bg-[#f7fde3]",
+                                  !currentMonth && !isSelected && "text-[#9aad8a]",
+                                  isDisabled && "cursor-not-allowed opacity-35 hover:bg-transparent"
+                                )}
+                              >
+                                {date.getDate()}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <Select value={deliveryTime} onValueChange={setDeliveryTime}>
+                    <SelectTrigger className="h-11 w-full border-[#d6e7a2] bg-white">
+                      <SelectValue placeholder="Selecione o horario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeSlots.map((time) => (
+                        <SelectItem key={time} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedDateHasNoSchedule ? (
+                  <p className="mt-2 text-sm text-amber-700">Nao atendemos nessa data. Escolha de terca a sabado, das 10h as 17h, ou domingo, das 9h as 13h.</p>
+                ) : (
+                  <p className="mt-2 text-sm text-[#48654f]">Esse horario acompanha o pedido no dashboard, WhatsApp, Mercado Pago e impressao.</p>
+                )}
               </div>
 
               <div className="grid gap-3 rounded-2xl border border-[#d6e7a2] bg-[#fbfff0] p-4 sm:grid-cols-2">

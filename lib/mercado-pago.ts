@@ -198,6 +198,7 @@ export async function createCartMercadoPagoPreference({
   order: {
     id: string;
     externalReference: string;
+    code?: string | null;
     customerName?: string | null;
     customerEmail?: string | null;
     customerPhone?: string | null;
@@ -230,8 +231,10 @@ export async function createCartMercadoPagoPreference({
   const payload = {
     items: [
       {
-        id: order.id,
-        title: items.length === 1 ? items[0].title : `Pedido ${order.id.slice(0, 8)} - carrinho`,
+        id: order.code || order.id,
+        title: items.length === 1
+          ? `${items[0].title} - Pedido ${order.code || order.id.slice(0, 8).toUpperCase()}`
+          : `Pedido ${order.code || order.id.slice(0, 8).toUpperCase()} - carrinho`,
         quantity: 1,
         currency_id: "BRL",
         unit_price: Number(chargedAmount),
@@ -263,6 +266,7 @@ export async function createCartMercadoPagoPreference({
     },
     metadata: {
       cartOrderId: order.id,
+      cartOrderCode: order.code || order.id.slice(0, 8).toUpperCase(),
       metodoPagamento: paymentMethod,
     },
   };

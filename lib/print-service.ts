@@ -84,6 +84,7 @@ export async function sendCartOrderToPrintService({
   receipt,
   customerName,
   customerPhone,
+  deliveryAt,
   total,
 }: {
   orderId: string;
@@ -92,6 +93,7 @@ export async function sendCartOrderToPrintService({
   receipt: string;
   customerName?: string | null;
   customerPhone?: string | null;
+  deliveryAt?: string | null;
   total: number;
 }) {
   const baseUrl = getPrintServiceUrl();
@@ -126,6 +128,7 @@ export async function sendCartOrderToPrintService({
       order: {
         customerName,
         customerPhone,
+        deliveryAt,
         productName: "Pedido do carrinho",
         total,
       },
