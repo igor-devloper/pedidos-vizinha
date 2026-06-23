@@ -1,11 +1,20 @@
-import { Prisma, type Order, type OrderItem, type OrderStatus } from "@prisma/client";
+import {
+  Prisma,
+  type Order,
+  type OrderItem,
+  type OrderStatus,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { formatCurrency } from "@/lib/pedidos";
 import { sendCartOrderToPrintService } from "@/lib/print-service";
 import { BUSINESS_INFO } from "@/lib/site-config";
 import { sendWhatsappText } from "@/lib/whatsapp";
-import { formatWhatsAppList, formatWhatsAppMessage, WHATSAPP_SECTION_DIVIDER } from "@/lib/whatsapp-message";
+import {
+  formatWhatsAppList,
+  formatWhatsAppMessage,
+  WHATSAPP_SECTION_DIVIDER,
+} from "@/lib/whatsapp-message";
 
 type CartOrderWithItems = Order & {
   items: OrderItem[];
@@ -13,14 +22,19 @@ type CartOrderWithItems = Order & {
   scheduledAt?: Date | string | null;
 };
 
-function cartOrderCode(order: Pick<CartOrderWithItems, "id"> & { code?: string | null }) {
+function cartOrderCode(
+  order: Pick<CartOrderWithItems, "id"> & { code?: string | null },
+) {
   return order.code || order.id.slice(0, 10).toUpperCase();
 }
 
 function formatScheduledAt(order: Pick<CartOrderWithItems, "scheduledAt">) {
   if (!order.scheduledAt) return null;
 
-  const date = order.scheduledAt instanceof Date ? order.scheduledAt : new Date(order.scheduledAt);
+  const date =
+    order.scheduledAt instanceof Date
+      ? order.scheduledAt
+      : new Date(order.scheduledAt);
   if (Number.isNaN(date.getTime())) return null;
 
   return new Intl.DateTimeFormat("pt-BR", {
@@ -40,7 +54,8 @@ function formatCartOrderItems(order: CartOrderWithItems) {
             }
 
             const typed = entry as { tipo?: unknown; quantidade?: unknown };
-            const tipo = typeof typed.tipo === "string" ? typed.tipo.trim() : "";
+            const tipo =
+              typeof typed.tipo === "string" ? typed.tipo.trim() : "";
             const quantidade = Number(typed.quantidade);
 
             if (!tipo || !Number.isFinite(quantidade) || quantidade <= 0) {
@@ -68,7 +83,9 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
     `Nome: ${order.customerName || "Nao informado"}`,
     order.customerPhone ? `WhatsApp: ${order.customerPhone}` : null,
     order.customerEmail ? `E-mail: ${order.customerEmail}` : null,
-    formatScheduledAt(order) ? `Entrega/retirada: ${formatScheduledAt(order)}` : null,
+    formatScheduledAt(order)
+      ? `Entrega/retirada: ${formatScheduledAt(order)}`
+      : null,
     "-".repeat(30),
     "#ITENS",
     ...formatCartOrderItems(order),
@@ -90,12 +107,20 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
     [
       `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
       order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
-      formatScheduledAt(order) ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}` : null,
+      formatScheduledAt(order)
+        ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}`
+        : null,
     ],
-    [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${cartOrderCode(order)}*`, WHATSAPP_SECTION_DIVIDER],
+    [
+      WHATSAPP_SECTION_DIVIDER,
+      `🛍️ *Pedido #${cartOrderCode(order)}*`,
+      WHATSAPP_SECTION_DIVIDER,
+    ],
     [
       "📦 *Itens:*",
-      ...formatWhatsAppList(formatCartOrderItems(order)).map((item) => `  ${item}`),
+      ...formatWhatsAppList(formatCartOrderItems(order)).map(
+        (item) => `  ${item}`,
+      ),
       `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
       `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
       `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
@@ -115,12 +140,20 @@ function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
       `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
       order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
       order.customerEmail ? `✉️ *E-mail:* ${order.customerEmail}` : null,
-      formatScheduledAt(order) ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}` : null,
+      formatScheduledAt(order)
+        ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}`
+        : null,
     ],
-    [WHATSAPP_SECTION_DIVIDER, `🛍️ *Pedido #${cartOrderCode(order)}*`, WHATSAPP_SECTION_DIVIDER],
+    [
+      WHATSAPP_SECTION_DIVIDER,
+      `🛍️ *Pedido #${cartOrderCode(order)}*`,
+      WHATSAPP_SECTION_DIVIDER,
+    ],
     [
       "📦 *Itens:*",
-      ...formatWhatsAppList(formatCartOrderItems(order)).map((item) => `  ${item}`),
+      ...formatWhatsAppList(formatCartOrderItems(order)).map(
+        (item) => `  ${item}`,
+      ),
       `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
       `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
       `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
@@ -156,16 +189,24 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
 
     if (claim.count > 0) {
       try {
-        const result = await sendWhatsappText(order.customerPhone, buildCartOrderClientMessage(order));
+        const result = await sendWhatsappText(
+          order.customerPhone,
+          buildCartOrderClientMessage(order),
+        );
         if (!result.ok) {
-          throw new Error("Envio para cliente nao confirmado pelo servico de WhatsApp.");
+          throw new Error(
+            "Envio para cliente nao confirmado pelo servico de WhatsApp.",
+          );
         }
       } catch (error) {
         await prisma.order.updateMany({
           where: { id: order.id, notificadoClienteAt: claimedAt },
           data: { notificadoClienteAt: null },
         });
-        console.error("Falha ao notificar cliente do carrinho via WhatsApp", { orderId: order.id, error });
+        console.error("Falha ao notificar cliente do carrinho via WhatsApp", {
+          orderId: order.id,
+          error,
+        });
       }
     }
   }
@@ -179,16 +220,24 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
 
     if (claim.count > 0) {
       try {
-        const result = await sendWhatsappText(BUSINESS_INFO.ownerPhone, buildCartOrderOwnerMessage(order));
+        const result = await sendWhatsappText(
+          BUSINESS_INFO.ownerPhone,
+          buildCartOrderOwnerMessage(order),
+        );
         if (!result.ok) {
-          throw new Error("Envio para Vizinha nao confirmado pelo servico de WhatsApp.");
+          throw new Error(
+            "Envio para Vizinha nao confirmado pelo servico de WhatsApp.",
+          );
         }
       } catch (error) {
         await prisma.order.updateMany({
           where: { id: order.id, notificadoVizinhaAt: claimedAt },
           data: { notificadoVizinhaAt: null },
         });
-        console.error("Falha ao notificar Vizinha sobre carrinho via WhatsApp", { orderId: order.id, error });
+        console.error(
+          "Falha ao notificar Vizinha sobre carrinho via WhatsApp",
+          { orderId: order.id, error },
+        );
       }
     }
   }
@@ -207,7 +256,9 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
       receipt: buildCartOrderPrintableReceipt(order),
       customerName: order.customerName,
       customerPhone: order.customerPhone,
-      deliveryAt: order.scheduledAt ? new Date(order.scheduledAt).toISOString() : undefined,
+      deliveryAt: order.scheduledAt
+        ? new Date(order.scheduledAt).toISOString()
+        : undefined,
       total: Number(order.chargedAmount || order.totalAmount),
     });
 
@@ -217,7 +268,10 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
       include: { items: true },
     });
   } catch (error) {
-    console.error("Falha ao imprimir pedido do carrinho aceito", { orderId: order.id, error });
+    console.error("Falha ao imprimir pedido do carrinho aceito", {
+      orderId: order.id,
+      error,
+    });
     return order;
   }
 }
@@ -225,6 +279,25 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
 export async function acceptPaidCartOrder(order: CartOrderWithItems) {
   await notifyPaidCartOrder(order);
   return printAcceptedCartOrder(order);
+}
+
+export async function processPaidCartOrdersSideEffects() {
+  const orders = await prisma.order.findMany({
+    where: {
+      status: "PAID",
+      OR: [
+        { impressoAutomaticamenteAt: null },
+        { notificadoClienteAt: null },
+        { notificadoVizinhaAt: null },
+      ],
+    },
+    include: { items: true },
+    take: 20,
+  });
+
+  for (const order of orders) {
+    await acceptPaidCartOrder(order);
+  }
 }
 
 export async function updateCartOrderStatus(id: string, status: OrderStatus) {
@@ -241,8 +314,14 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
     where: { id },
     data: {
       status,
-      prontoAt: enteringReady ? new Date() : leavingReady ? null : current.prontoAt,
-      notificadoProntoClienteAt: enteringReady ? null : current.notificadoProntoClienteAt,
+      prontoAt: enteringReady
+        ? new Date()
+        : leavingReady
+          ? null
+          : current.prontoAt,
+      notificadoProntoClienteAt: enteringReady
+        ? null
+        : current.notificadoProntoClienteAt,
     },
     include: { items: true },
   });
@@ -256,16 +335,24 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
 
     if (claim.count > 0) {
       try {
-        const result = await sendWhatsappText(order.customerPhone, buildCartOrderReadyMessage(order));
+        const result = await sendWhatsappText(
+          order.customerPhone,
+          buildCartOrderReadyMessage(order),
+        );
         if (!result.ok) {
-          throw new Error("Envio de pronto para cliente nao confirmado pelo servico de WhatsApp.");
+          throw new Error(
+            "Envio de pronto para cliente nao confirmado pelo servico de WhatsApp.",
+          );
         }
       } catch (error) {
         await prisma.order.updateMany({
           where: { id: order.id, notificadoProntoClienteAt: claimedAt },
           data: { notificadoProntoClienteAt: null },
         });
-        console.error("Falha ao notificar pedido do carrinho pronto", { orderId: order.id, error });
+        console.error("Falha ao notificar pedido do carrinho pronto", {
+          orderId: order.id,
+          error,
+        });
       }
     }
   }
@@ -310,7 +397,9 @@ export async function markCartOrderPaidManually({
   return acceptPaidCartOrder(updated);
 }
 
-export type SerializedCartOrderAdmin = ReturnType<typeof serializeCartOrderForAdmin>;
+export type SerializedCartOrderAdmin = ReturnType<
+  typeof serializeCartOrderForAdmin
+>;
 
 export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
   return {
@@ -319,7 +408,9 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     code: cartOrderCode(order),
-    scheduledAt: order.scheduledAt ? new Date(order.scheduledAt).toISOString() : null,
+    scheduledAt: order.scheduledAt
+      ? new Date(order.scheduledAt).toISOString()
+      : null,
     totalAmount: Number(order.totalAmount),
     paymentPercentage: order.paymentPercentage,
     paymentMethodLabel: order.paymentMethodLabel,

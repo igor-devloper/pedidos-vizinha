@@ -13,7 +13,10 @@ import {
   type StoreSettingsData,
 } from "@/components/manhia-admin-dashboard";
 import { getStoreSettings } from "@/lib/business-hours";
-import { serializeCartOrderForAdmin } from "@/lib/cart-order-service";
+import {
+  processPaidCartOrdersSideEffects,
+  serializeCartOrderForAdmin,
+} from "@/lib/cart-order-service";
 import { normalizeStoreSiteTheme } from "@/lib/site-theme";
 
 type ProdutoWithPromocao = Awaited<
@@ -80,6 +83,7 @@ async function getProductTypes(): Promise<ProductTypeAdmin[]> {
 
 async function getSimpleOrders(): Promise<SimpleOrderAdmin[]> {
   try {
+    await processPaidCartOrdersSideEffects();
     const orders = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },
       include: { items: true },
@@ -123,11 +127,16 @@ async function getPedidos(): Promise<PedidoAdmin[]> {
       produtoNomeSnapshot: pedido.produtoNomeSnapshot,
       notificadoClienteAt: pedido.notificadoClienteAt?.toISOString() || null,
       notificadoVizinhaAt: pedido.notificadoVizinhaAt?.toISOString() || null,
-      prontoAt: (pedido as { prontoAt?: Date | null }).prontoAt?.toISOString() || null,
+      prontoAt:
+        (pedido as { prontoAt?: Date | null }).prontoAt?.toISOString() || null,
       notificadoProntoClienteAt:
-        (pedido as { notificadoProntoClienteAt?: Date | null }).notificadoProntoClienteAt?.toISOString() || null,
+        (
+          pedido as { notificadoProntoClienteAt?: Date | null }
+        ).notificadoProntoClienteAt?.toISOString() || null,
       notificadoToleranciaAt:
-        (pedido as { notificadoToleranciaAt?: Date | null }).notificadoToleranciaAt?.toISOString() || null,
+        (
+          pedido as { notificadoToleranciaAt?: Date | null }
+        ).notificadoToleranciaAt?.toISOString() || null,
       impressoAutomaticamenteAt:
         pedido.impressoAutomaticamenteAt?.toISOString() || null,
       itens: pedido.itens.map((item) => ({
@@ -182,14 +191,15 @@ export default async function ManhiaPage() {
     return <ManhiaLoginForm isConfigured={isConfigured} />;
   }
 
-  const [produtos, pedidos, simpleOrders, productTypes, cupons, settingsRaw] = await Promise.all([
-    getProdutos(),
-    getPedidos(),
-    getSimpleOrders(),
-    getProductTypes(),
-    getCupons(),
-    getStoreSettings(),
-  ]);
+  const [produtos, pedidos, simpleOrders, productTypes, cupons, settingsRaw] =
+    await Promise.all([
+      getProdutos(),
+      getPedidos(),
+      getSimpleOrders(),
+      getProductTypes(),
+      getCupons(),
+      getStoreSettings(),
+    ]);
 
   const initialSettings: StoreSettingsData = {
     isOpen: settingsRaw.isOpen,

@@ -11,7 +11,10 @@ import {
 } from "@/lib/cart";
 import { prisma } from "@/lib/db";
 import { createCartMercadoPagoPreference } from "@/lib/mercado-pago";
-import { calculatePaymentAmounts, validatePedidoAgainstProduto } from "@/lib/pedidos";
+import {
+  calculatePaymentAmounts,
+  validatePedidoAgainstProduto,
+} from "@/lib/pedidos";
 import { getProdutoComboItens } from "@/lib/produtos";
 
 export async function POST(req: Request) {
@@ -32,42 +35,55 @@ export async function POST(req: Request) {
     }
 
     const paymentPercentage = body.paymentPercentage === 50 ? 50 : 100;
-    const paymentMethod = Object.values(MetodoPagamento).includes(body.paymentMethod as MetodoPagamento)
+    const paymentMethod = Object.values(MetodoPagamento).includes(
+      body.paymentMethod as MetodoPagamento,
+    )
       ? (body.paymentMethod as MetodoPagamento)
       : MetodoPagamento.PIX;
-    const allowsPartial = cart.items.every((item) => item.product.permitePagamentoParcial);
+    const allowsPartial = cart.items.every(
+      (item) => item.product.permitePagamentoParcial,
+    );
 
     if (paymentPercentage === 50 && !allowsPartial) {
       return NextResponse.json(
         { error: "Um dos produtos do carrinho exige pagamento integral." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     for (const item of cart.items) {
-      const selectedItems = normalizeCartSelectedItems(item.selectedItems).filter(
-        (entry) => entry.quantidade > 0
-      );
+      const selectedItems = normalizeCartSelectedItems(
+        item.selectedItems,
+      ).filter((entry) => entry.quantidade > 0);
 
       validatePedidoAgainstProduto(
         {
           ...item.product,
-          comboItens: getProdutoComboItens(item.product as { comboItens?: unknown }),
+          comboItens: getProdutoComboItens(
+            item.product as { comboItens?: unknown },
+          ),
         },
         selectedItems,
-        item.quantity
+        item.quantity,
       );
     }
 
     const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
 
     if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
-      return NextResponse.json({ error: "Informe uma data e horario validos." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Informe uma data e horario validos." },
+        { status: 400 },
+      );
     }
 
-    const payment = calculatePaymentAmounts(snapshot.totalAmount, paymentPercentage, paymentMethod);
-    const externalReference = `cart-${randomUUID()}`;
+    const payment = calculatePaymentAmounts(
+      snapshot.totalAmount,
+      paymentPercentage,
+      paymentMethod,
+    );
     const orderCode = `C${Date.now().toString(36).toUpperCase()}${randomUUID().slice(0, 4).toUpperCase()}`;
+    const externalReference = `cart-${orderCode}`;
 
     const order = await prisma.order.create({
       data: {
@@ -89,14 +105,16 @@ export async function POST(req: Request) {
           create: cart.items.map((item) => {
             const unitPrice = getCartProductUnitPrice(item.product);
             const subtotal = unitPrice * item.quantity;
-            const selectedItems = normalizeCartSelectedItems(item.selectedItems).filter(
-              (entry) => entry.quantidade > 0
-            );
+            const selectedItems = normalizeCartSelectedItems(
+              item.selectedItems,
+            ).filter((entry) => entry.quantidade > 0);
 
             return {
               productId: item.productId,
               productName: item.product.nome,
-              productType: item.product.productType?.name || String(item.product.categoria),
+              productType:
+                item.product.productType?.name ||
+                String(item.product.categoria),
               quantity: item.quantity,
               unitPrice,
               subtotal,
@@ -147,6 +165,9 @@ export async function POST(req: Request) {
     return response;
   } catch (error) {
     console.error("POST /api/checkout/cart error", error);
-    return NextResponse.json({ error: "Erro ao finalizar carrinho." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro ao finalizar carrinho." },
+      { status: 500 },
+    );
   }
 }

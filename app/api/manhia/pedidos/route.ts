@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isManhiaRequestAuthenticated } from "@/lib/admin-auth";
 import { processReadyPedidoToleranceReminders } from "@/lib/pedido-service";
-import { serializeCartOrderForAdmin } from "@/lib/cart-order-service";
+import {
+  processPaidCartOrdersSideEffects,
+  serializeCartOrderForAdmin,
+} from "@/lib/cart-order-service";
 
 export async function GET(req: Request) {
   if (!isManhiaRequestAuthenticated(req)) {
@@ -12,6 +15,7 @@ export async function GET(req: Request) {
 
   try {
     await processReadyPedidoToleranceReminders();
+    await processPaidCartOrdersSideEffects();
 
     const pedidos = await prisma.pedido.findMany({
       orderBy: [{ createdAt: "desc" }],
@@ -35,7 +39,7 @@ export async function GET(req: Request) {
     console.error("GET /api/manhia/pedidos error", error);
     return NextResponse.json(
       { error: "Não foi possível carregar os pedidos." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
