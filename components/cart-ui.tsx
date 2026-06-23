@@ -120,7 +120,9 @@ function getCalendarDays(month: Date) {
 }
 
 function buildDeliveryDateTime(date: string, time: string) {
-  return `${date}T${time}`;
+  // Horário escolhido na loja em America/Sao_Paulo.
+  // Enviar com offset evita o bug de selecionar 10:00 e salvar 07:00 no servidor em UTC.
+  return `${date}T${time}:00-03:00`;
 }
 
 function getTimeSlots(dateValue: string, minDate: Date) {

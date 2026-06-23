@@ -300,6 +300,34 @@ export async function processPaidCartOrdersSideEffects() {
   }
 }
 
+
+export async function printCartOrderReceipt(id: string) {
+  const order = await loadCartOrder(id);
+
+  if (!order) {
+    throw new Error("Pedido do carrinho nao encontrado.");
+  }
+
+  await sendCartOrderToPrintService({
+    orderId: order.id,
+    code: cartOrderCode(order),
+    reason: "manual-reprint",
+    receipt: buildCartOrderPrintableReceipt(order),
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    deliveryAt: order.scheduledAt
+      ? new Date(order.scheduledAt).toISOString()
+      : undefined,
+    total: Number(order.chargedAmount || order.totalAmount),
+  });
+
+  return prisma.order.update({
+    where: { id: order.id },
+    data: { impressoAutomaticamenteAt: order.impressoAutomaticamenteAt || new Date() },
+    include: { items: true },
+  });
+}
+
 export async function updateCartOrderStatus(id: string, status: OrderStatus) {
   const current = await loadCartOrder(id);
 

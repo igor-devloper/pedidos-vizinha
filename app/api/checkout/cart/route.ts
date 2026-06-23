@@ -17,6 +17,19 @@ import {
 } from "@/lib/pedidos";
 import { getProdutoComboItens } from "@/lib/produtos";
 
+function parseSaoPauloScheduledAt(value?: string) {
+  if (!value) return null;
+
+  // Quando vier só "YYYY-MM-DDTHH:mm", esse horário é local de Brasília/São Paulo.
+  // Sem o offset, o Node interpreta no fuso do servidor e pode salvar 3h errado.
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
+    ? value
+    : `${value.length === 16 ? `${value}:00` : value}-03:00`;
+
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
@@ -68,9 +81,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+    const scheduledAt = parseSaoPauloScheduledAt(body.scheduledAt);
 
-    if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
+    if (!scheduledAt) {
       return NextResponse.json(
         { error: "Informe uma data e horario validos." },
         { status: 400 },

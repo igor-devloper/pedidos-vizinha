@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -1156,6 +1156,41 @@ export function ManhiaAdminDashboard({
     }
   };
 
+  const handlePrintSimpleOrder = async (orderId: string) => {
+    try {
+      setPrintingPedidoId(orderId);
+      const response = await fetch(`/api/manhia/orders/${orderId}/imprimir`, {
+        method: "POST",
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | (SimpleOrderAdmin & { error?: string })
+        | null;
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "Nao foi possivel enviar o carrinho para a impressora.",
+        );
+      }
+
+      const updatedOrder = data as SimpleOrderAdmin;
+      setSimpleOrders((current) =>
+        current.map((item) =>
+          item.id === updatedOrder.id ? updatedOrder : item,
+        ),
+      );
+      toast.success("Pedido do carrinho enviado para a impressora.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Falha ao imprimir pedido do carrinho.",
+      );
+    } finally {
+      setPrintingPedidoId(null);
+    }
+  };
+
   const handleUpdateSimpleOrderStatus = async (
     orderId: string,
     status: SimpleOrderAdmin["status"],
@@ -1666,6 +1701,7 @@ export function ManhiaAdminDashboard({
                             key={order.id}
                             type="button"
                             draggable={statusLoadingId !== order.id}
+                            onClick={() => void handlePrintSimpleOrder(order.id)}
                             onDragStart={() =>
                               setDraggedPedidoId(`cart:${order.id}`)
                             }
