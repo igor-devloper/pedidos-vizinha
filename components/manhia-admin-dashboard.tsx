@@ -100,6 +100,7 @@ export type SimpleOrderAdmin = {
     quantity: number;
     unitPrice: string | number;
     subtotal: string | number;
+    selectedItems?: Array<{ tipo: string; quantidade: number }> | unknown;
   }[];
 };
 
@@ -143,6 +144,7 @@ export type PedidoAdmin = {
     | "ENTREGUE"
     | "CANCELADO";
   produtoNomeSnapshot: string;
+  createdAt: string;
   notificadoClienteAt: string | null;
   notificadoVizinhaAt: string | null;
   prontoAt?: string | null;
@@ -285,6 +287,65 @@ function getSimpleOrderDate(
   order: Pick<SimpleOrderAdmin, "createdAt" | "scheduledAt">,
 ) {
   return order.scheduledAt || order.createdAt;
+}
+
+function normalizeSimpleOrderSelectedItems(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const typed = entry as { tipo?: unknown; quantidade?: unknown };
+      const tipo = typeof typed.tipo === "string" ? typed.tipo.trim() : "";
+      const quantidade = Number(typed.quantidade);
+
+      if (!tipo || !Number.isFinite(quantidade) || quantidade <= 0) {
+        return null;
+      }
+
+      return { tipo, quantidade };
+    })
+    .filter((entry): entry is { tipo: string; quantidade: number } =>
+      Boolean(entry),
+    );
+}
+
+function getSimpleOrderSalgados(order: SimpleOrderAdmin) {
+  const map = new Map<string, number>();
+
+  for (const item of order.items) {
+    for (const selected of normalizeSimpleOrderSelectedItems(
+      item.selectedItems,
+    )) {
+      map.set(
+        selected.tipo,
+        (map.get(selected.tipo) ?? 0) + selected.quantidade,
+      );
+    }
+  }
+
+  return Array.from(map.entries()).map(([tipo, quantidade]) => ({
+    tipo,
+    quantidade,
+  }));
+}
+
+function getSimpleOrderSalgadosSummary(order: SimpleOrderAdmin) {
+  const salgados = getSimpleOrderSalgados(order);
+  const total = salgados.reduce((sum, item) => sum + item.quantidade, 0);
+
+  if (salgados.length === 0) {
+    return `${order.items.reduce((sum, item) => sum + item.quantity, 0)} produto(s)`;
+  }
+
+  return `${total} un - ${salgados
+    .map((item) => `${item.tipo}: ${item.quantidade}`)
+    .join(" • ")}`;
 }
 
 function getSimpleOrderStatusLabel(status: SimpleOrderAdmin["status"]) {
@@ -438,6 +499,60 @@ export function ManhiaAdminDashboard({
     }),
     [simpleOrders],
   );
+  const kanbanPedidosPorStatus = useMemo(
+    () =>
+      KANBAN_COLUMNS.reduce(
+        (acc, column) => {
+          acc[column.status] = [
+            ...pedidosPorStatus[column.status].map((pedido) => ({
+              kind: "pedido" as const,
+              id: pedido.id,
+              createdAt: pedido.createdAt,
+              deliveryAt: pedido.dataEntrega,
+              pedido,
+            })),
+            ...simpleOrdersPorStatus[column.status].map((order) => ({
+              kind: "cart" as const,
+              id: order.id,
+              createdAt: order.createdAt,
+              deliveryAt: getSimpleOrderDate(order),
+              order,
+            })),
+          ].sort(
+            (a, b) =>
+              new Date(a.deliveryAt).getTime() -
+                new Date(b.deliveryAt).getTime() ||
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          );
+
+          return acc;
+        },
+        {
+          PAGO: [],
+          PRONTO: [],
+          ENTREGUE: [],
+        } as Record<
+          "PAGO" | "PRONTO" | "ENTREGUE",
+          Array<
+            | {
+                kind: "pedido";
+                id: string;
+                createdAt: string;
+                deliveryAt: string;
+                pedido: PedidoAdmin;
+              }
+            | {
+                kind: "cart";
+                id: string;
+                createdAt: string;
+                deliveryAt: string;
+                order: SimpleOrderAdmin;
+              }
+          >
+        >,
+      ),
+    [pedidosPorStatus, simpleOrdersPorStatus],
+  );
   const pedidosPendentes = useMemo(
     () => pedidos.filter((pedido) => pedido.status === "PENDENTE_PAGAMENTO"),
     [pedidos],
@@ -462,22 +577,43 @@ export function ManhiaAdminDashboard({
     [pedidosAceitos],
   );
 
+  const simpleOrdersParaProduzir = useMemo(
+    () =>
+      simpleOrders.filter(
+        (order) => order.status === "PAID" || order.status === "READY",
+      ),
+    [simpleOrders],
+  );
+
   const salgadosPorDia = useMemo(() => {
     const map = new Map<string, Map<string, number>>();
+
+    const addItem = (dia: string, tipo: string, quantidade: number) => {
+      if (!map.has(dia)) map.set(dia, new Map());
+      const tiposMap = map.get(dia)!;
+      tiposMap.set(tipo, (tiposMap.get(tipo) ?? 0) + quantidade);
+    };
+
     for (const pedido of pedidosParaProduzir) {
       const dia = new Intl.DateTimeFormat("pt-BR", {
         dateStyle: "short",
         timeZone: "America/Sao_Paulo",
       }).format(new Date(pedido.dataEntrega));
-      if (!map.has(dia)) map.set(dia, new Map());
-      const tiposMap = map.get(dia)!;
       for (const item of pedido.itens) {
-        tiposMap.set(
-          item.tipo,
-          (tiposMap.get(item.tipo) ?? 0) + item.quantidade,
-        );
+        addItem(dia, item.tipo, item.quantidade);
       }
     }
+
+    for (const order of simpleOrdersParaProduzir) {
+      const dia = new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeZone: "America/Sao_Paulo",
+      }).format(new Date(getSimpleOrderDate(order)));
+      for (const item of getSimpleOrderSalgados(order)) {
+        addItem(dia, item.tipo, item.quantidade);
+      }
+    }
+
     return Array.from(map.entries()).map(([dia, tiposMap]) => ({
       dia,
       itens: Array.from(tiposMap.entries())
@@ -485,7 +621,30 @@ export function ManhiaAdminDashboard({
         .sort((a, b) => b.quantidade - a.quantidade),
       total: Array.from(tiposMap.values()).reduce((s, q) => s + q, 0),
     }));
-  }, [pedidosParaProduzir]);
+  }, [pedidosParaProduzir, simpleOrdersParaProduzir]);
+
+  const salgadosTotaisPorTipo = useMemo(() => {
+    const map = new Map<string, number>();
+
+    for (const dia of salgadosPorDia) {
+      for (const item of dia.itens) {
+        map.set(item.tipo, (map.get(item.tipo) ?? 0) + item.quantidade);
+      }
+    }
+
+    return Array.from(map.entries())
+      .map(([tipo, quantidade]) => ({ tipo, quantidade }))
+      .sort((a, b) => b.quantidade - a.quantidade || a.tipo.localeCompare(b.tipo));
+  }, [salgadosPorDia]);
+
+  const totalSalgadosParaProduzir = useMemo(
+    () =>
+      salgadosTotaisPorTipo.reduce(
+        (total, item) => total + item.quantidade,
+        0,
+      ),
+    [salgadosTotaisPorTipo],
+  );
 
   const refreshPedidos = async () => {
     try {
@@ -1651,8 +1810,7 @@ export function ManhiaAdminDashboard({
                             {column.title}
                           </h3>
                           <p className="text-sm text-slate-500">
-                            {pedidosPorStatus[column.status].length +
-                              simpleOrdersPorStatus[column.status].length}{" "}
+                            {kanbanPedidosPorStatus[column.status].length}{" "}
                             pedido(s)
                           </p>
                         </div>
@@ -1661,11 +1819,16 @@ export function ManhiaAdminDashboard({
                         </Badge>
                       </div>
 
-                      <div className="space-y-3">
-                        {pedidosPorStatus[column.status].map((pedido) => (
+                      <div className="flex flex-col gap-3">
+                        {kanbanPedidosPorStatus[column.status].map((entry, index) => {
+                          if (entry.kind === "cart") return null;
+                          const { pedido } = entry;
+
+                          return (
                           <button
-                            key={pedido.id}
+                            key={`pedido:${pedido.id}`}
                             type="button"
+                            style={{ order: index }}
                             draggable={statusLoadingId !== pedido.id}
                             onDragStart={() =>
                               setDraggedPedidoId(`pedido:${pedido.id}`)
@@ -1694,12 +1857,18 @@ export function ManhiaAdminDashboard({
                               {formatDateTime(pedido.dataEntrega)}
                             </p>
                           </button>
-                        ))}
+                          );
+                        })}
 
-                        {simpleOrdersPorStatus[column.status].map((order) => (
+                        {kanbanPedidosPorStatus[column.status].map((entry, index) => {
+                          if (entry.kind === "pedido") return null;
+                          const { order } = entry;
+
+                          return (
                           <button
-                            key={order.id}
+                            key={`cart:${order.id}`}
                             type="button"
+                            style={{ order: index }}
                             title="Clique para imprimir o pedido do carrinho"
                             aria-label={`Imprimir pedido do carrinho ${getSimpleOrderCode(order)}`}
                             draggable={statusLoadingId !== order.id}
@@ -1733,17 +1902,19 @@ export function ManhiaAdminDashboard({
                               {order.customerName || "Cliente nao informado"} -{" "}
                               {formatDateTime(getSimpleOrderDate(order))}
                             </p>
+                            <p className="mt-1 truncate text-xs text-slate-500">
+                              {getSimpleOrderSalgadosSummary(order)}
+                            </p>
                             <p className="mt-1 truncate text-xs text-slate-400">
                               Carrinho •{" "}
                               {getSimpleOrderStatusLabel(order.status)} •{" "}
                               {order.paymentMethodLabel}
                             </p>
                           </button>
-                        ))}
+                          );
+                        })}
 
-                        {pedidosPorStatus[column.status].length +
-                          simpleOrdersPorStatus[column.status].length ===
-                        0 ? (
+                        {kanbanPedidosPorStatus[column.status].length === 0 ? (
                           <p className="rounded-2xl border border-dashed border-[#d6e7a2] p-4 text-sm text-slate-500">
                             Sem pedidos nesta etapa.
                           </p>
@@ -1917,6 +2088,69 @@ export function ManhiaAdminDashboard({
                 </p>
               </div>
             </div>
+
+            {salgadosTotaisPorTipo.length > 0 ? (
+              <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                  <Card className="border-[#d6e7a2] bg-[#f7fde7] shadow-lg shadow-green-900/5">
+                    <CardContent className="p-5">
+                      <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                        Total geral
+                      </p>
+                      <p className="mt-2 text-4xl font-bold text-[#0b3d18]">
+                        {totalSalgadosParaProduzir}
+                      </p>
+                      <p className="text-sm font-medium text-slate-500">
+                        unidades para produzir
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
+                    <CardContent className="p-5">
+                      <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                        Tipos no preparo
+                      </p>
+                      <p className="mt-2 text-4xl font-bold text-[#0b3d18]">
+                        {salgadosTotaisPorTipo.length}
+                      </p>
+                      <p className="text-sm font-medium text-slate-500">
+                        sabores consolidados
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
+                  <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0] pb-3 pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <CardTitle className="text-lg text-[#0b3d18]">
+                        Total por tipo de salgado
+                      </CardTitle>
+                      <Badge className="border border-[#d6e7a2] bg-[#fff3a8] text-[#0b3d18]">
+                        {totalSalgadosParaProduzir} un
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-5">
+                    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                      {salgadosTotaisPorTipo.map(({ tipo, quantidade }) => (
+                        <div
+                          key={tipo}
+                          className="flex min-h-16 items-center justify-between gap-4 rounded-2xl border border-[#d6e7a2] bg-[#fbfff0] px-4 py-3"
+                        >
+                          <span className="text-sm font-semibold text-slate-700">
+                            {tipo}
+                          </span>
+                          <span className="shrink-0 text-lg font-bold text-[#1b7f31]">
+                            {quantidade} un
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : null}
 
             {salgadosPorDia.length === 0 ? (
               <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">

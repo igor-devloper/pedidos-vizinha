@@ -125,6 +125,7 @@ async function getPedidos(): Promise<PedidoAdmin[]> {
       totalTipos: pedido.totalTipos,
       status: pedido.status,
       produtoNomeSnapshot: pedido.produtoNomeSnapshot,
+      createdAt: pedido.createdAt.toISOString(),
       notificadoClienteAt: pedido.notificadoClienteAt?.toISOString() || null,
       notificadoVizinhaAt: pedido.notificadoVizinhaAt?.toISOString() || null,
       prontoAt:

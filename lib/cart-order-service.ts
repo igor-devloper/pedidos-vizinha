@@ -458,6 +458,7 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
       quantity: item.quantity,
       unitPrice: Number(item.unitPrice),
       subtotal: Number(item.subtotal),
+      selectedItems: item.selectedItems,
     })),
   };
 }
