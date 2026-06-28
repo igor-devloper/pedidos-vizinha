@@ -149,7 +149,9 @@ export async function POST(req: Request) {
       );
     }
 
-    validateDeliveryDate(scheduledAtForRules, new Date(), settings.minimumLeadHours);
+    validateDeliveryDate(scheduledAtForRules, new Date(), settings.minimumLeadHours, {
+      operationSchedule: settings.operationSchedule,
+    });
 
     if (!settings.allowMultipleOrdersPerSlot) {
       const [conflictingPedido, conflictingOrder] = await Promise.all([

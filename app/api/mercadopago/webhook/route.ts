@@ -126,6 +126,10 @@ export async function POST(req: Request) {
       }
     } catch (processingErr) {
       console.error("[MP webhook] Erro ao processar pagamento:", processingErr);
+      return NextResponse.json(
+        { ok: false, error: "payment-processing-failed" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });

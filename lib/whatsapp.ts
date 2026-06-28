@@ -38,6 +38,7 @@ async function resolveBotInstanceId(baseUrl: string, apiKey: string, preferredIn
         Authorization: `Bearer ${apiKey.replace(/^Bearer\s+/i, "")}`,
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(4000),
     });
 
     if (!response.ok) {
@@ -107,6 +108,7 @@ export async function sendWhatsappText(number: string, text: string) {
         number: normalized,
         text: formattedText,
       }),
+      signal: AbortSignal.timeout(6000),
     });
 
     if (response.ok) {
@@ -171,6 +173,7 @@ export async function sendWhatsappImage({
         imageUrl,
         caption: caption ? formatWhatsAppText(caption) : undefined,
       }),
+      signal: AbortSignal.timeout(6000),
     });
 
     if (response.ok) {

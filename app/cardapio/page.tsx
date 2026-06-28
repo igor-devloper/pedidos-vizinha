@@ -416,6 +416,7 @@ export default async function CardapioPage() {
           isOpen: businessStatus.isOpen,
           message: businessStatus.message,
           minimumLeadHours: businessStatus.minimumLeadHours,
+          operationSchedule: businessStatus.operationSchedule,
         }}
       />
     </main>

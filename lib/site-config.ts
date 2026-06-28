@@ -5,17 +5,66 @@ function parseFee(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type BusinessDaySchedule = {
+  isOpen: boolean;
+  openHour: number;
+  closeHour: number;
+};
+export type BusinessScheduleByWeekday = Record<WeekdayIndex, BusinessDaySchedule>;
+
+export const DEFAULT_OPERATION_SCHEDULE: BusinessScheduleByWeekday = {
+  0: { isOpen: true, openHour: 9, closeHour: 13 },
+  1: { isOpen: false, openHour: 10, closeHour: 17 },
+  2: { isOpen: true, openHour: 10, closeHour: 17 },
+  3: { isOpen: true, openHour: 10, closeHour: 17 },
+  4: { isOpen: true, openHour: 10, closeHour: 17 },
+  5: { isOpen: true, openHour: 10, closeHour: 17 },
+  6: { isOpen: true, openHour: 10, closeHour: 17 },
+};
+
+const WEEKDAY_KEYS = ["0", "1", "2", "3", "4", "5", "6"] as const;
+
+function normalizeHour(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(23, Math.max(0, Math.round(parsed)));
+}
+
+export function normalizeOperationSchedule(input: unknown): BusinessScheduleByWeekday {
+  const raw = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+
+  return WEEKDAY_KEYS.reduce((schedule, key) => {
+    const weekday = Number(key) as WeekdayIndex;
+    const fallback = DEFAULT_OPERATION_SCHEDULE[weekday];
+    const rawDay = raw[key] && typeof raw[key] === "object" ? (raw[key] as Record<string, unknown>) : {};
+    const openHour = normalizeHour(rawDay.openHour, fallback.openHour);
+    const closeHour = Math.max(openHour, normalizeHour(rawDay.closeHour, fallback.closeHour));
+
+    schedule[weekday] = {
+      isOpen: typeof rawDay.isOpen === "boolean" ? rawDay.isOpen : fallback.isOpen,
+      openHour,
+      closeHour,
+    };
+
+    return schedule;
+  }, {} as BusinessScheduleByWeekday);
+}
+
+export function getScheduleForWeekday(
+  schedule: BusinessScheduleByWeekday,
+  weekday: number,
+) {
+  const day = schedule[weekday as WeekdayIndex];
+  return day?.isOpen ? { openHour: day.openHour, closeHour: day.closeHour } : null;
+}
+
 export const BUSINESS_RULES = {
   minimumLeadHours: 2,
-  scheduleByWeekday: {
-    0: { openHour: 9, closeHour: 13 },
-    1: null,
-    2: { openHour: 10, closeHour: 17 },
-    3: { openHour: 10, closeHour: 17 },
-    4: { openHour: 10, closeHour: 17 },
-    5: { openHour: 10, closeHour: 17 },
-    6: { openHour: 10, closeHour: 17 },
-  },
+  scheduleByWeekday: DEFAULT_OPERATION_SCHEDULE,
   slotMinutes: 15,
   toleranceMinutes: 15,
 } as const;

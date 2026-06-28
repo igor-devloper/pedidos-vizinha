@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 import { isManhiaRequestAuthenticated } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
+import {
+  DEFAULT_OPERATION_SCHEDULE,
+  normalizeOperationSchedule,
+  type BusinessScheduleByWeekday,
+} from "@/lib/site-config";
 import { normalizeStoreSiteTheme, type StoreSiteTheme } from "@/lib/site-theme";
 
 export async function GET(req: Request) {
@@ -18,11 +23,15 @@ export async function GET(req: Request) {
         isOpen: true,
         minimumLeadHours: 2,
         allowMultipleOrdersPerSlot: false,
+        operationSchedule: DEFAULT_OPERATION_SCHEDULE,
         siteTheme: "COPA",
       },
     });
 
-    return NextResponse.json(settings);
+    return NextResponse.json({
+      ...settings,
+      operationSchedule: normalizeOperationSchedule(settings.operationSchedule),
+    });
   } catch (error) {
     console.error("GET /api/manhia/configuracoes error", error);
     return NextResponse.json(
@@ -42,6 +51,7 @@ export async function PATCH(req: Request) {
       isOpen?: boolean;
       minimumLeadHours?: number;
       allowMultipleOrdersPerSlot?: boolean;
+      operationSchedule?: unknown;
       siteTheme?: StoreSiteTheme;
       featuredProductId?: string | null;
     } | null;
@@ -54,6 +64,7 @@ export async function PATCH(req: Request) {
       isOpen?: boolean;
       minimumLeadHours?: number;
       allowMultipleOrdersPerSlot?: boolean;
+      operationSchedule?: BusinessScheduleByWeekday;
       siteTheme?: StoreSiteTheme;
       featuredProductId?: string | null;
     } = {};
@@ -68,6 +79,10 @@ export async function PATCH(req: Request) {
 
     if (typeof body.allowMultipleOrdersPerSlot === "boolean") {
       patch.allowMultipleOrdersPerSlot = body.allowMultipleOrdersPerSlot;
+    }
+
+    if (body.operationSchedule !== undefined) {
+      patch.operationSchedule = normalizeOperationSchedule(body.operationSchedule);
     }
 
     if (typeof body.siteTheme === "string") {
@@ -88,12 +103,16 @@ export async function PATCH(req: Request) {
         isOpen: patch.isOpen ?? true,
         minimumLeadHours: patch.minimumLeadHours ?? 2,
         allowMultipleOrdersPerSlot: patch.allowMultipleOrdersPerSlot ?? false,
+        operationSchedule: patch.operationSchedule ?? DEFAULT_OPERATION_SCHEDULE,
         siteTheme: patch.siteTheme ?? "COPA",
         featuredProductId: patch.featuredProductId ?? null,
       },
     });
 
-    return NextResponse.json(settings);
+    return NextResponse.json({
+      ...settings,
+      operationSchedule: normalizeOperationSchedule(settings.operationSchedule),
+    });
   } catch (error) {
     console.error("PATCH /api/manhia/configuracoes error", error);
     return NextResponse.json(

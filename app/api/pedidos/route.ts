@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     }
 
     validateDeliveryDate(entrega, new Date(), settings.minimumLeadHours, {
-      enforceBusinessHours: false,
+      operationSchedule: settings.operationSchedule,
     });
 
     if (!settings.allowMultipleOrdersPerSlot) {

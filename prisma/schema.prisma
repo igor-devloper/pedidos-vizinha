@@ -301,6 +301,7 @@ model StoreSettings {
   minimumLeadHours           Int      @default(2)
   /// Permite mais de um pedido no mesmo horário de entrega.
   allowMultipleOrdersPerSlot Boolean  @default(false)
+  operationSchedule          Json     @default("{}")
   siteTheme                  String   @default("COPA")
   featuredProductId          String?
   updatedAt                  DateTime @updatedAt

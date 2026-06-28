@@ -13,10 +13,12 @@ import {
   type StoreSettingsData,
 } from "@/components/manhia-admin-dashboard";
 import { getStoreSettings } from "@/lib/business-hours";
+import { processPaidPedidosSideEffects } from "@/lib/pedido-service";
 import {
   processPaidCartOrdersSideEffects,
   serializeCartOrderForAdmin,
 } from "@/lib/cart-order-service";
+import { normalizeOperationSchedule } from "@/lib/site-config";
 import { normalizeStoreSiteTheme } from "@/lib/site-theme";
 
 type ProdutoWithPromocao = Awaited<
@@ -84,6 +86,7 @@ async function getProductTypes(): Promise<ProductTypeAdmin[]> {
 async function getSimpleOrders(): Promise<SimpleOrderAdmin[]> {
   try {
     await processPaidCartOrdersSideEffects();
+    await processPaidPedidosSideEffects();
     const orders = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },
       include: { items: true },
@@ -206,6 +209,7 @@ export default async function ManhiaPage() {
     isOpen: settingsRaw.isOpen,
     minimumLeadHours: settingsRaw.minimumLeadHours,
     allowMultipleOrdersPerSlot: settingsRaw.allowMultipleOrdersPerSlot,
+    operationSchedule: normalizeOperationSchedule(settingsRaw.operationSchedule),
     siteTheme: normalizeStoreSiteTheme(settingsRaw.siteTheme),
     featuredProductId: settingsRaw.featuredProductId,
   };

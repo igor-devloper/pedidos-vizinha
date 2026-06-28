@@ -306,6 +306,26 @@ async function printAcceptedPedido(pedido: PedidoWithItens) {
   }
 }
 
+export async function processPaidPedidosSideEffects() {
+  const pedidos = await prisma.pedido.findMany({
+    where: {
+      status: PedidoStatus.PAGO,
+      OR: [
+        { impressoAutomaticamenteAt: null },
+        { notificadoClienteAt: null },
+        { notificadoVizinhaAt: null },
+      ],
+    },
+    include: { itens: true },
+    take: 20,
+  });
+
+  for (const pedido of pedidos) {
+    await notifyPaidPedido(pedido as PedidoWithItens);
+    await printAcceptedPedido(pedido as PedidoWithItens);
+  }
+}
+
 export async function markPedidoPaidManually({
   id,
   valorPago,

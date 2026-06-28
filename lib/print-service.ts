@@ -67,6 +67,7 @@ export async function sendPedidoToPrintService(
         total: Number(pedido.totalCobrado),
       },
     }),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!response.ok) {
@@ -133,6 +134,7 @@ export async function sendCartOrderToPrintService({
         total,
       },
     }),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!response.ok) {

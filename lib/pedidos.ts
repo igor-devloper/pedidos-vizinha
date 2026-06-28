@@ -5,7 +5,15 @@ import { z } from "zod";
 
 import { getBusinessHoursStatus, getBusinessTimeParts, getBusinessWeekday } from "@/lib/business-hours";
 import { getProdutoComboItens, isComboProduto } from "@/lib/produtos";
-import { BUSINESS_INFO, BUSINESS_RULES, PEDIDO_STATUS_META, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
+import {
+  BUSINESS_INFO,
+  BUSINESS_RULES,
+  DEFAULT_OPERATION_SCHEDULE,
+  getScheduleForWeekday,
+  normalizeOperationSchedule,
+  PEDIDO_STATUS_META,
+  SUPPORTED_PAYMENT_METHODS,
+} from "@/lib/site-config";
 import {
   formatWhatsAppList,
   formatWhatsAppMessage,
@@ -118,16 +126,17 @@ export function validateDeliveryDate(
   input: Date,
   now = new Date(),
   minimumLeadHours: number = BUSINESS_RULES.minimumLeadHours,
-  options: { enforceBusinessHours?: boolean } = {}
+  options: { enforceBusinessHours?: boolean; operationSchedule?: unknown } = {}
 ) {
   const minDate = new Date(now.getTime() + minimumLeadHours * 60 * 60 * 1000);
   const enforceBusinessHours = options.enforceBusinessHours ?? true;
-  const { isOpen: isWithinSchedule } = getBusinessHoursStatus(input);
+  const operationSchedule = normalizeOperationSchedule(
+    options.operationSchedule ?? DEFAULT_OPERATION_SCHEDULE,
+  );
+  const { isOpen: isWithinSchedule } = getBusinessHoursStatus(input, operationSchedule);
   const weekday = getBusinessWeekday(input);
   const { hour, minute: minutes } = getBusinessTimeParts(input);
-  const schedule = BUSINESS_RULES.scheduleByWeekday[
-    weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday
-  ];
+  const schedule = getScheduleForWeekday(operationSchedule, weekday);
 
   if (input.getTime() < minDate.getTime()) {
     throw new Error(`Escolha um horario com pelo menos ${minimumLeadHours} horas de antecedencia.`);
@@ -142,23 +151,15 @@ export function validateDeliveryDate(
   }
 
   if (!schedule) {
-    throw new Error("Nao atendemos nas segundas-feiras. Escolha de terça a sabádo, das 10h as 17h, ou domingo, das 9h as 13h.");
+    throw new Error("Nao atendemos nessa data. Escolha um dia com horario ativo na operacao.");
   }
 
   if (!isWithinSchedule && (hour < schedule.openHour || hour > schedule.closeHour)) {
-    if (weekday === 0) {
-      throw new Error("Aos domingos, os pedidos precisam ficar entre 9h e 13h.");
-    }
-
-    throw new Error("De terça a sabádo, os pedidos precisam ficar entre 10h e 17h.");
+    throw new Error(`Nesse dia, os pedidos precisam ficar entre ${schedule.openHour}h e ${schedule.closeHour}h.`);
   }
 
   if (hour === schedule.closeHour && minutes > 0) {
-    if (weekday === 0) {
-      throw new Error("No domingo, o ultimo horario disponivel e as 13h.");
-    }
-
-    throw new Error("O ultimo horario disponivel de terça a sabádo e as 17h.");
+    throw new Error(`O ultimo horario disponivel nesse dia e as ${schedule.closeHour}h.`);
   }
 
   if (minutes % BUSINESS_RULES.slotMinutes !== 0) {

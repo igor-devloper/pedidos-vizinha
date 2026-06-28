@@ -156,6 +156,7 @@ export default async function PedidoPage({
           isOpen: businessStatus.isOpen,
           message: businessStatus.message,
           minimumLeadHours: businessStatus.minimumLeadHours,
+          operationSchedule: businessStatus.operationSchedule,
         }}
       />
     </main>

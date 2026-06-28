@@ -49,6 +49,7 @@ import {
   formatDateTime,
   getPedidoStatusMeta,
 } from "@/lib/pedidos";
+import type { BusinessScheduleByWeekday, WeekdayIndex } from "@/lib/site-config";
 
 export type ProdutoAdmin = {
   id: string;
@@ -158,6 +159,7 @@ export type StoreSettingsData = {
   isOpen: boolean;
   minimumLeadHours: number;
   allowMultipleOrdersPerSlot: boolean;
+  operationSchedule: BusinessScheduleByWeekday;
   siteTheme: StoreSiteTheme;
   featuredProductId: string | null;
 };
@@ -238,6 +240,16 @@ const PEDIDO_STATUS_OPTIONS = [
   "ENTREGUE",
   "CANCELADO",
 ] as const;
+
+const WEEKDAY_OPTIONS: Array<{ value: WeekdayIndex; label: string }> = [
+  { value: 0, label: "Domingo" },
+  { value: 1, label: "Segunda" },
+  { value: 2, label: "Terca" },
+  { value: 3, label: "Quarta" },
+  { value: 4, label: "Quinta" },
+  { value: 5, label: "Sexta" },
+  { value: 6, label: "Sabado" },
+];
 
 const KANBAN_COLUMNS = [
   {
@@ -1229,6 +1241,36 @@ export function ManhiaAdminDashboard({
     void handleUpdatePedidoStatus(pedido.id, status);
   };
 
+  const updateOperationScheduleDay = (
+    weekday: WeekdayIndex,
+    patch: Partial<BusinessScheduleByWeekday[WeekdayIndex]>,
+  ) => {
+    setSettings((current) => {
+      const currentDay = current.operationSchedule[weekday];
+      const nextOpenHour = Math.max(
+        0,
+        Math.min(23, Math.round(patch.openHour ?? currentDay.openHour)),
+      );
+      const nextCloseHour = Math.max(
+        nextOpenHour,
+        Math.min(23, Math.round(patch.closeHour ?? currentDay.closeHour)),
+      );
+
+      return {
+        ...current,
+        operationSchedule: {
+          ...current.operationSchedule,
+          [weekday]: {
+            ...currentDay,
+            ...patch,
+            openHour: nextOpenHour,
+            closeHour: nextCloseHour,
+          },
+        },
+      };
+    });
+  };
+
   const handleSaveSettings = async (patch: Partial<StoreSettingsData>) => {
     const nextSettings = { ...settings, ...patch };
 
@@ -1259,6 +1301,8 @@ export function ManhiaAdminDashboard({
           data?.allowMultipleOrdersPerSlot ??
           nextSettings.allowMultipleOrdersPerSlot,
         ),
+        operationSchedule:
+          data?.operationSchedule ?? nextSettings.operationSchedule,
         siteTheme: (data?.siteTheme ??
           nextSettings.siteTheme) as StoreSiteTheme,
         featuredProductId:
@@ -2740,6 +2784,98 @@ export function ManhiaAdminDashboard({
                     >
                       {savingSettings ? "Salvando..." : "Salvar horario"}
                     </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-[#284a2e]">
+                        Horario da operacao por dia
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-[#48654f]">
+                        Defina quais dias aceitam pedidos e o intervalo de
+                        atendimento de cada um.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={savingSettings}
+                      onClick={() =>
+                        void handleSaveSettings({
+                          operationSchedule: settings.operationSchedule,
+                        })
+                      }
+                      className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]"
+                    >
+                      {savingSettings ? "Salvando..." : "Salvar horarios"}
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-3">
+                    {WEEKDAY_OPTIONS.map((day) => {
+                      const schedule = settings.operationSchedule[day.value];
+
+                      return (
+                        <div
+                          key={day.value}
+                          className="grid gap-3 rounded-[1rem] border border-[#d6e7a2] bg-white p-3 sm:grid-cols-[150px_1fr_1fr] sm:items-center"
+                        >
+                          <label className="flex items-center gap-3 text-sm font-bold text-[#284a2e]">
+                            <Checkbox
+                              checked={schedule.isOpen}
+                              disabled={savingSettings}
+                              onCheckedChange={(checked) =>
+                                updateOperationScheduleDay(day.value, {
+                                  isOpen: Boolean(checked),
+                                })
+                              }
+                            />
+                            {day.label}
+                          </label>
+
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                              Abre
+                            </label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              step="1"
+                              value={schedule.openHour}
+                              disabled={savingSettings || !schedule.isOpen}
+                              onChange={(event) =>
+                                updateOperationScheduleDay(day.value, {
+                                  openHour: Number(event.target.value || 0),
+                                })
+                              }
+                              className="h-11 border-[#d6e7a2] bg-white text-sm font-bold text-[#0b3d18]"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                              Fecha
+                            </label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              step="1"
+                              value={schedule.closeHour}
+                              disabled={savingSettings || !schedule.isOpen}
+                              onChange={(event) =>
+                                updateOperationScheduleDay(day.value, {
+                                  closeHour: Number(event.target.value || 0),
+                                })
+                              }
+                              className="h-11 border-[#d6e7a2] bg-white text-sm font-bold text-[#0b3d18]"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

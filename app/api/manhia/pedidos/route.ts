@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { isManhiaRequestAuthenticated } from "@/lib/admin-auth";
-import { processReadyPedidoToleranceReminders } from "@/lib/pedido-service";
+import {
+  processPaidPedidosSideEffects,
+  processReadyPedidoToleranceReminders,
+} from "@/lib/pedido-service";
 import {
   processPaidCartOrdersSideEffects,
   serializeCartOrderForAdmin,
@@ -15,6 +18,7 @@ export async function GET(req: Request) {
 
   try {
     await processReadyPedidoToleranceReminders();
+    await processPaidPedidosSideEffects();
     await processPaidCartOrdersSideEffects();
 
     const pedidos = await prisma.pedido.findMany({

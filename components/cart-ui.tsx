@@ -17,7 +17,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
-import { BUSINESS_RULES, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
+import {
+  BUSINESS_RULES,
+  getScheduleForWeekday,
+  SUPPORTED_PAYMENT_METHODS,
+  type BusinessScheduleByWeekday,
+} from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
 type CartItem = {
@@ -49,6 +54,7 @@ type CartBusinessStatusData = {
   isOpen: boolean;
   message: string;
   minimumLeadHours: number;
+  operationSchedule: BusinessScheduleByWeekday;
 };
 
 const EMPTY_CART: CartData = {
@@ -140,12 +146,16 @@ function getBusinessDateInputValue(value = new Date()) {
   }).format(value);
 }
 
-function getTimeSlots(dateValue: string, minDate: Date) {
+function getTimeSlots(
+  dateValue: string,
+  minDate: Date,
+  operationSchedule: BusinessScheduleByWeekday,
+) {
   if (!dateValue) return [] as string[];
 
   const selectedDate = new Date(`${dateValue}T12:00:00`);
   const weekday = selectedDate.getDay();
-  const schedule = BUSINESS_RULES.scheduleByWeekday[weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday];
+  const schedule = getScheduleForWeekday(operationSchedule, weekday);
 
   if (!schedule) return [] as string[];
 
@@ -332,13 +342,16 @@ export function FloatingCart({
   };
 
   const calendarDays = useMemo(() => getCalendarDays(displayMonth), [displayMonth]);
-  const timeSlots = useMemo(() => getTimeSlots(deliveryDate, minDeliveryDate), [deliveryDate, minDeliveryDate]);
+  const timeSlots = useMemo(
+    () => getTimeSlots(deliveryDate, minDeliveryDate, businessStatus.operationSchedule),
+    [businessStatus.operationSchedule, deliveryDate, minDeliveryDate]
+  );
   const scheduledAt = buildDeliveryDateTime(deliveryDate, deliveryTime);
   const selectedDateHasNoSchedule = Boolean(deliveryDate) && timeSlots.length === 0;
   const storeClosedBlocksSelectedDate = !businessStatus.isOpen && deliveryDate === getBusinessDateInputValue();
   const selectDeliveryDate = (nextDate: string) => {
     setDeliveryDate(nextDate);
-    const nextSlots = getTimeSlots(nextDate, minDeliveryDate);
+    const nextSlots = getTimeSlots(nextDate, minDeliveryDate, businessStatus.operationSchedule);
     if (!nextSlots.includes(deliveryTime)) setDeliveryTime(nextSlots[0] || "");
     setCalendarOpen(false);
   };
@@ -760,7 +773,7 @@ export function FloatingCart({
                   </Select>
                 </div>
                 {selectedDateHasNoSchedule ? (
-                  <p className="mt-2 text-sm text-amber-700">Nao atendemos nessa data. Escolha de terca a sabado, das 10h as 17h, ou domingo, das 9h as 13h.</p>
+                  <p className="mt-2 text-sm text-amber-700">Nao atendemos nessa data. Escolha um dia com horario ativo na operacao.</p>
                 ) : storeClosedBlocksSelectedDate ? (
                   <p className="mt-2 text-sm text-amber-700">A loja esta fechada para pedidos de hoje. Escolha uma data futura para continuar.</p>
                 ) : (

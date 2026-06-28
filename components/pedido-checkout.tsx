@@ -31,7 +31,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { calculateDiscountedSubtotal } from "@/lib/descontos";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
 import { type ComboItem, PRODUCT_CATEGORY_LABEL, type ProductCategory } from "@/lib/produtos";
-import { BUSINESS_RULES } from "@/lib/site-config";
+import {
+  BUSINESS_RULES,
+  getScheduleForWeekday,
+  type BusinessScheduleByWeekday,
+} from "@/lib/site-config";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +80,7 @@ type BusinessStatusData = {
   isOpen: boolean;
   message: string;
   minimumLeadHours: number;
+  operationSchedule: BusinessScheduleByWeekday;
 };
 
 function getMinDeliveryDate(minimumLeadHours: number) {
@@ -161,26 +166,28 @@ function buildDeliveryDateTime(date: string, time: string) {
   return `${date}T${time}`;
 }
 
-function getTimeSlots(dateValue: string, minDate: Date, allowExtendedHours: boolean) {
+function getTimeSlots(
+  dateValue: string,
+  minDate: Date,
+  operationSchedule: BusinessScheduleByWeekday,
+) {
   if (!dateValue) {
     return [] as string[];
   }
 
   const selectedDate = new Date(`${dateValue}T12:00:00`);
   const weekday = selectedDate.getDay();
-  const schedule = BUSINESS_RULES.scheduleByWeekday[
-    weekday as keyof typeof BUSINESS_RULES.scheduleByWeekday
-  ];
+  const schedule = getScheduleForWeekday(operationSchedule, weekday);
 
-  if (!schedule && !allowExtendedHours) {
+  if (!schedule) {
     return [] as string[];
   }
 
   const slots: string[] = [];
   const selectedKey = dateValue;
   const minKey = formatDateInputValue(minDate);
-  const openHour = schedule?.openHour ?? 0;
-  const closeMinutes = allowExtendedHours ? 23 * 60 + 45 : (schedule?.closeHour ?? 0) * 60;
+  const openHour = schedule.openHour;
+  const closeMinutes = schedule.closeHour * 60;
   const startMinutes =
     openHour * 60 +
     (selectedKey === minKey
@@ -283,8 +290,8 @@ export function PedidoCheckout({
   const selectedMethod = paymentMethods.find((method) => method.id === metodoPagamento);
   const calendarDays = useMemo(() => getCalendarDays(displayMonth), [displayMonth]);
   const timeSlots = useMemo(
-    () => getTimeSlots(dataEntregaData, minDeliveryDate, businessStatus.isOpen),
-    [dataEntregaData, minDeliveryDate, businessStatus.isOpen]
+    () => getTimeSlots(dataEntregaData, minDeliveryDate, businessStatus.operationSchedule),
+    [businessStatus.operationSchedule, dataEntregaData, minDeliveryDate]
   );
   const dataEntrega = buildDeliveryDateTime(dataEntregaData, dataEntregaHora);
   const paymentPreview = useMemo(
@@ -308,7 +315,7 @@ export function PedidoCheckout({
 
   const selectDeliveryDate = (nextDate: string) => {
     setDataEntregaData(nextDate);
-    const nextSlots = getTimeSlots(nextDate, minDeliveryDate, businessStatus.isOpen);
+    const nextSlots = getTimeSlots(nextDate, minDeliveryDate, businessStatus.operationSchedule);
     if (!nextSlots.includes(dataEntregaHora)) {
       setDataEntregaHora(nextSlots[0] || "");
     }
@@ -806,7 +813,7 @@ export function PedidoCheckout({
               </div>
               {selectedDateHasNoSchedule ? (
                 <p className="text-sm text-amber-700">
-                  Nao atendemos nessa data. Escolha de terca a sabado, das 10h as 17h, ou domingo, das 9h as 13h.
+                  Nao atendemos nessa data. Escolha um dia com horario ativo na operacao.
                 </p>
               ) : (
                 <p className="text-sm text-[#48654f]">

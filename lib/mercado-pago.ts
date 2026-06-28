@@ -66,6 +66,7 @@ async function mercadoPagoRequest<T>(path: string, init?: RequestInit): Promise<
       ...(init?.headers || {}),
     },
     cache: "no-store",
+    signal: init?.signal ?? AbortSignal.timeout(10000),
   });
 
   const data = (await response.json().catch(() => null)) as T | { message?: string } | null;
