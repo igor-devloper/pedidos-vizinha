@@ -261,6 +261,16 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
     return order;
   }
 
+  const claimedAt = new Date();
+  const claim = await prisma.order.updateMany({
+    where: { id: order.id, impressoAutomaticamenteAt: null },
+    data: { impressoAutomaticamenteAt: claimedAt },
+  });
+
+  if (claim.count === 0) {
+    return order;
+  }
+
   try {
     await sendCartOrderToPrintService({
       orderId: order.id,
@@ -273,12 +283,18 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
       total: Number(order.chargedAmount || order.totalAmount),
     });
 
-    return prisma.order.update({
+    const printed = await prisma.order.findUnique({
       where: { id: order.id },
-      data: { impressoAutomaticamenteAt: new Date() },
       include: { items: true },
     });
+
+    return printed || { ...order, impressoAutomaticamenteAt: claimedAt };
   } catch (error) {
+    await prisma.order.updateMany({
+      where: { id: order.id, impressoAutomaticamenteAt: claimedAt },
+      data: { impressoAutomaticamenteAt: null },
+    });
+
     console.error("Falha ao imprimir pedido do carrinho aceito", {
       orderId: order.id,
       error,

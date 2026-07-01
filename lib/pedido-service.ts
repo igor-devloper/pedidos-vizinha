@@ -293,17 +293,31 @@ async function printAcceptedPedido(pedido: PedidoWithItens) {
     return pedido;
   }
 
+  const claimedAt = new Date();
+  const claim = await prisma.pedido.updateMany({
+    where: { id: pedido.id, impressoAutomaticamenteAt: null },
+    data: { impressoAutomaticamenteAt: claimedAt },
+  });
+
+  if (claim.count === 0) {
+    return pedido;
+  }
+
   try {
     await sendPedidoToPrintService(pedido, "auto-accepted");
 
-    return prisma.pedido.update({
+    const printed = await prisma.pedido.findUnique({
       where: { id: pedido.id },
-      data: {
-        impressoAutomaticamenteAt: new Date(),
-      },
       include: { itens: true },
     });
+
+    return printed || { ...pedido, impressoAutomaticamenteAt: claimedAt };
   } catch (error) {
+    await prisma.pedido.updateMany({
+      where: { id: pedido.id, impressoAutomaticamenteAt: claimedAt },
+      data: { impressoAutomaticamenteAt: null },
+    });
+
     console.error("Falha ao imprimir pedido aceito", {
       pedidoId: pedido.id,
       codigo: pedido.codigo,
