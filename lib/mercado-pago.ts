@@ -36,6 +36,17 @@ type MercadoPagoPaymentSearchResponse = {
   results?: MercadoPagoPaymentResponse[];
 };
 
+export class MercadoPagoApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly path: string
+  ) {
+    super(message);
+    this.name = "MercadoPagoApiError";
+  }
+}
+
 function getAccessToken() {
   const token =
     process.env.envMERCADO_PAGO_ACCESS_TOKEN?.trim() ||
@@ -72,9 +83,11 @@ async function mercadoPagoRequest<T>(path: string, init?: RequestInit): Promise<
   const data = (await response.json().catch(() => null)) as T | { message?: string } | null;
 
   if (!response.ok) {
-    throw new Error(
+    throw new MercadoPagoApiError(
       (data && typeof data === "object" && "message" in data && data.message) ||
-        `Mercado Pago respondeu ${response.status}.`
+        `Mercado Pago respondeu ${response.status}.`,
+      response.status,
+      path
     );
   }
 

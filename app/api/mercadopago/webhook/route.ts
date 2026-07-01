@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { applyCartOrderPayment } from "@/lib/cart-order-payment";
-import { handleMercadoPagoPaymentUpdate } from "@/lib/pedido-service";
+import {
+  applyCartOrderPayment,
+  CartOrderPaymentApplyError,
+} from "@/lib/cart-order-payment";
+import {
+  handleMercadoPagoPaymentUpdate,
+  PedidoPaymentReferenceNotFoundError,
+} from "@/lib/pedido-service";
 import {
   getMercadoPagoPayment,
+  MercadoPagoApiError,
   verifyMercadoPagoWebhookSignature,
 } from "@/lib/mercado-pago";
 
@@ -93,6 +100,14 @@ export async function POST(req: Request) {
         ),
       ]);
 
+      console.log("[MP webhook] Pagamento encontrado:", {
+        paymentId: payment.id,
+        externalReference: payment.external_reference,
+        status: payment.status,
+        statusDetail: payment.status_detail,
+        transactionAmount: payment.transaction_amount,
+      });
+
       if (!payment.external_reference) {
         console.log("[MP webhook] Pagamento sem external_reference:", paymentId);
         return NextResponse.json({ ok: true, ignored: true }, { status: 200 });
@@ -125,6 +140,43 @@ export async function POST(req: Request) {
         });
       }
     } catch (processingErr) {
+      if (
+        processingErr instanceof MercadoPagoApiError &&
+        processingErr.status === 404
+      ) {
+        console.warn("[MP webhook] Pagamento nao encontrado no Mercado Pago:", {
+          paymentId,
+          topic,
+          action: body.action,
+        });
+        return NextResponse.json(
+          { ok: true, ignored: true, reason: "payment-not-found" },
+          { status: 200 }
+        );
+      }
+
+      if (processingErr instanceof PedidoPaymentReferenceNotFoundError) {
+        console.warn("[MP webhook] Referencia de pagamento sem pedido local:", {
+          paymentId,
+          externalReference: processingErr.externalReference,
+        });
+        return NextResponse.json(
+          { ok: true, ignored: true, reason: "local-reference-not-found" },
+          { status: 200 }
+        );
+      }
+
+      if (processingErr instanceof CartOrderPaymentApplyError) {
+        console.error("[MP webhook] Erro ao aplicar pagamento no carrinho:", {
+          ...processingErr.context,
+          cause: processingErr.cause,
+        });
+        return NextResponse.json(
+          { ok: false, error: "cart-payment-apply-failed" },
+          { status: 500 }
+        );
+      }
+
       console.error("[MP webhook] Erro ao processar pagamento:", processingErr);
       return NextResponse.json(
         { ok: false, error: "payment-processing-failed" },

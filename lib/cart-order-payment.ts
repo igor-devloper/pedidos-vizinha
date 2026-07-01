@@ -8,6 +8,17 @@ type MercadoPagoCartPayment = {
   external_reference?: string;
 };
 
+export class CartOrderPaymentApplyError extends Error {
+  constructor(
+    message: string,
+    public readonly context: Record<string, unknown>,
+    options?: ErrorOptions
+  ) {
+    super(message, options);
+    this.name = "CartOrderPaymentApplyError";
+  }
+}
+
 export function getOrderStatusFromMercadoPagoStatus(status: string) {
   if (status === "approved") {
     return "PAID" as const;
@@ -25,6 +36,12 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     return null;
   }
 
+  console.log("[MP webhook] Buscando order do carrinho:", {
+    externalReference: payment.external_reference,
+    paymentId: payment.id,
+    paymentStatus: payment.status,
+  });
+
   const current = await prisma.order.findUnique({
     where: { externalReference: payment.external_reference },
   });
@@ -37,19 +54,55 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
   }
 
   const orderStatus = getOrderStatusFromMercadoPagoStatus(payment.status);
-  const order = await prisma.order.update({
-    where: { id: current.id },
-    data: {
-      status: orderStatus,
-      mercadoPagoPaymentId: String(payment.id),
-    },
-    include: { items: true },
+  let order;
+
+  try {
+    order = await prisma.order.update({
+      where: { id: current.id },
+      data: {
+        status: orderStatus,
+        mercadoPagoPaymentId: String(payment.id),
+      },
+      include: { items: true },
+    });
+  } catch (error) {
+    throw new CartOrderPaymentApplyError(
+      "Falha ao atualizar status do order do carrinho.",
+      {
+        orderId: current.id,
+        externalReference: payment.external_reference,
+        paymentId: payment.id,
+        paymentStatus: payment.status,
+        orderStatus,
+      },
+      { cause: error }
+    );
+  }
+
+  console.log("[MP webhook] Order do carrinho atualizado:", {
+    orderId: order.id,
+    externalReference: order.externalReference,
+    status: order.status,
+    paymentId: payment.id,
   });
 
   if (orderStatus === "PAID" && order.cartId) {
-    await prisma.cartItem.deleteMany({
-      where: { cartId: order.cartId },
-    });
+    try {
+      await prisma.cartItem.deleteMany({
+        where: { cartId: order.cartId },
+      });
+    } catch (error) {
+      throw new CartOrderPaymentApplyError(
+        "Falha ao limpar carrinho apos pagamento aprovado.",
+        {
+          orderId: order.id,
+          cartId: order.cartId,
+          externalReference: order.externalReference,
+          paymentId: payment.id,
+        },
+        { cause: error }
+      );
+    }
   }
 
   if (orderStatus === "PAID") {

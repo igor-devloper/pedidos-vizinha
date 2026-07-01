@@ -35,6 +35,13 @@ type PedidoWithReadyFields = PedidoWithItens & {
   saldoCobrancaEnviadaAt?: Date | null;
 };
 
+export class PedidoPaymentReferenceNotFoundError extends Error {
+  constructor(public readonly externalReference: string) {
+    super(`Pedido nao encontrado para a referencia ${externalReference}.`);
+    this.name = "PedidoPaymentReferenceNotFoundError";
+  }
+}
+
 async function loadPedidoById(id: string) {
   return prisma.pedido.findUnique({
     where: { id },
@@ -387,7 +394,7 @@ export async function handleMercadoPagoPaymentUpdate({
   const pedido = (await loadPedidoByReference(externalReference)) as PedidoWithReadyFields | null;
 
   if (!pedido) {
-    throw new Error(`Pedido não encontrado para a referência ${externalReference}.`);
+    throw new PedidoPaymentReferenceNotFoundError(externalReference);
   }
 
   const isBalancePayment = pedido.saldoExternalReference === externalReference;
