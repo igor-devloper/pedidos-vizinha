@@ -5,6 +5,7 @@ import { findLatestMercadoPagoPaymentByExternalReference } from "@/lib/mercado-p
 type MercadoPagoCartPayment = {
   id: string | number;
   status: string;
+  status_detail?: string;
   external_reference?: string;
 };
 
@@ -42,8 +43,13 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     paymentStatus: payment.status,
   });
 
-  const current = await prisma.order.findUnique({
-    where: { externalReference: payment.external_reference },
+  const current = await prisma.order.findFirst({
+    where: {
+      OR: [
+        { externalReference: payment.external_reference },
+        { saldoExternalReference: payment.external_reference },
+      ],
+    },
   });
 
   if (!current) {
@@ -54,15 +60,23 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
   }
 
   const orderStatus = getOrderStatusFromMercadoPagoStatus(payment.status);
+  const isBalancePayment =
+    current.saldoExternalReference === payment.external_reference;
   let order;
 
   try {
     order = await prisma.order.update({
       where: { id: current.id },
-      data: {
-        status: orderStatus,
-        mercadoPagoPaymentId: String(payment.id),
-      },
+      data: isBalancePayment
+        ? {
+            saldoPaymentId: String(payment.id),
+            saldoPagoAt:
+              payment.status === "approved" ? new Date() : current.saldoPagoAt,
+          }
+        : {
+            status: orderStatus,
+            mercadoPagoPaymentId: String(payment.id),
+          },
       include: { items: true },
     });
   } catch (error) {
@@ -86,7 +100,7 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     paymentId: payment.id,
   });
 
-  if (orderStatus === "PAID" && order.cartId) {
+  if (!isBalancePayment && orderStatus === "PAID" && order.cartId) {
     try {
       await prisma.cartItem.deleteMany({
         where: { cartId: order.cartId },
@@ -105,7 +119,7 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     }
   }
 
-  if (orderStatus === "PAID") {
+  if (!isBalancePayment && orderStatus === "PAID") {
     return acceptPaidCartOrder(order);
   }
 

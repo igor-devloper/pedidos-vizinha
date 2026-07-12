@@ -51,6 +51,12 @@ const printJobSchema = z.object({
 });
 
 async function bootstrap() {
+  if (!config.geminiApiKey) {
+    logger.warn(
+      "Gemini is not configured; free-text and media understanding will use deterministic fallbacks",
+    );
+  }
+
   await ensureDir(config.authDir);
   await ensureDir(config.storeDir);
   await ensureParent(config.instanceFile);
@@ -65,6 +71,10 @@ async function bootstrap() {
       ok: true,
       service: "whatsapp-bot",
       totalInstances: instances.length,
+      gemini: {
+        configured: Boolean(config.geminiApiKey),
+        model: config.geminiModel,
+      },
     });
   });
 

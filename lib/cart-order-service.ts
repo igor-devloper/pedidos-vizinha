@@ -5,7 +5,8 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { formatCurrency } from "@/lib/pedidos";
+import { createMercadoPagoPreference } from "@/lib/mercado-pago";
+import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
 import { sendCartOrderToPrintService } from "@/lib/print-service";
 import { BUSINESS_INFO } from "@/lib/site-config";
 import { sendWhatsappText } from "@/lib/whatsapp";
@@ -174,15 +175,90 @@ function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
   ]);
 }
 
-function buildCartOrderReadyMessage(order: Pick<Order, "id" | "customerName">) {
+function buildCartOrderReadyMessage(
+  order: Pick<
+    Order,
+    | "id"
+    | "customerName"
+    | "paymentPercentage"
+    | "saldoInitPoint"
+    | "saldoTotalCobrado"
+    | "saldoPagoAt"
+  >,
+) {
+  const hasPendingBalance =
+    order.paymentPercentage === 50 &&
+    !order.saldoPagoAt &&
+    order.saldoInitPoint &&
+    order.saldoTotalCobrado !== null;
+
   return formatWhatsAppMessage([
     "🍽️ *Seu pedido está pronto!*",
     [
       `Oi, ${order.customerName || "cliente"}!`,
       `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* já está pronto.`,
     ],
+    hasPendingBalance
+      ? [
+          "💰 *Falta o pagamento da 2ª parte*",
+          `Valor para quitar agora: *${formatCurrency(Number(order.saldoTotalCobrado))}*`,
+          "🔗 *Acesse sua cobrança para pagar:*",
+          order.saldoInitPoint!,
+        ]
+      : null,
     `📲 Se precisar falar com a equipe, chame no WhatsApp: ${BUSINESS_INFO.supportPhone}`,
   ]);
+}
+
+async function ensureCartOrderBalanceCharge(order: CartOrderWithItems) {
+  if (order.paymentPercentage !== 50 || order.saldoPagoAt) {
+    return null;
+  }
+
+  if (
+    order.saldoExternalReference &&
+    order.saldoPreferenceId &&
+    order.saldoInitPoint &&
+    order.saldoTotalCobrado !== null
+  ) {
+    return {
+      saldoExternalReference: order.saldoExternalReference,
+      saldoPreferenceId: order.saldoPreferenceId,
+      saldoInitPoint: order.saldoInitPoint,
+      saldoTotalCobrado: Number(order.saldoTotalCobrado),
+    };
+  }
+
+  const charge = calculatePaymentAmounts(
+    Number(order.totalAmount),
+    50,
+    order.paymentMethod,
+  );
+  const saldoExternalReference = `${order.externalReference}-saldo`;
+  const preference = await createMercadoPagoPreference({
+    pedido: {
+      codigo: `${cartOrderCode(order)}-SALDO`,
+      mpExternalReference: saldoExternalReference,
+      produtoNomeSnapshot: `Pedido ${cartOrderCode(order)} - saldo final`,
+      totalCobrado: charge.totalToCharge,
+      clienteNome: order.customerName || "Cliente",
+      clienteEmail: order.customerEmail,
+      clienteTelefone: order.customerPhone || "",
+      metodoPagamento: order.paymentMethod,
+    },
+    payer: {
+      name: order.customerName || "Cliente",
+      email: order.customerEmail,
+      phone: order.customerPhone,
+    },
+  });
+
+  return {
+    saldoExternalReference,
+    saldoPreferenceId: preference.id,
+    saldoInitPoint: preference.init_point,
+    saldoTotalCobrado: charge.totalToCharge,
+  };
 }
 
 async function loadCartOrder(id: string) {
@@ -362,6 +438,15 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
 
   const enteringReady = status === "READY" && current.status !== "READY";
   const leavingReady = status !== "READY" && current.status === "READY";
+  const missingReadyBalance =
+    status === "READY" &&
+    current.paymentPercentage === 50 &&
+    !current.saldoPagoAt &&
+    (!current.saldoInitPoint || !current.saldoCobrancaEnviadaAt);
+  const shouldPrepareReady = enteringReady || missingReadyBalance;
+  const balanceCharge = shouldPrepareReady
+    ? await ensureCartOrderBalanceCharge(current)
+    : null;
 
   const order = await prisma.order.update({
     where: { id },
@@ -372,14 +457,24 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
         : leavingReady
           ? null
           : current.prontoAt,
-      notificadoProntoClienteAt: enteringReady
+      notificadoProntoClienteAt: shouldPrepareReady
         ? null
         : current.notificadoProntoClienteAt,
+      saldoExternalReference:
+        balanceCharge?.saldoExternalReference ?? current.saldoExternalReference,
+      saldoPreferenceId:
+        balanceCharge?.saldoPreferenceId ?? current.saldoPreferenceId,
+      saldoInitPoint: balanceCharge?.saldoInitPoint ?? current.saldoInitPoint,
+      saldoTotalCobrado:
+        balanceCharge?.saldoTotalCobrado ?? current.saldoTotalCobrado,
+      saldoCobrancaEnviadaAt: shouldPrepareReady
+        ? null
+        : current.saldoCobrancaEnviadaAt,
     },
     include: { items: true },
   });
 
-  if (enteringReady && order.customerPhone) {
+  if (shouldPrepareReady && order.customerPhone) {
     const claimedAt = new Date();
     const claim = await prisma.order.updateMany({
       where: { id: order.id, notificadoProntoClienteAt: null },
@@ -396,6 +491,12 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
           throw new Error(
             "Envio de pronto para cliente nao confirmado pelo servico de WhatsApp.",
           );
+        }
+        if (order.paymentPercentage === 50 && !order.saldoPagoAt) {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { saldoCobrancaEnviadaAt: claimedAt },
+          });
         }
       } catch (error) {
         await prisma.order.updateMany({
@@ -415,6 +516,33 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
   }
 
   return order;
+}
+
+export async function processReadyCartOrderBalanceCharges() {
+  const orders = await prisma.order.findMany({
+    where: {
+      status: "READY",
+      paymentPercentage: 50,
+      saldoPagoAt: null,
+      OR: [
+        { saldoInitPoint: null },
+        { saldoCobrancaEnviadaAt: null },
+      ],
+    },
+    select: { id: true },
+    take: 20,
+  });
+
+  for (const order of orders) {
+    try {
+      await updateCartOrderStatus(order.id, "READY");
+    } catch (error) {
+      console.error("Falha ao processar cobranca de saldo do carrinho", {
+        orderId: order.id,
+        error,
+      });
+    }
+  }
 }
 
 export async function markCartOrderPaidManually({

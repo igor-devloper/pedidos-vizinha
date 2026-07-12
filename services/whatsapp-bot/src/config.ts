@@ -20,7 +20,10 @@ export const config = {
   baseUrl: readOptional("BASE_URL", `http://localhost:${process.env.PORT || 8787}`),
   apiKey: readRequired("BOT_API_KEY"),
   webhookUrl: process.env.WEBHOOK_URL?.trim() || undefined,
-  geminiApiKey: process.env.GEMINI_API_KEY?.trim() || undefined,
+  geminiApiKey:
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_API_KEY?.trim() ||
+    undefined,
   geminiModel: readOptional("GEMINI_MODEL", "gemini-2.5-flash"),
   businessName: readOptional("BUSINESS_NAME", "Vizinha Salgateria"),
   cardapioUrl: readOptional(

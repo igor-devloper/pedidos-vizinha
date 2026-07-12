@@ -50,6 +50,30 @@ type CardFormData = {
   };
 };
 
+type CardBrickError = {
+  type?: string;
+  cause?: string;
+  message?: string;
+};
+
+function getCardBrickErrorMessage(error: CardBrickError, amount: number) {
+  const detail = `${error.cause || ""} ${error.message || ""}`.toLowerCase();
+
+  if (amount < 0.5 || detail.includes("amount")) {
+    return "O valor deste teste e muito baixo para pagamento com cartao. Teste com um pedido de pelo menos R$ 0,50.";
+  }
+
+  if (
+    detail.includes("public_key") ||
+    detail.includes("credential") ||
+    detail.includes("unauthorized")
+  ) {
+    return "Nao foi possivel validar a chave publica do Mercado Pago. Confira se Public Key e Access Token pertencem a mesma integracao e ao mesmo ambiente.";
+  }
+
+  return "Nao foi possivel carregar o formulario do cartao. Atualize a pagina e tente novamente.";
+}
+
 export function CartTransparentPayment({
   session,
   customerEmail,
@@ -262,6 +286,10 @@ export function CartTransparentPayment({
             </div>
           )}
         </div>
+      ) : session.chargedAmount < 0.5 ? (
+        <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-base font-bold text-amber-900">
+          O valor deste teste e muito baixo para pagamento com cartao. Teste com um pedido de pelo menos R$ 0,50.
+        </div>
       ) : !mercadoPagoPublicKey ? (
         <div role="alert" className="rounded-2xl border border-red-300 bg-red-50 p-5 text-base font-bold text-red-800">
           Pagamento com cartao indisponivel: configure NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY.
@@ -297,7 +325,17 @@ export function CartTransparentPayment({
             }}
             locale="pt-BR"
             onReady={() => setCardReady(true)}
-            onError={() => setMessage("Nao foi possivel carregar o formulario do cartao. Tente novamente.")}
+            onError={(error) => {
+              console.error("Mercado Pago Card Payment Brick failed", {
+                type: error.type,
+                cause: error.cause,
+                message: error.message,
+                paymentMethod: session.paymentMethod,
+                chargedAmount: session.chargedAmount,
+              });
+              setCardReady(true);
+              setMessage(getCardBrickErrorMessage(error, session.chargedAmount));
+            }}
             onSubmit={(formData) => payCard(formData as CardFormData)}
           />
           <p className="px-2 pb-2 text-center text-sm text-[#405348]">

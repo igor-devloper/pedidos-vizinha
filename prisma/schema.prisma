@@ -106,6 +106,13 @@ model Order {
   pixQrCode                 String?
   pixQrCodeBase64           String?
   pixExpirationDate         DateTime?
+  saldoExternalReference    String?         @unique
+  saldoPreferenceId         String?
+  saldoPaymentId            String?
+  saldoInitPoint            String?
+  saldoTotalCobrado         Decimal?        @db.Decimal(10, 2)
+  saldoPagoAt               DateTime?
+  saldoCobrancaEnviadaAt    DateTime?
   externalReference         String          @unique
   customerName              String?
   customerEmail             String?

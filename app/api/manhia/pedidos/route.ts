@@ -8,6 +8,7 @@ import {
 } from "@/lib/pedido-service";
 import {
   processPaidCartOrdersSideEffects,
+  processReadyCartOrderBalanceCharges,
   serializeCartOrderForAdmin,
 } from "@/lib/cart-order-service";
 
@@ -20,6 +21,7 @@ export async function GET(req: Request) {
     await processReadyPedidoToleranceReminders();
     await processPaidPedidosSideEffects();
     await processPaidCartOrdersSideEffects();
+    await processReadyCartOrderBalanceCharges();
 
     const pedidos = await prisma.pedido.findMany({
       orderBy: [{ createdAt: "desc" }],

@@ -16,6 +16,7 @@ import { getStoreSettings } from "@/lib/business-hours";
 import { processPaidPedidosSideEffects } from "@/lib/pedido-service";
 import {
   processPaidCartOrdersSideEffects,
+  processReadyCartOrderBalanceCharges,
   serializeCartOrderForAdmin,
 } from "@/lib/cart-order-service";
 import { normalizeOperationSchedule } from "@/lib/site-config";
@@ -86,6 +87,7 @@ async function getProductTypes(): Promise<ProductTypeAdmin[]> {
 async function getSimpleOrders(): Promise<SimpleOrderAdmin[]> {
   try {
     await processPaidCartOrdersSideEffects();
+    await processReadyCartOrderBalanceCharges();
     await processPaidPedidosSideEffects();
     const orders = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },

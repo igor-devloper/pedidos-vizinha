@@ -626,8 +626,8 @@ export function FloatingCart({
           className={cn(
             "grid grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-white p-0",
             isDesktop
-              ? "h-[86vh] w-[min(94vw,72rem)] max-w-6xl rounded-2xl [&>[data-slot=dialog-close]]:hidden"
-              : "h-[calc(100dvh-0.75rem)] max-h-none rounded-t-3xl border-x-0 border-b-0 [&>[data-slot=drawer-header]]:pt-2"
+              ? "h-[min(90vh,56rem)] w-[94vw] max-w-none rounded-2xl sm:w-[94vw] sm:max-w-none md:w-[92vw] md:max-w-5xl lg:w-[88vw] lg:max-w-6xl xl:w-[80vw] [&>[data-slot=dialog-close]]:hidden"
+              : "rounded-t-3xl border-x-0 border-b-0 [&>[data-slot=drawer-header]]:pt-2"
           )}
         >
           <DialogHeader className={cn(
@@ -686,7 +686,7 @@ export function FloatingCart({
               {cart.items.map((item) => (
                 <div
                   key={item.id}
-                  className="grid gap-4 rounded-2xl border border-[#cad99b] bg-[#fbfff0] p-4 sm:grid-cols-[72px_1fr_auto]"
+                  className="grid gap-4 rounded-2xl border border-[#cad99b] bg-[#fbfff0] p-4 md:grid-cols-[88px_minmax(0,1fr)_auto] lg:gap-6 lg:p-5"
                 >
                   <div className="relative h-20 overflow-hidden rounded-xl bg-white sm:h-16">
                     <Image src={item.image} alt={item.name} fill unoptimized className="object-cover" />
@@ -735,11 +735,11 @@ export function FloatingCart({
                     </Button>
                   </div>
                   {itemError?.id === item.id ? (
-                    <p role="alert" className="text-sm font-semibold text-red-700 sm:col-span-3">
+                    <p role="alert" className="text-sm font-semibold text-red-700 md:col-span-3">
                       {itemError.message}
                     </p>
                   ) : null}
-                  <div className="space-y-3 sm:col-span-3">
+                  <div className="space-y-3 md:col-span-3">
                     <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[#dfeab9] bg-white p-3 sm:p-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-base font-bold text-[#0b3d18]">Sabores do pedido</p>
@@ -754,7 +754,7 @@ export function FloatingCart({
                           (entry, index) => (
                             <div
                               key={`${item.id}-${index}`}
-                              className="grid gap-3 rounded-[1.25rem] border border-[#edf3d7] bg-[linear-gradient(180deg,#fbfff0,#f7fde3)] p-3 sm:grid-cols-[1fr_112px_auto]"
+                              className="grid gap-3 rounded-[1.25rem] border border-[#edf3d7] bg-[linear-gradient(180deg,#fbfff0,#f7fde3)] p-3 md:grid-cols-[minmax(220px,1fr)_140px_auto] lg:gap-4 lg:p-4"
                             >
                               <div className="space-y-2">
                                 <label className="text-sm font-medium text-[#284a2e]">

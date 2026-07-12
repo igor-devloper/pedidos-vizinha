@@ -1,7 +1,6 @@
 ﻿import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Lobster } from "next/font/google";
 import { ArrowRight, BadgePercent, Clock3, Flame, Heart, Star, Trophy } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +12,6 @@ import { formatCurrency } from "@/lib/pedidos";
 import { getProdutoComboItens, PRODUCT_CATEGORY_LABEL } from "@/lib/produtos";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
-
-const lobster = Lobster({
-  subsets: ["latin"],
-  weight: "400",
-});
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +127,7 @@ function ProductCard({
         )}
       >
         <div className="space-y-2">
-          <h2 className={cn("text-xl font-black tracking-tight text-[#0b2d16]", isSaoJoaoTheme && lobster.className)}>
+          <h2 className="text-xl font-black tracking-tight text-[#0b2d16]">
             {produto.nome}
           </h2>
           <p className="text-sm leading-6 text-[#456148]">{produto.descricao}</p>
@@ -296,12 +290,7 @@ export default async function CardapioPage() {
                     {isValentinesTheme ? "Especial para presentear" : "Encomendas online"}
                   </Badge>
 
-                  <h1
-                    className={cn(
-                      "max-w-2xl text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl",
-                      isSaoJoaoTheme && lobster.className
-                    )}
-                  >
+                  <h1 className="max-w-2xl text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
                     {isValentinesTheme
                       ? "Amor na mesa, sabor para dividir"
                       : isSaoJoaoTheme
