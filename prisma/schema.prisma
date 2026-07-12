@@ -102,6 +102,10 @@ model Order {
   mercadoPagoPreferenceId   String?
   mercadoPagoInitPoint      String?
   mercadoPagoPaymentId      String?
+  mercadoPagoStatusDetail   String?
+  pixQrCode                 String?
+  pixQrCodeBase64           String?
+  pixExpirationDate         DateTime?
   externalReference         String          @unique
   customerName              String?
   customerEmail             String?

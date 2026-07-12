@@ -11,7 +11,6 @@ import {
 } from "@/lib/cart";
 import { getFullStoreStatus, isSameBusinessDate } from "@/lib/business-hours";
 import { prisma } from "@/lib/db";
-import { createCartMercadoPagoPreference } from "@/lib/mercado-pago";
 import {
   calculatePaymentAmounts,
   validateDeliveryDate,
@@ -64,6 +63,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
       customerName?: string;
+      customerEmail?: string;
       customerPhone?: string;
       paymentPercentage?: number;
       paymentMethod?: MetodoPagamento;
@@ -77,6 +77,7 @@ export async function POST(req: Request) {
     }
 
     const customerName = body.customerName?.trim() || "";
+    const customerEmail = body.customerEmail?.trim() || "";
     const customerPhone = body.customerPhone?.trim() || "";
 
     if (customerName.length < 2) {
@@ -89,6 +90,13 @@ export async function POST(req: Request) {
     if (customerPhone.replace(/\D/g, "").length < 10) {
       return NextResponse.json(
         { error: "Informe um WhatsApp valido para finalizar o pedido." },
+        { status: 400 },
+      );
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(customerEmail)) {
+      return NextResponse.json(
+        { error: "Informe um e-mail valido para o pagamento." },
         { status: 400 },
       );
     }
@@ -197,7 +205,7 @@ export async function POST(req: Request) {
         code: orderCode,
         scheduledAt,
         customerName,
-        customerEmail: null,
+        customerEmail,
         customerPhone,
         totalAmount: snapshot.totalAmount,
         paymentPercentage,
@@ -231,36 +239,11 @@ export async function POST(req: Request) {
       include: { items: true },
     });
 
-    const preference = await createCartMercadoPagoPreference({
-      order,
-      payer: {
-        name: order.customerName,
-        email: order.customerEmail,
-        phone: order.customerPhone,
-      },
-      items: order.items.map((item) => ({
-        id: item.productId,
-        title: `${item.productName} (${item.productType})`,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-      })),
-      paymentMethod,
-      chargedAmount: payment.totalToCharge,
-    });
-
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        mercadoPagoId: preference.id,
-        mercadoPagoPreferenceId: preference.id,
-        mercadoPagoInitPoint: preference.init_point,
-      },
-    });
-
     const response = NextResponse.json({
       orderId: order.id,
-      preferenceId: preference.id,
-      redirectUrl: preference.init_point,
+      externalReference: order.externalReference,
+      paymentMethod,
+      chargedAmount: payment.totalToCharge,
     });
 
     if (isNew) {

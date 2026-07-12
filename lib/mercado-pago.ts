@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 
 import { Prisma, type Pedido } from "@prisma/client";
 
@@ -30,21 +30,142 @@ export type MercadoPagoPaymentResponse = {
     id?: string | number | null;
   };
   metadata?: Record<string, unknown>;
+  date_of_expiration?: string;
+  point_of_interaction?: {
+    transaction_data?: {
+      qr_code?: string;
+      qr_code_base64?: string;
+    };
+  };
 };
 
 type MercadoPagoPaymentSearchResponse = {
   results?: MercadoPagoPaymentResponse[];
 };
 
+type MercadoPagoErrorResponse = {
+  message?: string;
+  error?: string;
+  cause?: Array<{
+    code?: string | number;
+    description?: string;
+  }>;
+};
+
 export class MercadoPagoApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    public readonly path: string
+    public readonly path: string,
+    public readonly code?: string
   ) {
     super(message);
     this.name = "MercadoPagoApiError";
   }
+}
+
+const MERCADO_PAGO_STATUS_MESSAGES: Record<string, string> = {
+  bad_filled_card_data: "Confira os dados do cartao e tente novamente.",
+  card_disabled: "Este cartao esta bloqueado ou desabilitado. Fale com o banco ou use outro cartao.",
+  cc_rejected_bad_filled_card_number: "Confira o numero do cartao.",
+  cc_rejected_bad_filled_date: "Confira a data de validade do cartao.",
+  cc_rejected_bad_filled_other: "Confira os dados do cartao e tente novamente.",
+  cc_rejected_bad_filled_security_code: "Confira o codigo de seguranca do cartao.",
+  cc_rejected_call_for_authorize: "O banco precisa autorizar esta compra. Fale com o banco ou use outro cartao.",
+  cc_rejected_card_disabled: "Este cartao esta bloqueado ou desabilitado. Fale com o banco ou use outro cartao.",
+  cc_rejected_duplicated_payment: "Este pagamento ja foi enviado. Aguarde a confirmacao antes de tentar novamente.",
+  cc_rejected_high_risk: "O pagamento nao foi autorizado. Use outra forma de pagamento.",
+  cc_rejected_insufficient_amount: "Saldo ou limite insuficiente. Use outro cartao ou forma de pagamento.",
+  cc_rejected_invalid_installments: "O numero de parcelas escolhido nao esta disponivel.",
+  cc_rejected_max_attempts: "O limite de tentativas foi atingido. Use outro cartao ou forma de pagamento.",
+  cc_rejected_other_reason: "O banco nao autorizou o pagamento. Tente novamente ou use outro cartao.",
+  high_risk: "O pagamento nao foi autorizado. Use outra forma de pagamento.",
+  insufficient_amount: "Saldo ou limite insuficiente. Use outro cartao ou forma de pagamento.",
+  invalid_installments: "O numero de parcelas escolhido nao esta disponivel.",
+  max_attempts_exceeded: "O limite de tentativas foi atingido. Use outro cartao ou forma de pagamento.",
+  rejected_by_issuer: "O banco nao autorizou o pagamento. Tente novamente ou use outro cartao.",
+  required_call_for_authorize: "O banco precisa autorizar esta compra. Fale com o banco ou use outro cartao.",
+};
+
+export function getMercadoPagoPaymentStatusMessage(statusDetail?: string | null) {
+  if (!statusDetail) return "Nao foi possivel processar o pagamento. Tente novamente.";
+  return MERCADO_PAGO_STATUS_MESSAGES[statusDetail] || "O pagamento nao foi autorizado. Tente novamente ou use outra forma de pagamento.";
+}
+
+export function getMercadoPagoErrorMessage(error: unknown) {
+  if (!(error instanceof MercadoPagoApiError)) {
+    return "Nao foi possivel processar o pagamento. Tente novamente.";
+  }
+
+  const normalizedMessage = `${error.code || ""} ${error.message}`.toLowerCase();
+
+  if (
+    error.code === "17" ||
+    normalizedMessage.includes("unauthorized use of live credentials")
+  ) {
+    return "As credenciais do Mercado Pago nao correspondem ao ambiente atual. Configure o par de Public Key e Access Token de teste ou ative o par de producao da mesma integracao.";
+  }
+  const statusDetail = Object.keys(MERCADO_PAGO_STATUS_MESSAGES).find((detail) =>
+    normalizedMessage.includes(detail)
+  );
+
+  if (statusDetail) return getMercadoPagoPaymentStatusMessage(statusDetail);
+  if (error.status === 401 || error.status === 403) {
+    return "O pagamento esta temporariamente indisponivel. Tente novamente mais tarde.";
+  }
+  if (error.status === 429) {
+    return "Muitas tentativas de pagamento. Aguarde um momento e tente novamente.";
+  }
+
+  return "Nao foi possivel processar o pagamento. Confira os dados e tente novamente.";
+}
+
+type CartMercadoPagoOrder = {
+  id: string;
+  externalReference: string;
+  code?: string | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+};
+
+type CartMercadoPagoPayer = {
+  email?: string | null;
+  name?: string | null;
+  phone?: string | null;
+  identification?: {
+    type: string;
+    number: string;
+  } | null;
+};
+
+function buildCartPaymentPayer(order: CartMercadoPagoOrder, payer: CartMercadoPagoPayer) {
+  const phone = payer.phone || order.customerPhone;
+
+  return {
+    email: payer.email || order.customerEmail || undefined,
+    first_name: payer.name || order.customerName || undefined,
+    phone: phone
+      ? { number: String(phone).replace(/\D/g, "") }
+      : undefined,
+    identification: payer.identification || undefined,
+  };
+}
+
+function getCartPaymentBase(order: CartMercadoPagoOrder, payer: CartMercadoPagoPayer, chargedAmount: number) {
+  return {
+    transaction_amount: Number(chargedAmount),
+    external_reference: order.externalReference,
+    description: `Pedido ${order.code || order.id.slice(0, 8).toUpperCase()}`,
+    notification_url:
+      process.env.MP_WEBHOOK_URL?.trim() ||
+      `${BUSINESS_INFO.appUrl}/api/mercadopago/webhook`,
+    payer: buildCartPaymentPayer(order, payer),
+    metadata: {
+      cartOrderId: order.id,
+      cartOrderCode: order.code || order.id.slice(0, 8).toUpperCase(),
+    },
+  };
 }
 
 function getAccessToken() {
@@ -80,14 +201,16 @@ async function mercadoPagoRequest<T>(path: string, init?: RequestInit): Promise<
     signal: init?.signal ?? AbortSignal.timeout(10000),
   });
 
-  const data = (await response.json().catch(() => null)) as T | { message?: string } | null;
+  const data = (await response.json().catch(() => null)) as T | MercadoPagoErrorResponse | null;
 
   if (!response.ok) {
+    const apiError = data && typeof data === "object" ? data as MercadoPagoErrorResponse : null;
     throw new MercadoPagoApiError(
-      (data && typeof data === "object" && "message" in data && data.message) ||
+      apiError?.message ||
         `Mercado Pago respondeu ${response.status}.`,
       response.status,
-      path
+      path,
+      String(apiError?.cause?.[0]?.code || apiError?.error || "") || undefined
     );
   }
 
@@ -289,6 +412,100 @@ export async function createCartMercadoPagoPreference({
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function createCartMercadoPagoPixPayment({
+  order,
+  payer,
+  chargedAmount,
+  idempotencySuffix,
+}: {
+  order: CartMercadoPagoOrder;
+  payer: CartMercadoPagoPayer;
+  chargedAmount: number;
+  idempotencySuffix?: string;
+}) {
+  const methods = await listMercadoPagoMethods();
+  const pixMethod = methods.find(
+    (method) =>
+      method.id === "PIX" &&
+      method.paymentTypeId === "bank_transfer" &&
+      method.gatewayMethodId === "pix"
+  );
+
+  if (!pixMethod) {
+    throw new Error("Pix indisponivel no Mercado Pago.");
+  }
+
+  const payment = await mercadoPagoRequest<MercadoPagoPaymentResponse>("/v1/payments", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": `cart-${order.id}-pix${idempotencySuffix ? `-${idempotencySuffix}` : ""}`,
+    },
+    body: JSON.stringify({
+      ...getCartPaymentBase(order, payer, chargedAmount),
+      payment_method_id: "pix",
+    }),
+  });
+
+  return {
+    id: payment.id,
+    status: payment.status,
+    statusDetail: payment.status_detail || null,
+    qrCode: payment.point_of_interaction?.transaction_data?.qr_code || null,
+    qrCodeBase64:
+      payment.point_of_interaction?.transaction_data?.qr_code_base64 || null,
+    expirationDate: payment.date_of_expiration || null,
+  };
+}
+
+export async function createCartMercadoPagoCardPayment({
+  order,
+  payer,
+  chargedAmount,
+  token,
+  paymentMethodId,
+  issuerId,
+  installments,
+}: {
+  order: CartMercadoPagoOrder;
+  payer: CartMercadoPagoPayer;
+  chargedAmount: number;
+  token: string;
+  paymentMethodId: string;
+  issuerId: string | number;
+  installments: number;
+}) {
+  const methods = await listMercadoPagoMethods();
+  const cardPaymentsEnabled = methods.some(
+    (method) =>
+      (method.paymentTypeId === "credit_card" || method.paymentTypeId === "debit_card") &&
+      Boolean(method.gatewayMethodId)
+  );
+
+  if (!cardPaymentsEnabled) {
+    throw new Error("Pagamento com cartao indisponivel no Mercado Pago.");
+  }
+
+  const payment = await mercadoPagoRequest<MercadoPagoPaymentResponse>("/v1/payments", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": `cart-${order.id}-card-${createHash("sha256").update(token).digest("hex").slice(0, 16)}`,
+    },
+    body: JSON.stringify({
+      ...getCartPaymentBase(order, payer, chargedAmount),
+      token,
+      payment_method_id: paymentMethodId,
+      issuer_id: issuerId,
+      installments,
+    }),
+  });
+
+  return {
+    id: payment.id,
+    status: payment.status,
+    statusDetail: payment.status_detail || null,
+  };
 }
 
 export async function getMercadoPagoPayment(paymentId: string) {
