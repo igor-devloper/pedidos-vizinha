@@ -321,7 +321,7 @@ export function ManhiaBotDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(getApiErrorMessage(data, "Falha ao executar acao."));
+        throw new Error(getApiErrorMessage(data, "Falha ao executar a ação."));
       }
 
       if (action === "delete") {
@@ -347,7 +347,7 @@ export function ManhiaBotDashboard({
       void refreshInstances();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Falha ao executar acao.";
+        error instanceof Error ? error.message : "Falha ao executar a ação.";
       toast.error(message);
     } finally {
       setActingInstanceId(null);
@@ -560,7 +560,7 @@ export function ManhiaBotDashboard({
                           name: event.target.value,
                         }))
                       }
-                      placeholder="Ex: Atendimento Vizinha"
+                      placeholder="Ex.: Atendimento Vizinha"
                       className="border-pink-100 bg-white focus-visible:ring-pink-400"
                     />
                   </div>
@@ -652,7 +652,7 @@ export function ManhiaBotDashboard({
                           </p>
                           {instance.phoneNumber && (
                             <p className="text-sm text-slate-500">
-                              Numero: {instance.phoneNumber}
+                              Número: {instance.phoneNumber}
                             </p>
                           )}
                           {instance.webhookUrl && (
@@ -786,7 +786,7 @@ export function ManhiaBotDashboard({
                           descricao: event.target.value,
                         }))
                       }
-                      placeholder="Resumo rapido do papel desse fluxo"
+                      placeholder="Resumo rápido do papel desse fluxo"
                       className="border-pink-100 bg-white focus-visible:ring-pink-400"
                     />
                   </div>

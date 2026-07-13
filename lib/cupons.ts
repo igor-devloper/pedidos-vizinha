@@ -20,11 +20,11 @@ export function validateCupomPayload(body: CupomPayloadInput) {
   const ativo = body.ativo ?? true;
 
   if (!codigo) {
-    return { error: "Informe o codigo do cupom." };
+    return { error: "Informe o código do cupom." };
   }
 
   if (codigo.length < 3) {
-    return { error: "Use um codigo de cupom com pelo menos 3 caracteres." };
+    return { error: "Use um código de cupom com pelo menos 3 caracteres." };
   }
 
   if (!divulgadorNome) {

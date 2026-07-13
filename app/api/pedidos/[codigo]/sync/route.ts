@@ -14,7 +14,7 @@ export async function POST(
   } catch (error) {
     console.error("POST /api/pedidos/[codigo]/sync error", error);
     return NextResponse.json(
-      { error: "Nao foi possivel sincronizar o pagamento." },
+      { error: "Não foi possível sincronizar o pagamento." },
       { status: 500 }
     );
   }

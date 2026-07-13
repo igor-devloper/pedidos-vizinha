@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
     if (!settings.isOpen && isSameBusinessDate(entrega, new Date())) {
       return NextResponse.json(
-        { error: "A loja esta fechada para pedidos de hoje. Escolha uma data futura para continuar." },
+        { error: "A loja está fechada para pedidos de hoje. Escolha uma data futura para continuar." },
         { status: 400 }
       );
     }
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              "Esse horario ja esta reservado para outra encomenda. Escolha outro horario para continuar.",
+              "Esse horário já está reservado para outra encomenda. Escolha outro horário para continuar.",
           },
           { status: 409 }
         );
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
 
     if (cupomCodigo && (!cupom || !cupom.ativo)) {
       return NextResponse.json(
-        { error: "Cupom invalido para este produto ou inativo." },
+        { error: "Cupom inválido para este produto ou inativo." },
         { status: 400 }
       );
     }
@@ -165,7 +165,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              "Esse horario acabou de ser reservado por outra encomenda. Escolha outro horario para continuar.",
+              "Esse horário acabou de ser reservado por outra encomenda. Escolha outro horário para continuar.",
           },
           { status: 409 }
         );

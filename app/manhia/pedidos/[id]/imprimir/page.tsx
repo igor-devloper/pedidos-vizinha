@@ -25,7 +25,7 @@ export default async function ImprimirPedidoPage({
   });
 
   if (!pedido) {
-    return <main className="p-6 text-sm text-slate-500">Pedido nao encontrado.</main>;
+    return <main className="p-6 text-sm text-slate-500">Pedido não encontrado.</main>;
   }
 
   return (
@@ -123,7 +123,7 @@ export default async function ImprimirPedidoPage({
 
         <div className="thermal-section mt-4 border-t border-dashed border-slate-400 pt-3">
           <p>Subtotal: {formatCurrency(Number(pedido.subtotal))}</p>
-          <p>Taxa de servico: {formatCurrency(Number(pedido.taxaValor))}</p>
+          <p>Taxa de serviço: {formatCurrency(Number(pedido.taxaValor))}</p>
           <p className="font-bold">Total: {formatCurrency(Number(pedido.totalCobrado))}</p>
         </div>
 

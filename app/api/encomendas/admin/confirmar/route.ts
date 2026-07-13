@@ -24,19 +24,19 @@ async function enviarWhatsappConfirmacao({
 }) {
   try {
     if (!telefone) {
-      console.warn("[GZAPPY] Telefone nao informado, envio de WhatsApp ignorado.");
+      console.warn("[GZAPPY] Telefone não informado, envio de WhatsApp ignorado.");
       return;
     }
 
     const token = process.env.GZAPPY_TOKEN;
     if (!token) {
-      console.error("[GZAPPY] GZAPPY_TOKEN nao configurado nas variaveis de ambiente.");
+      console.error("[GZAPPY] GZAPPY_TOKEN não configurado nas variaveis de ambiente.");
       return;
     }
 
     const phone = telefone.replace(/\D/g, "");
     if (!phone) {
-      console.error("[GZAPPY] Telefone invalido apos a normalizacao:", telefone);
+      console.error("[GZAPPY] Telefone inválido após a normalização:", telefone);
       return;
     }
 

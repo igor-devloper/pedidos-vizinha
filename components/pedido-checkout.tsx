@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { MetodoPagamento } from "@prisma/client";
 import {
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
   Minus,
   Plus,
   ShieldCheck,
+  Star,
   Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -225,6 +226,20 @@ export function PedidoCheckout({
   const isCombo = produto.categoria === "COMBO" && produto.comboItens.length > 0;
   const isCentoProduct = produto.categoria === "CENTO";
   const isValentinesTheme = siteTheme === "NAMORADOS";
+  const isSaoJoaoTheme = siteTheme === "SAO_JOAO";
+  const isDefaultTheme = siteTheme === "PADRAO";
+  const themeStyle = {
+    "--theme-accent": isDefaultTheme ? "#e000cf" : "#1b7f31",
+    "--theme-accent-hover": isDefaultTheme ? "#b800aa" : "#156326",
+    "--theme-accent-dark": isDefaultTheme ? "#8f147b" : "#0f5d22",
+    "--theme-surface": isDefaultTheme ? "#fff0fc" : "#f7fde3",
+    "--theme-border": isDefaultTheme ? "#f4a8eb" : "#d8e8a4",
+    "--theme-text": isDefaultTheme ? "#641052" : "#284a2e",
+    "--theme-muted": isDefaultTheme ? "#72506b" : "#48654f",
+    "--theme-strong": isDefaultTheme ? "#4d0e40" : "#0b2d16",
+    "--theme-hover": isDefaultTheme ? "#ffe4fa" : "#eff8d0",
+    "--theme-highlight": isDefaultTheme ? "#bff2ec" : "#ffef8d",
+  } as CSSProperties;
   const minDeliveryDate = useMemo(
     () => getMinDeliveryDate(businessStatus.minimumLeadHours),
     [businessStatus.minimumLeadHours]
@@ -369,7 +384,7 @@ export function PedidoCheckout({
         | null;
 
       if (!response.ok || !data) {
-        throw new Error(data?.error || "Cupom invalido.");
+        throw new Error(data?.error || "Cupom inválido.");
       }
 
       setAppliedCoupon({
@@ -381,7 +396,7 @@ export function PedidoCheckout({
       toast.success("Cupom aplicado.");
     } catch (error) {
       setAppliedCoupon(null);
-      toast.error(error instanceof Error ? error.message : "Nao foi possivel aplicar o cupom.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível aplicar o cupom.");
     } finally {
       setValidatingCoupon(false);
     }
@@ -423,7 +438,7 @@ export function PedidoCheckout({
         | null;
 
       if (!response.ok || !data?.redirectUrl) {
-        throw new Error(data?.error || "Nao foi possivel iniciar o pagamento.");
+        throw new Error(data?.error || "Não foi possível iniciar o pagamento.");
       }
 
       window.location.assign(data.redirectUrl);
@@ -435,7 +450,7 @@ export function PedidoCheckout({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+    <div style={themeStyle} className="grid gap-6 lg:grid-cols-[1fr_420px]">
       <section className="space-y-6">
         {!businessStatus.isOpen ? (
           <Card className="overflow-hidden border-yellow-300 bg-[linear-gradient(135deg,#fff9c4,#fff6e5_55%,#fef3c7)] shadow-lg shadow-yellow-200/40">
@@ -443,10 +458,10 @@ export function PedidoCheckout({
               <AlertTriangle className="mt-1 h-5 w-5 shrink-0 text-amber-700" />
               <div>
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-800">
-                  Atendimento fora do horario
+                  Atendimento fora do horário
                 </p>
                 <p className="mt-2 text-sm leading-6 text-amber-950">
-                  {businessStatus.message} Se voce seguir para o site agora, pode encontrar a loja
+                  {businessStatus.message} Se você seguir para o site agora, pode encontrar a loja
                   fechada.
                 </p>
               </div>
@@ -459,7 +474,9 @@ export function PedidoCheckout({
             "overflow-hidden bg-white/95 shadow-lg",
             isValentinesTheme
               ? "border-[#f4b6c5] shadow-rose-200/30"
-              : "border-[#d8e8a4] shadow-green-200/30"
+              : isDefaultTheme
+                ? "border-[#f4a8eb] shadow-fuchsia-200/30"
+                : "border-[var(--theme-border)] shadow-green-200/30"
           )}
         >
           <div className="grid gap-0 md:grid-cols-[260px_1fr]">
@@ -468,7 +485,9 @@ export function PedidoCheckout({
                 "relative min-h-72",
                 isValentinesTheme
                   ? "bg-[linear-gradient(180deg,#881337,#be123c_52%,#f9a8d4)]"
-                  : "bg-[linear-gradient(180deg,#1b5e20,#2e7d32_45%,#fdd835)]"
+                  : isDefaultTheme
+                    ? "bg-[linear-gradient(180deg,#8f147b,#e800d9_52%,#bff2ec)]"
+                    : "bg-[linear-gradient(180deg,#1b5e20,#2e7d32_45%,#fdd835)]"
               )}
             >
               <Image
@@ -482,10 +501,20 @@ export function PedidoCheckout({
               <div
                 className={cn(
                   "absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-white",
-                  isValentinesTheme ? "bg-[#5f1029]/85" : "bg-[#0b3d0b]/85"
+                  isValentinesTheme
+                    ? "bg-[#5f1029]/85"
+                    : isDefaultTheme
+                      ? "bg-[#8f147b]/90"
+                      : "bg-[#0b3d0b]/85"
                 )}
               >
-                {isValentinesTheme ? "Dia dos Namorados" : "Copa da Vizinha"}
+                {isDefaultTheme
+                  ? "Vizinha Salgateria"
+                  : isValentinesTheme
+                    ? "Dia dos Namorados"
+                    : isSaoJoaoTheme
+                      ? "São João da Vizinha"
+                      : "Copa da Vizinha"}
               </div>
             </div>
 
@@ -494,7 +523,9 @@ export function PedidoCheckout({
                 "space-y-4 p-6",
                 isValentinesTheme
                   ? "bg-[radial-gradient(circle_at_top_right,#fbcfe8_0,transparent_28%),linear-gradient(180deg,#ffffff,#fff1f5)]"
-                  : "bg-[radial-gradient(circle_at_top_right,#fff59d_0,transparent_28%),linear-gradient(180deg,#ffffff,#f7ffe7)]"
+                  : isDefaultTheme
+                    ? "bg-[radial-gradient(circle_at_top_right,#bff2ec_0,transparent_30%),linear-gradient(180deg,#ffffff,#fff0fc)]"
+                    : "bg-[radial-gradient(circle_at_top_right,#fff59d_0,transparent_28%),linear-gradient(180deg,#ffffff,#f7ffe7)]"
               )}
             >
               <div>
@@ -502,7 +533,11 @@ export function PedidoCheckout({
                   <span
                     className={cn(
                       "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white",
-                      isValentinesTheme ? "bg-[#be123c]" : "bg-[#0b5d1e]"
+                      isValentinesTheme
+                        ? "bg-[#be123c]"
+                        : isDefaultTheme
+                          ? "bg-[#e000cf]"
+                          : "bg-[#0b5d1e]"
                     )}
                   >
                     {PRODUCT_CATEGORY_LABEL[produto.categoria]}
@@ -511,22 +546,26 @@ export function PedidoCheckout({
                     <span
                       className={cn(
                         "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em]",
-                        isValentinesTheme ? "bg-[#ffe4ec] text-[#9f1239]" : "bg-[#fedf00] text-[#175c2b]"
+                        isValentinesTheme
+                          ? "bg-[#ffe4ec] text-[#9f1239]"
+                          : isDefaultTheme
+                            ? "bg-[#e9fbf8] text-[#8f147b]"
+                            : "bg-[#fedf00] text-[#175c2b]"
                       )}
                     >
                       {isValentinesTheme ? "Especial para casal" : "Combo fixo"}
                     </span>
                   ) : null}
                 </div>
-                <h1 className="mt-3 text-3xl font-black tracking-tight text-[#0b2d16]">
+                <h1 className="mt-3 text-3xl font-black tracking-tight text-[var(--theme-strong)]">
                   {produto.nome}
                 </h1>
-                <p className="mt-3 text-sm leading-6 text-[#35553d]">{produto.descricao}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--theme-muted)]">{produto.descricao}</p>
               </div>
 
-              <div className="grid gap-3 rounded-[1.5rem] bg-[linear-gradient(135deg,#0f5d22,#1c8d39)] p-4 text-sm text-white sm:grid-cols-3">
+              <div className="grid gap-3 rounded-[1.5rem] bg-[linear-gradient(135deg,var(--theme-accent-dark),var(--theme-accent))] p-4 text-sm text-white sm:grid-cols-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-highlight)]">
                     Valor
                   </p>
                   {discountPreview.discountValue > 0 ? (
@@ -539,16 +578,16 @@ export function PedidoCheckout({
                   )}
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-highlight)]">
                     Unidades
                   </p>
                   <p className="mt-2 text-lg font-semibold">{requiredUnits}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffef8d]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-highlight)]">
                     Tipos
                   </p>
-                  <p className="mt-2 text-lg font-semibold">Ate {maxAllowedTypes}</p>
+                  <p className="mt-2 text-lg font-semibold">Até {maxAllowedTypes}</p>
                 </div>
               </div>
             </CardContent>
@@ -560,7 +599,9 @@ export function PedidoCheckout({
             "bg-white/95 shadow-lg",
             isValentinesTheme
               ? "border-[#f4b6c5] shadow-rose-200/30"
-              : "border-[#d8e8a4] shadow-green-200/30"
+              : isDefaultTheme
+                ? "border-[var(--theme-border)] shadow-fuchsia-200/30"
+                : "border-[var(--theme-border)] shadow-green-200/30"
           )}
         >
           <CardContent className="space-y-6 p-6">
@@ -568,33 +609,35 @@ export function PedidoCheckout({
               <div className="flex items-center gap-2">
                 {isValentinesTheme ? (
                   <Heart className="h-5 w-5 text-[#be123c]" />
+                ) : isDefaultTheme ? (
+                  <Star className="h-5 w-5 text-[var(--theme-accent)]" />
                 ) : (
-                  <Trophy className="h-5 w-5 text-[#1b7f31]" />
+                  <Trophy className="h-5 w-5 text-[var(--theme-accent)]" />
                 )}
                 <h2
                   className={cn(
                     "text-2xl font-semibold",
-                    isValentinesTheme ? "text-[#5f1029]" : "text-[#0b2d16]"
+                    isValentinesTheme ? "text-[#5f1029]" : "text-[var(--theme-strong)]"
                   )}
                 >
                   {isCombo ? "Composição do combo" : "Monte os salgados"}
                 </h2>
               </div>
-              <p className="mt-2 text-sm text-[#48654f]">
+              <p className="mt-2 text-sm text-[var(--theme-muted)]">
                 {isCombo
                   ? "Esse combo já vem com quantidades fechadas. O cliente vê exatamente o que está levando."
-                  : `A soma precisa fechar em ${requiredUnits} unidades e no maximo ${maxAllowedTypes} tipos.`}
+                  : `A soma precisa fechar em ${requiredUnits} unidades e no máximo ${maxAllowedTypes} tipos.`}
               </p>
             </div>
 
             {isCentoProduct ? (
-              <div className="grid gap-2 rounded-[1.5rem] border border-[#dfeab9] bg-[#f7fde3] p-4 sm:max-w-xs">
-                <label className="text-sm font-medium text-[#284a2e]">Quantidade de centos</label>
+              <div className="grid gap-2 rounded-[1.5rem] border border-[var(--theme-border)] bg-[var(--theme-surface)] p-4 sm:max-w-xs">
+                <label className="text-sm font-medium text-[var(--theme-text)]">Quantidade de centos</label>
                 <Select
                   value={String(productQuantity)}
                   onValueChange={(value) => setProductQuantity(Number(value))}
                 >
-                  <SelectTrigger className="w-full border-[#d8e8a4] bg-white">
+                  <SelectTrigger className="w-full border-[var(--theme-border)] bg-white">
                     <SelectValue placeholder="Escolha a quantidade" />
                   </SelectTrigger>
                   <SelectContent>
@@ -605,7 +648,7 @@ export function PedidoCheckout({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-[#48654f]">
+                <p className="text-sm text-[var(--theme-muted)]">
                   Cada cento soma mais {produto.totalUnidades} unidades e libera mais {produto.maxTiposSalgado} tipo{produto.maxTiposSalgado > 1 ? "s" : ""}.
                 </p>
               </div>
@@ -615,20 +658,20 @@ export function PedidoCheckout({
               {items.map((item, index) => (
                 <div
                   key={`${index}-${item.tipo}`}
-                  className="grid gap-3 rounded-[1.5rem] border border-[#dfeab9] bg-[linear-gradient(180deg,#fbfff0,#f7fde3)] p-4 sm:grid-cols-[1fr_120px_auto]"
+                  className="grid gap-3 rounded-[1.5rem] border border-[var(--theme-border)] bg-[linear-gradient(180deg,#ffffff,var(--theme-surface))] p-4 sm:grid-cols-[1fr_120px_auto]"
                 >
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-[#284a2e]">
+                    <label className="text-sm font-medium text-[var(--theme-text)]">
                       {isCombo ? `Item do combo ${index + 1}` : `Tipo de salgado ${index + 1}`}
                     </label>
                     {isCombo ? (
-                      <Input value={item.tipo} disabled className="border-[#d8e8a4] bg-white" />
+                      <Input value={item.tipo} disabled className="border-[var(--theme-border)] bg-white" />
                     ) : produto.saboresSugeridos.length > 0 ? (
                       <Select
                         value={item.tipo}
                         onValueChange={(value) => updateItem(index, { tipo: value })}
                       >
-                        <SelectTrigger className="w-full border-[#d8e8a4] bg-white">
+                        <SelectTrigger className="w-full border-[var(--theme-border)] bg-white">
                           <SelectValue placeholder="Selecione o salgado" />
                         </SelectTrigger>
                         <SelectContent>
@@ -649,7 +692,7 @@ export function PedidoCheckout({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-[#284a2e]">Quantidade</label>
+                    <label className="text-sm font-medium text-[var(--theme-text)]">Quantidade</label>
                     <Input
                       type="number"
                       min="0"
@@ -670,7 +713,7 @@ export function PedidoCheckout({
                       variant="outline"
                       onClick={() => removeType(index)}
                       disabled={isCombo || items.length === 1}
-                      className="w-full rounded-xl border-[#d8e8a4] text-[#1b5e20] hover:bg-[#eff8d0]"
+                      className="w-full rounded-xl border-[var(--theme-border)] text-[var(--theme-accent)] hover:bg-[var(--theme-hover)]"
                     >
                       <Minus className="mr-2 h-4 w-4" />
                       Remover
@@ -685,7 +728,7 @@ export function PedidoCheckout({
                   variant="outline"
                   disabled={!canAddType}
                   onClick={addType}
-                  className="rounded-full border-[#d8e8a4] text-[#1b5e20] hover:bg-[#eff8d0]"
+                  className="rounded-full border-[var(--theme-border)] text-[var(--theme-accent)] hover:bg-[var(--theme-hover)]"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Adicionar tipo
@@ -695,14 +738,14 @@ export function PedidoCheckout({
           </CardContent>
         </Card>
 
-        <Card className="border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
+        <Card className="border-[var(--theme-border)] bg-white/95 shadow-lg shadow-green-200/30">
           <CardContent className="grid gap-4 p-6 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-[#284a2e]">Nome</label>
+              <label className="text-sm font-medium text-[var(--theme-text)]">Nome</label>
               <Input value={clienteNome} onChange={(event) => setClienteNome(event.target.value)} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-[#284a2e]">Telefone / WhatsApp</label>
+              <label className="text-sm font-medium text-[var(--theme-text)]">Telefone / WhatsApp</label>
               <Input
                 value={clienteTelefone}
                 onChange={(event) => setClienteTelefone(event.target.value)}
@@ -710,41 +753,41 @@ export function PedidoCheckout({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-[#284a2e]">E-mail</label>
+              <label className="text-sm font-medium text-[var(--theme-text)]">E-mail</label>
               <Input
                 type="email"
                 value={clienteEmail}
                 onChange={(event) => setClienteEmail(event.target.value)}
-                placeholder="voce@email.com"
+                placeholder="email@exemplo.com"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-[#284a2e]">Entrega</label>
+              <label className="text-sm font-medium text-[var(--theme-text)]">Entrega</label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="relative">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => setCalendarOpen((current) => !current)}
-                    className="h-11 w-full justify-between border-[#d8e8a4] bg-white px-3 text-left text-[#284a2e] hover:bg-[#f7fde3]"
+                    className="h-11 w-full justify-between border-[var(--theme-border)] bg-white px-3 text-left text-[var(--theme-text)] hover:bg-[var(--theme-surface)]"
                   >
                     <span className="truncate">{formatDateLabel(dataEntregaData)}</span>
                     <CalendarDays className="h-4 w-4 shrink-0" />
                   </Button>
 
                   {calendarOpen ? (
-                    <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-[18rem] rounded-2xl border border-[#d8e8a4] bg-white p-4 shadow-[0_24px_60px_rgba(27,94,32,0.18)]">
+                    <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-[18rem] rounded-2xl border border-[var(--theme-border)] bg-white p-4 shadow-[0_24px_60px_rgba(27,94,32,0.18)]">
                       <div className="mb-4 flex items-center justify-between">
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
                           onClick={() => setDisplayMonth((current) => addMonths(current, -1))}
-                          className="h-9 w-9 rounded-full text-[#1b5e20] hover:bg-[#f7fde3]"
+                          className="h-9 w-9 rounded-full text-[var(--theme-accent)] hover:bg-[var(--theme-surface)]"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <p className="text-sm font-semibold capitalize text-[#0b2d16]">
+                        <p className="text-sm font-semibold capitalize text-[var(--theme-strong)]">
                           {new Intl.DateTimeFormat("pt-BR", {
                             month: "long",
                             year: "numeric",
@@ -755,7 +798,7 @@ export function PedidoCheckout({
                           variant="ghost"
                           size="icon"
                           onClick={() => setDisplayMonth((current) => addMonths(current, 1))}
-                          className="h-9 w-9 rounded-full text-[#1b5e20] hover:bg-[#f7fde3]"
+                          className="h-9 w-9 rounded-full text-[var(--theme-accent)] hover:bg-[var(--theme-surface)]"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>
@@ -784,8 +827,8 @@ export function PedidoCheckout({
                               className={cn(
                                 "h-10 rounded-xl text-sm transition",
                                 isSelected
-                                  ? "bg-[#1b7f31] font-semibold text-white"
-                                  : "text-[#284a2e] hover:bg-[#f7fde3]",
+                                  ? "bg-[var(--theme-accent)] font-semibold text-white"
+                                  : "text-[var(--theme-text)] hover:bg-[var(--theme-surface)]",
                                 !currentMonth && !isSelected && "text-[#9aad8a]",
                                 isDisabled && "cursor-not-allowed opacity-35 hover:bg-transparent"
                               )}
@@ -799,8 +842,8 @@ export function PedidoCheckout({
                   ) : null}
                 </div>
                 <Select value={dataEntregaHora} onValueChange={setDataEntregaHora}>
-                  <SelectTrigger className="w-full border-[#d8e8a4] bg-white">
-                    <SelectValue placeholder="Selecione o horario" />
+                  <SelectTrigger className="w-full border-[var(--theme-border)] bg-white">
+                    <SelectValue placeholder="Selecione o horário" />
                   </SelectTrigger>
                   <SelectContent>
                     {timeSlots.map((time) => (
@@ -813,21 +856,21 @@ export function PedidoCheckout({
               </div>
               {selectedDateHasNoSchedule ? (
                 <p className="text-sm text-amber-700">
-                  Nao atendemos nessa data. Escolha um dia com horario ativo na operacao.
+                  Não atendemos nessa data. Escolha um dia com horário ativo na operação.
                 </p>
               ) : (
-                <p className="text-sm text-[#48654f]">
-                  Escolha a data e depois o horario para evitar confusão no agendamento.
+                <p className="text-sm text-[var(--theme-muted)]">
+                  Escolha a data e depois o horário para evitar confusão no agendamento.
                 </p>
               )}
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-[#284a2e]">Observacoes</label>
+              <label className="text-sm font-medium text-[var(--theme-text)]">Observações</label>
               <Textarea
                 value={observacoes}
                 onChange={(event) => setObservacoes(event.target.value)}
                 className="min-h-24"
-                placeholder="Ponto de referencia, recheios preferidos, observacoes gerais..."
+                placeholder="Ponto de referência, recheios preferidos, observações gerais..."
               />
             </div>
           </CardContent>
@@ -835,23 +878,23 @@ export function PedidoCheckout({
       </section>
 
       <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-        <Card className="border-[#d8e8a4] bg-white/95 shadow-lg shadow-green-200/30">
+        <Card className="border-[var(--theme-border)] bg-white/95 shadow-lg shadow-green-200/30">
           <CardContent className="space-y-5 p-6">
             <div>
-              <h2 className="text-2xl font-semibold text-[#0b2d16]">Pagamento</h2>
-              <p className="mt-2 text-sm text-[#48654f]">
+              <h2 className="text-2xl font-semibold text-[var(--theme-strong)]">Pagamento</h2>
+              <p className="mt-2 text-sm text-[var(--theme-muted)]">
                 Escolha quanto pagar agora e selecione a forma de pagamento.
               </p>
             </div>
 
-            <div className="grid gap-4 rounded-[1.5rem] border border-[#dfeab9] bg-[#f7fde3] p-4">
+            <div className="grid gap-4 rounded-[1.5rem] border border-[var(--theme-border)] bg-[var(--theme-surface)] p-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[#284a2e]">Quanto pagar agora</label>
+                <label className="text-sm font-medium text-[var(--theme-text)]">Quanto pagar agora</label>
                 <Select
                   value={String(percentualPagamento)}
                   onValueChange={(value) => setPercentualPagamento(Number(value) as 50 | 100)}
                 >
-                  <SelectTrigger className="h-11 w-full border-[#d8e8a4] bg-white">
+                  <SelectTrigger className="h-11 w-full border-[var(--theme-border)] bg-white">
                     <SelectValue placeholder="Selecione o valor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -864,18 +907,18 @@ export function PedidoCheckout({
                     )}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-[#48654f]">
+                <p className="text-sm text-[var(--theme-muted)]">
                   Base do pagamento: {formatCurrency((effectivePrice * percentualPagamento) / 100)}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-[#284a2e]">Forma de pagamento</label>
+                <label className="text-sm font-medium text-[var(--theme-text)]">Forma de pagamento</label>
                 <Select
                   value={metodoPagamento}
                   onValueChange={(value) => setMetodoPagamento(value as MetodoPagamento)}
                 >
-                  <SelectTrigger className="h-11 w-full border-[#d8e8a4] bg-white">
+                  <SelectTrigger className="h-11 w-full border-[var(--theme-border)] bg-white">
                     <SelectValue placeholder="Selecione a forma de pagamento" />
                   </SelectTrigger>
                   <SelectContent>
@@ -886,14 +929,14 @@ export function PedidoCheckout({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-[#48654f]">
+                <p className="text-sm text-[var(--theme-muted)]">
                   {selectedMethod?.description || "Escolha a forma de pagamento."}
                 </p>
               </div>
             </div>
 
-            <div className="grid gap-3 rounded-[1.5rem] border border-[#dfeab9] bg-white p-4">
-              <label className="text-sm font-medium text-[#284a2e]">Cupom de desconto</label>
+            <div className="grid gap-3 rounded-[1.5rem] border border-[var(--theme-border)] bg-white p-4">
+              <label className="text-sm font-medium text-[var(--theme-text)]">Cupom de desconto</label>
               <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                 <Input
                   value={cupomCodigo}
@@ -911,7 +954,7 @@ export function PedidoCheckout({
                   variant="outline"
                   disabled={validatingCoupon}
                   onClick={appliedCoupon ? handleRemoveCoupon : () => void handleApplyCoupon()}
-                  className="rounded-xl border-[#d8e8a4] text-[#1b5e20] hover:bg-[#eff8d0]"
+                  className="rounded-xl border-[var(--theme-border)] text-[var(--theme-accent)] hover:bg-[var(--theme-hover)]"
                 >
                   {validatingCoupon ? (
                     <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
@@ -924,8 +967,8 @@ export function PedidoCheckout({
                   {appliedCoupon.codigo}: {appliedCoupon.descontoPercentual}% aplicado.
                 </p>
               ) : (
-                <p className="text-sm text-[#48654f]">
-                  Use o codigo recebido para ganhar desconto no pedido.
+                <p className="text-sm text-[var(--theme-muted)]">
+                  Use o código recebido para ganhar desconto no pedido.
                 </p>
               )}
             </div>
@@ -954,7 +997,7 @@ export function PedidoCheckout({
                   <span>{percentualPagamento}%</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span>Taxa de servico</span>
+                  <span>Taxa de serviço</span>
                   <span>{formatCurrency(paymentPreview.feeAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 text-base font-semibold text-white">
@@ -964,8 +1007,8 @@ export function PedidoCheckout({
               </div>
             </div>
 
-            <div className="rounded-[1.5rem] border border-[#dfeab9] bg-[#f7fde3] p-4 text-sm text-[#35553d]">
-              <p className="font-semibold text-[#0b2d16]">Validacao do pedido</p>
+            <div className="rounded-[1.5rem] border border-[var(--theme-border)] bg-[var(--theme-surface)] p-4 text-sm text-[var(--theme-muted)]">
+              <p className="font-semibold text-[var(--theme-strong)]">Validação do pedido</p>
               <p className={cn("mt-2", remaining === 0 ? "text-emerald-700" : "text-amber-700")}>
                 {remaining === 0
                   ? "Quantidade fechada corretamente."
@@ -975,21 +1018,21 @@ export function PedidoCheckout({
                 Tipos ativos: {activeTypes} de {maxAllowedTypes}
               </p>
               <p className="mt-1">
-                Atendimento: terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.
+                Atendimento: de terça a sábado, das 10h às 17h. Aos domingos, das 9h às 13h. Fechamos às segundas-feiras.
               </p>
               {!businessStatus.isOpen ? (
                 <p className="mt-1 font-medium text-amber-700">
-                  Aviso: o atendimento esta fechado neste momento. Pedidos para datas futuras continuam disponiveis.
+                  Aviso: o atendimento está fechado neste momento. Pedidos para datas futuras continuam disponíveis.
                 </p>
               ) : null}
-              <p className="mt-1">Tolerancia de {BUSINESS_RULES.toleranceMinutes} minutos.</p>
+              <p className="mt-1">Tolerância de {BUSINESS_RULES.toleranceMinutes} minutos.</p>
             </div>
 
             <Button
               type="button"
               disabled={!canSubmit}
               onClick={handleSubmit}
-              className="h-12 rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+              className="h-12 rounded-full bg-[var(--theme-accent)] text-white hover:bg-[var(--theme-accent-hover)]"
             >
               {submitting ? (
                 <>
@@ -1003,11 +1046,18 @@ export function PedidoCheckout({
               )}
             </Button>
 
-            <div className="flex items-start gap-3 rounded-[1.4rem] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+            <div
+              className={cn(
+                "flex items-start gap-3 rounded-[1.4rem] border p-4 text-sm",
+                isDefaultTheme
+                  ? "border-[#b8ebe4] bg-[#e9fbf8] text-[#641052]"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-950",
+              )}
+            >
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Voce sera redirecionada para concluir o pagamento com{" "}
-                <strong>{selectedMethod?.label || "o metodo selecionado"}</strong>.
+                Você será direcionado ao pagamento com{" "}
+                <strong>{selectedMethod?.label || "o método selecionado"}</strong>.
               </p>
             </div>
           </CardContent>

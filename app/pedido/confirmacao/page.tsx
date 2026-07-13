@@ -50,7 +50,7 @@ export default async function PedidoConfirmacaoPage({
               <p className="mt-3 text-sm leading-6 text-slate-500">
                 {isPaid
                   ? "Seu pagamento foi aprovado e o carrinho foi limpo."
-                  : "Recebemos o retorno do pagamento. Sempre que esta pagina for aberta, conferimos novamente no Mercado Pago."}
+                  : "Recebemos o retorno do pagamento. Sempre que esta página for aberta, conferimos novamente no Mercado Pago."}
               </p>
             </div>
 
@@ -99,12 +99,12 @@ export default async function PedidoConfirmacaoPage({
               </div>
             ) : (
               <div className="rounded-[1.4rem] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-                Nao localizamos o resumo deste pedido ainda.
+                Não localizamos o resumo deste pedido ainda.
               </div>
             )}
 
             <Button asChild className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]">
-              <Link href="/cardapio">Voltar ao cardapio</Link>
+              <Link href="/cardapio">Voltar ao cardápio</Link>
             </Button>
           </CardContent>
         </Card>

@@ -1,0 +1,2 @@
+ALTER TABLE "StoreSettings"
+ALTER COLUMN "siteTheme" SET DEFAULT 'PADRAO';

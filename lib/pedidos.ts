@@ -29,10 +29,10 @@ export const pedidoItemSchema = z.object({
 
 export const createPedidoSchema = z.object({
   produtoId: z.string().trim().min(1),
-  productQuantity: z.coerce.number().int().positive("Informe uma quantidade valida do produto.").default(1),
+  productQuantity: z.coerce.number().int().positive("Informe uma quantidade válida do produto.").default(1),
   clienteNome: z.string().trim().min(2, "Informe o nome do cliente."),
-  clienteTelefone: z.string().trim().min(10, "Informe um telefone valido."),
-  clienteEmail: z.string().trim().email("Informe um e-mail valido.").optional().or(z.literal("")),
+  clienteTelefone: z.string().trim().min(10, "Informe um telefone válido."),
+  clienteEmail: z.string().trim().email("Informe um e-mail válido.").optional().or(z.literal("")),
   observacoes: z.string().trim().max(500).optional().or(z.literal("")),
   dataEntrega: z.string().trim().min(1, "Escolha a data e hora de entrega."),
   percentualPagamento: z.union([z.literal(50), z.literal(100)]),
@@ -94,7 +94,7 @@ export function calculatePaymentAmounts(subtotal: number, paymentPercentage: 50 
   const methodConfig = getPaymentMethodConfig(method);
 
   if (!methodConfig) {
-    throw new Error("Metodo de pagamento nao suportado.");
+    throw new Error("Método de pagamento não suportado.");
   }
 
   const baseAmount = Number(((subtotal * paymentPercentage) / 100).toFixed(2));
@@ -139,19 +139,19 @@ export function validateDeliveryDate(
   const schedule = getScheduleForWeekday(operationSchedule, weekday);
 
   if (input.getTime() < minDate.getTime()) {
-    throw new Error(`Escolha um horario com pelo menos ${minimumLeadHours} horas de antecedencia.`);
+    throw new Error(`Escolha um horário com pelo menos ${minimumLeadHours} horas de antecedência.`);
   }
 
   if (!enforceBusinessHours) {
     if (minutes % BUSINESS_RULES.slotMinutes !== 0) {
-      throw new Error(`Escolha um horario em intervalos de ${BUSINESS_RULES.slotMinutes} minutos.`);
+      throw new Error(`Escolha um horário em intervalos de ${BUSINESS_RULES.slotMinutes} minutos.`);
     }
 
     return;
   }
 
   if (!schedule) {
-    throw new Error("Nao atendemos nessa data. Escolha um dia com horario ativo na operacao.");
+    throw new Error("Não atendemos nessa data. Escolha um dia com horário ativo na operação.");
   }
 
   if (!isWithinSchedule && (hour < schedule.openHour || hour > schedule.closeHour)) {
@@ -159,11 +159,11 @@ export function validateDeliveryDate(
   }
 
   if (hour === schedule.closeHour && minutes > 0) {
-    throw new Error(`O ultimo horario disponivel nesse dia e as ${schedule.closeHour}h.`);
+    throw new Error(`O último horário disponível nesse dia é às ${schedule.closeHour}h.`);
   }
 
   if (minutes % BUSINESS_RULES.slotMinutes !== 0) {
-    throw new Error(`Escolha um horario em intervalos de ${BUSINESS_RULES.slotMinutes} minutos.`);
+    throw new Error(`Escolha um horário em intervalos de ${BUSINESS_RULES.slotMinutes} minutos.`);
   }
 }
 
@@ -185,7 +185,7 @@ export function validatePedidoAgainstProduto(
     const comboItens = getProdutoComboItens(produto);
 
     if (items.length !== comboItens.length) {
-      throw new Error("Esse combo possui itens fixos e nao pode ser alterado.");
+      throw new Error("Esse combo possui itens fixos e não pode ser alterado.");
     }
 
     for (const comboItem of comboItens) {
@@ -194,7 +194,7 @@ export function validatePedidoAgainstProduto(
       );
 
       if (!item || item.quantidade !== comboItem.quantidade) {
-        throw new Error("Esse combo possui quantidades fixas e nao pode ser alterado.");
+        throw new Error("Esse combo possui quantidades fixas e não pode ser alterado.");
       }
     }
   }
@@ -210,7 +210,7 @@ export function validatePedidoAgainstProduto(
   }
 
   if (totalTipos > maxAllowedTypes) {
-    throw new Error(`Esse produto permite no maximo ${maxAllowedTypes} tipos diferentes.`);
+    throw new Error(`Esse produto permite no máximo ${maxAllowedTypes} tipos diferentes.`);
   }
 
   return { totalUnidades, totalTipos };
@@ -511,7 +511,7 @@ export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
     ...receiptField("Forma", pedido.metodoPagamentoLabel),
     ...receiptField("Pago agora", `${pedido.percentualPagamento}%`),
     ...receiptField("Subtotal", formatCurrency(Number(pedido.subtotal))),
-    ...receiptField("Taxa servico", formatCurrency(Number(pedido.taxaValor))),
+    ...receiptField("Taxa serviço", formatCurrency(Number(pedido.taxaValor))),
     `TOTAL: ${formatCurrency(Number(pedido.totalCobrado))}`,
     pedido.observacoes ? separator : null,
     pedido.observacoes ? "#OBS" : null,

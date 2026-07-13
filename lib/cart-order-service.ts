@@ -94,7 +94,7 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
     `#PEDIDO CARRINHO ${cartOrderCode(order)}`,
     "-".repeat(30),
     "#CLIENTE",
-    `Nome: ${order.customerName || "Nao informado"}`,
+    `Nome: ${order.customerName || "Não informado"}`,
     order.customerPhone ? `WhatsApp: ${order.customerPhone}` : null,
     order.customerEmail ? `E-mail: ${order.customerEmail}` : null,
     formatScheduledAt(order)
@@ -119,7 +119,7 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
   return formatWhatsAppMessage([
     "✅ *Pedido Confirmado!*",
     [
-      `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
+      `👤 *Cliente:* ${order.customerName || "Não informado"}`,
       order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
       formatScheduledAt(order)
         ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}`
@@ -151,7 +151,7 @@ function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
   return formatWhatsAppMessage([
     "🔔 *Novo Pedido Pago!*",
     [
-      `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
+      `👤 *Cliente:* ${order.customerName || "Não informado"}`,
       order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
       order.customerEmail ? `✉️ *E-mail:* ${order.customerEmail}` : null,
       formatScheduledAt(order)
@@ -284,7 +284,7 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
         );
         if (!result.ok) {
           throw new Error(
-            "Envio para cliente nao confirmado pelo servico de WhatsApp.",
+            "Envio para cliente não confirmado pelo serviço de WhatsApp.",
           );
         }
       } catch (error) {
@@ -315,7 +315,7 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
         );
         if (!result.ok) {
           throw new Error(
-            "Envio para Vizinha nao confirmado pelo servico de WhatsApp.",
+            "Envio para Vizinha não confirmado pelo serviço de WhatsApp.",
           );
         }
       } catch (error) {
@@ -408,7 +408,7 @@ export async function printCartOrderReceipt(id: string) {
   const order = await loadCartOrder(id);
 
   if (!order) {
-    throw new Error("Pedido do carrinho nao encontrado.");
+    throw new Error("Pedido do carrinho não encontrado.");
   }
 
   await sendCartOrderToPrintService({
@@ -433,7 +433,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
   const current = await loadCartOrder(id);
 
   if (!current) {
-    throw new Error("Pedido do carrinho nao encontrado.");
+    throw new Error("Pedido do carrinho não encontrado.");
   }
 
   const enteringReady = status === "READY" && current.status !== "READY";
@@ -489,7 +489,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
         );
         if (!result.ok) {
           throw new Error(
-            "Envio de pronto para cliente nao confirmado pelo servico de WhatsApp.",
+            "Envio de pronto para cliente não confirmado pelo serviço de WhatsApp.",
           );
         }
         if (order.paymentPercentage === 50 && !order.saldoPagoAt) {
@@ -555,11 +555,11 @@ export async function markCartOrderPaidManually({
   const order = await loadCartOrder(id);
 
   if (!order) {
-    throw new Error("Pedido do carrinho nao encontrado.");
+    throw new Error("Pedido do carrinho não encontrado.");
   }
 
   if (order.status === "CANCELLED") {
-    throw new Error("Pedido cancelado nao pode ser confirmado.");
+    throw new Error("Pedido cancelado não pode ser confirmado.");
   }
 
   const updated = await prisma.order.update({

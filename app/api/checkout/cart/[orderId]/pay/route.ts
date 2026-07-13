@@ -16,12 +16,12 @@ import {
 } from "@/lib/mercado-pago";
 
 const cardPaymentSchema = z.object({
-  token: z.string().trim().min(1, "Token do cartao nao informado."),
-  payment_method_id: z.string().trim().min(1, "Metodo do cartao nao informado."),
+  token: z.string().trim().min(1, "Token do cartão não informado."),
+  payment_method_id: z.string().trim().min(1, "Método do cartão não informado."),
   issuer_id: z.union([z.string().trim().min(1), z.number().int().positive()]),
-  installments: z.coerce.number().int().positive("Numero de parcelas invalido."),
+  installments: z.coerce.number().int().positive("Número de parcelas inválido."),
   payer: z.object({
-    email: z.string().trim().email("Informe um e-mail valido."),
+    email: z.string().trim().email("Informe um e-mail válido."),
     identification: z.object({
       type: z.string().trim().min(1),
       number: z.string().trim().min(1),
@@ -47,7 +47,7 @@ export async function GET(
   });
 
   if (!order) {
-    return NextResponse.json({ error: "Pedido nao encontrado." }, { status: 404 });
+    return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
   }
 
   return NextResponse.json({
@@ -70,7 +70,7 @@ export async function POST(
 
     if (!order) {
       return NextResponse.json(
-        { error: "Pedido nao encontrado." },
+        { error: "Pedido não encontrado." },
         { status: 404 },
       );
     }
@@ -91,7 +91,7 @@ export async function POST(
       !rejectedCardCanRetry
     ) {
       return NextResponse.json(
-        { error: "Este pedido nao esta aguardando pagamento." },
+        { error: "Este pedido não está aguardando pagamento." },
         { status: 409 },
       );
     }
@@ -152,7 +152,7 @@ export async function POST(
       order.paymentMethod !== MetodoPagamento.CARTAO_DEBITO
     ) {
       return NextResponse.json(
-        { error: "Forma de pagamento indisponivel no Checkout Transparente." },
+        { error: "Forma de pagamento indisponível no Checkout Transparente." },
         { status: 400 },
       );
     }
@@ -218,7 +218,7 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { error: "Nao foi possivel processar o pagamento." },
+      { error: "Não foi possível processar o pagamento." },
       { status: 500 },
     );
   }

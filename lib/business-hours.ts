@@ -61,11 +61,11 @@ function getScheduleSummary(schedule: BusinessScheduleByWeekday) {
   const days = [
     "domingo",
     "segunda",
-    "terca",
+    "terça",
     "quarta",
     "quinta",
     "sexta",
-    "sabado",
+    "sábado",
   ];
 
   return days
@@ -75,14 +75,14 @@ function getScheduleSummary(schedule: BusinessScheduleByWeekday) {
         return `${day} fechado`;
       }
 
-      return `${day} das ${formatHour(entry.openHour)} as ${formatHour(entry.closeHour)}`;
+      return `${day} dàs ${formatHour(entry.openHour)} às ${formatHour(entry.closeHour)}`;
     })
     .join(", ");
 }
 
 /**
- * Verifica apenas o horario de funcionamento (sem verificar se a loja esta aberta no DB).
- * Use para logica interna que nao depende do painel.
+ * Verifica apenas o horário de funcionamento (sem verificar se a loja está aberta no DB).
+ * Use para logica interna que não depende do painel.
  */
 export function getBusinessHoursStatus(
   now = new Date(),
@@ -96,7 +96,7 @@ export function getBusinessHoursStatus(
   if (!schedule) {
     return {
       isOpen: false,
-      message: `Estamos fora do horario de atendimento. Horarios: ${getScheduleSummary(normalizedSchedule)}.`,
+      message: `Estamos fora do horário de atendimento. Horários: ${getScheduleSummary(normalizedSchedule)}.`,
     };
   }
 
@@ -110,14 +110,14 @@ export function getBusinessHoursStatus(
   return {
     isOpen,
     message: isOpen
-      ? "Estamos em horario de atendimento."
-      : `Agora estamos fora do horario. Hoje atendemos das ${formatHour(schedule.openHour)} as ${formatHour(schedule.closeHour)}.`,
+      ? "Estamos em horário de atendimento."
+      : `Agora estamos fora do horário. Hoje atendemos dàs ${formatHour(schedule.openHour)} às ${formatHour(schedule.closeHour)}.`,
   };
 }
 
 /**
  * Retorna as configuracoes da loja do banco de dados (singleton).
- * Cria o registro com os padroes se ainda nao existir.
+ * Cria o registro com os padroes se ainda não existir.
  */
 export async function getStoreSettings() {
   return prisma.storeSettings.upsert({
@@ -129,13 +129,13 @@ export async function getStoreSettings() {
       minimumLeadHours: BUSINESS_RULES.minimumLeadHours,
       allowMultipleOrdersPerSlot: false,
       operationSchedule: DEFAULT_OPERATION_SCHEDULE,
-      siteTheme: "COPA",
+      siteTheme: "PADRAO",
     },
   });
 }
 
 /**
- * Verifica se a loja esta aberta considerando tanto o horario de funcionamento
+ * Verifica se a loja está aberta considerando tanto o horário de funcionamento
  * quanto o toggle manual do painel.
  */
 export async function getFullStoreStatus(now = new Date()) {
@@ -151,7 +151,7 @@ export async function getFullStoreStatus(now = new Date()) {
       operationSchedule,
       siteTheme: normalizeStoreSiteTheme(settings.siteTheme),
       featuredProductId: settings.featuredProductId,
-      message: "A loja esta fechada no momento. Volte em breve!",
+      message: "A loja está fechada no momento. Volte em breve!",
       closedByOwner: true,
     };
   }
@@ -165,7 +165,7 @@ export async function getFullStoreStatus(now = new Date()) {
     featuredProductId: settings.featuredProductId,
     message: hoursStatus.isOpen
       ? hoursStatus.message
-      : "A loja esta aberta para receber encomendas.",
+      : "A loja está aberta para receber encomendas.",
     closedByOwner: false,
   };
 }

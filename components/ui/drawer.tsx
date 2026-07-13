@@ -6,12 +6,12 @@ import { Drawer as DrawerPrimitive } from "vaul"
 import { cn } from "@/lib/utils"
 
 /**
- * iOS Safari nao recalcula "dvh"/"vh" de forma confiavel quando o teclado
+ * iOS Safari não recalcula "dvh"/"vh" de forma confiável quando o teclado
  * virtual abre dentro de um elemento "position: fixed". Isso fazia o Drawer
- * colapsar (o rodape ficava espremido e a pagina por tras aparecia atras
- * dele). Este hook usa a Visual Viewport API (quando disponivel) para medir
- * a altura real visivel da tela e atualiza sozinho quando o teclado
- * abre/fecha ou a pagina rola.
+ * colapsar (o rodape ficava espremido e a página por tras aparecia atras
+ * dele). Este hook usa a Visual Viewport API (quando disponível) para medir
+ * a altura real visível da tela e atualiza sozinho quando o teclado
+ * abre/fecha ou a página rola.
  */
 function useVisualViewportHeight() {
   const [height, setHeight] = React.useState<number | null>(null)
@@ -45,28 +45,6 @@ function useVisualViewportHeight() {
   return height
 }
 
-/** Trava o scroll do body enquanto o elemento estiver montado (drawer aberto). */
-function useLockBodyScroll(locked: boolean) {
-  React.useEffect(() => {
-    if (!locked) return
-
-    const { style } = document.body
-    const previousOverflow = style.overflow
-    const previousPosition = style.position
-    const previousWidth = style.width
-
-    style.overflow = "hidden"
-    style.position = "fixed"
-    style.width = "100%"
-
-    return () => {
-      style.overflow = previousOverflow
-      style.position = previousPosition
-      style.width = previousWidth
-    }
-  }, [locked])
-}
-
 function Drawer(props: React.ComponentProps<typeof DrawerPrimitive.Root>) {
   return <DrawerPrimitive.Root data-slot="drawer" {...props} />
 }
@@ -91,7 +69,7 @@ function DrawerOverlay({ className, style, ...props }: React.ComponentProps<type
       data-slot="drawer-overlay"
       className={cn("fixed inset-x-0 top-0 z-50 bg-black/50", className)}
       style={{
-        // Altura real da tela visivel (ignora o espaco tomado pelo teclado no iOS).
+        // Altura real da tela visível (ignora o espaco tomado pelo teclado no iOS).
         height: viewportHeight ? `${viewportHeight}px` : "100dvh",
         ...style,
       }}
@@ -102,7 +80,6 @@ function DrawerOverlay({ className, style, ...props }: React.ComponentProps<type
 
 function DrawerContent({ className, style, children, ...props }: React.ComponentProps<typeof DrawerPrimitive.Content>) {
   const viewportHeight = useVisualViewportHeight()
-  useLockBodyScroll(true)
 
   return (
     <DrawerPortal>

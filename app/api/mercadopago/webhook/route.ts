@@ -144,7 +144,7 @@ export async function POST(req: Request) {
         processingErr instanceof MercadoPagoApiError &&
         processingErr.status === 404
       ) {
-        console.warn("[MP webhook] Pagamento nao encontrado no Mercado Pago:", {
+        console.warn("[MP webhook] Pagamento não encontrado no Mercado Pago:", {
           paymentId,
           topic,
           action: body.action,

@@ -54,8 +54,8 @@ export async function botServiceFetch<T>({
     const message =
       data && typeof data === "object" && "error" in data
         ? data.error
-        : "Falha ao comunicar com o servico do bot.";
-    throw new Error(message || "Falha ao comunicar com o servico do bot.");
+        : "Falha ao comunicar com o serviço do bot.";
+    throw new Error(message || "Falha ao comunicar com o serviço do bot.");
   }
 
   return data as T;

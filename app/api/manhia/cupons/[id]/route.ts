@@ -15,7 +15,7 @@ function getToken(req: Request) {
 }
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
 }
 
 function serializeCupom(cupom: {
@@ -67,7 +67,7 @@ export async function PATCH(
     });
 
     if (!produto) {
-      return NextResponse.json({ error: "Produto do cupom nao encontrado." }, { status: 404 });
+      return NextResponse.json({ error: "Produto do cupom não encontrado." }, { status: 404 });
     }
 
     const existing = await prisma.cupomDesconto.findUnique({
@@ -76,7 +76,7 @@ export async function PATCH(
     });
 
     if (existing && existing.id !== id) {
-      return NextResponse.json({ error: "Ja existe um cupom com esse codigo." }, { status: 409 });
+      return NextResponse.json({ error: "Já existe um cupom com esse código." }, { status: 409 });
     }
 
     const cupom = await prisma.cupomDesconto.update({

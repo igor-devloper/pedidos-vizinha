@@ -37,7 +37,7 @@ type PedidoWithReadyFields = PedidoWithItens & {
 
 export class PedidoPaymentReferenceNotFoundError extends Error {
   constructor(public readonly externalReference: string) {
-    super(`Pedido nao encontrado para a referencia ${externalReference}.`);
+    super(`Pedido não encontrado para a referência ${externalReference}.`);
     this.name = "PedidoPaymentReferenceNotFoundError";
   }
 }
@@ -227,7 +227,7 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
       try {
         const result = await sendWhatsappText(pedido.clienteTelefone, clientMessage);
         if (!result.ok) {
-          throw new Error("Envio para cliente nao confirmado pelo servico de WhatsApp.");
+          throw new Error("Envio para cliente não confirmado pelo serviço de WhatsApp.");
         }
       } catch (error) {
         await prisma.pedido.updateMany({
@@ -265,7 +265,7 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
       try {
         const result = await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
         if (!result.ok) {
-          throw new Error("Envio para Vizinha nao confirmado pelo servico de WhatsApp.");
+          throw new Error("Envio para Vizinha não confirmado pelo serviço de WhatsApp.");
         }
       } catch (error) {
         await prisma.pedido.updateMany({
@@ -359,7 +359,7 @@ export async function markPedidoPaidManually({
   const pedidoAtual = await loadPedidoById(id);
 
   if (!pedidoAtual) {
-    throw new Error("Pedido nao encontrado.");
+    throw new Error("Pedido não encontrado.");
   }
 
   const manualPayload = {
@@ -463,7 +463,7 @@ export async function syncPedidoPaymentByExternalReference(externalReference: st
   const pedido = await loadPedidoByReference(externalReference);
 
   if (!pedido) {
-    throw new Error(`Pedido nao encontrado para a referencia ${externalReference}.`);
+    throw new Error(`Pedido não encontrado para a referência ${externalReference}.`);
   }
 
   if (pedido.status !== PedidoStatus.PENDENTE_PAGAMENTO) {
@@ -495,7 +495,7 @@ export async function updatePedidoStatus(id: string, status: PedidoStatus) {
   const pedidoAtual = await loadPedidoById(id);
 
   if (!pedidoAtual) {
-    throw new Error("Pedido nao encontrado.");
+    throw new Error("Pedido não encontrado.");
   }
 
   const pedidoAtualWithReady = pedidoAtual as PedidoWithReadyFields;
@@ -584,7 +584,7 @@ export async function printPedidoReceipt(id: string) {
   const pedido = await loadPedidoById(id);
 
   if (!pedido) {
-    throw new Error("Pedido nao encontrado.");
+    throw new Error("Pedido não encontrado.");
   }
 
   await sendPedidoToPrintService(pedido, "manual");

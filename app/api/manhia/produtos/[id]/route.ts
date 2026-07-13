@@ -16,7 +16,7 @@ function getToken(req: Request) {
 }
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
 }
 
 export async function PATCH(

@@ -83,19 +83,19 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
   }
 
   if (!descricao) {
-    return { error: "Informe a descricao do produto." };
+    return { error: "Informe a descrição do produto." };
   }
 
   if (!Number.isFinite(preco) || preco <= 0) {
-    return { error: "Informe um valor valido." };
+    return { error: "Informe um valor válido." };
   }
 
   if (emPromocao && descontoPercentual <= 0) {
-    return { error: "Informe o percentual de desconto da promocao." };
+    return { error: "Informe o percentual de desconto da promoção." };
   }
 
   if (!imagemBase64.startsWith("data:image/")) {
-    return { error: "Envie uma imagem valida para o produto." };
+    return { error: "Envie uma imagem válida para o produto." };
   }
 
   if (imagemBase64.length > 2_500_000) {

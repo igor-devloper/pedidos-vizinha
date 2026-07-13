@@ -5,7 +5,7 @@ import { type CupomPayloadInput, validateCupomPayload } from "@/lib/cupons";
 import { prisma } from "@/lib/db";
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
 }
 
 function getToken(req: Request) {
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
     });
 
     if (!produto) {
-      return NextResponse.json({ error: "Produto do cupom nao encontrado." }, { status: 404 });
+      return NextResponse.json({ error: "Produto do cupom não encontrado." }, { status: 404 });
     }
 
     const existing = await prisma.cupomDesconto.findUnique({
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
     });
 
     if (existing) {
-      return NextResponse.json({ error: "Ja existe um cupom com esse codigo." }, { status: 409 });
+      return NextResponse.json({ error: "Já existe um cupom com esse código." }, { status: 409 });
     }
 
     const cupom = await prisma.cupomDesconto.create({

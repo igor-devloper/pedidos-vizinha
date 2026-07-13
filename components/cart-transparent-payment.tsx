@@ -60,7 +60,7 @@ function getCardBrickErrorMessage(error: CardBrickError, amount: number) {
   const detail = `${error.cause || ""} ${error.message || ""}`.toLowerCase();
 
   if (amount < 0.5 || detail.includes("amount")) {
-    return "O valor deste teste e muito baixo para pagamento com cartao. Teste com um pedido de pelo menos R$ 0,50.";
+    return "O valor deste teste e muito baixo para pagamento com cartão. Teste com um pedido de pelo menos R$ 0,50.";
   }
 
   if (
@@ -68,10 +68,10 @@ function getCardBrickErrorMessage(error: CardBrickError, amount: number) {
     detail.includes("credential") ||
     detail.includes("unauthorized")
   ) {
-    return "Nao foi possivel validar a chave publica do Mercado Pago. Confira se Public Key e Access Token pertencem a mesma integracao e ao mesmo ambiente.";
+    return "Não foi possível validar a chave pública do Mercado Pago. Confira se Public Key e Access Token pertencem a mesma integração e ao mesmo ambiente.";
   }
 
-  return "Nao foi possivel carregar o formulario do cartao. Atualize a pagina e tente novamente.";
+  return "Não foi possível carregar o formulário do cartão. Atualize a página e tente novamente.";
 }
 
 export function CartTransparentPayment({
@@ -110,12 +110,12 @@ export function CartTransparentPayment({
       const data = (await response.json().catch(() => null)) as PayResponse | null;
 
       if (!response.ok || !data) {
-        throw new Error(data?.error || "Nao foi possivel gerar o Pix. Tente novamente.");
+        throw new Error(data?.error || "Não foi possível gerar o Pix. Tente novamente.");
       }
 
       applyResponse(data);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel gerar o Pix. Tente novamente.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível gerar o Pix. Tente novamente.");
     } finally {
       setLoadingPix(false);
     }
@@ -147,7 +147,7 @@ export function CartTransparentPayment({
           data.pixExpirationDate &&
           new Date(data.pixExpirationDate).getTime() <= Date.now()
         ) {
-          setMessage("Este Pix expirou. Gere um novo codigo para continuar.");
+          setMessage("Este Pix expirou. Gere um novo código para continuar.");
         }
       } catch {
         // O polling e silencioso; uma falha pontual de rede sera tentada novamente.
@@ -184,7 +184,7 @@ export function CartTransparentPayment({
     const data = (await response.json().catch(() => null)) as PayResponse | null;
 
     if (!response.ok || !data) {
-      const errorMessage = data?.error || "Nao foi possivel enviar o pagamento. Tente novamente.";
+      const errorMessage = data?.error || "Não foi possível enviar o pagamento. Tente novamente.";
       setMessage(errorMessage);
       throw new Error(errorMessage);
     }
@@ -200,7 +200,7 @@ export function CartTransparentPayment({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2500);
     } catch {
-      setMessage("Nao foi possivel copiar automaticamente. Selecione o codigo abaixo e copie.");
+      setMessage("Não foi possível copiar automaticamente. Selecione o código abaixo e copie.");
     }
   };
 
@@ -210,7 +210,7 @@ export function CartTransparentPayment({
         <CheckCircle2 className="mx-auto h-16 w-16 text-emerald-600" />
         <h2 className="mt-4 text-2xl font-black text-[#0b3d18]">Pagamento aprovado!</h2>
         <p className="mt-2 text-base leading-7 text-[#405348]">
-          Seu pedido foi confirmado. A equipe ja recebeu as informacoes.
+          Seu pedido foi confirmado. A equipe já recebeu as informações.
         </p>
       </div>
     );
@@ -227,7 +227,7 @@ export function CartTransparentPayment({
         <p className="text-sm font-bold uppercase tracking-[0.12em] text-[#52705a]">Pedido criado</p>
         <div className="mt-2 flex items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-black text-[#0b3d18]">{isPix ? "Pague com Pix" : "Pague com cartao"}</h2>
+            <h2 className="text-2xl font-black text-[#0b3d18]">{isPix ? "Pague com Pix" : "Pague com cartão"}</h2>
             <p className="mt-1 text-base text-[#405348]">Valor: <strong>{formatCurrency(session.chargedAmount)}</strong></p>
           </div>
           <Clock3 className="h-9 w-9 shrink-0 text-amber-600" />
@@ -264,13 +264,13 @@ export function CartTransparentPayment({
               <textarea
                 readOnly
                 value={pix.qrCode}
-                aria-label="Codigo Pix copia e cola"
+                aria-label="Código Pix copia e cola"
                 className="mt-2 min-h-24 w-full resize-none rounded-xl border border-[#9fb66a] bg-[#fbfff0] p-3 text-sm text-[#17251a]"
                 onFocus={(event) => event.currentTarget.select()}
               />
               <Button type="button" onClick={() => void copyPix()} className="mt-3 min-h-12 w-full rounded-full bg-[#176c2a] text-base font-black text-white">
                 {copied ? <Check className="mr-2 h-5 w-5" /> : <Copy className="mr-2 h-5 w-5" />}
-                {copied ? "Codigo copiado!" : "Copiar codigo Pix"}
+                {copied ? "Código copiado!" : "Copiar código Pix"}
               </Button>
               <div className="mt-5 rounded-xl bg-amber-50 p-4 text-left text-base text-amber-900">
                 <strong>Aguardando o pagamento.</strong> Esta tela atualiza sozinha quando o Pix for confirmado.
@@ -278,7 +278,7 @@ export function CartTransparentPayment({
             </>
           ) : (
             <div className="py-6">
-              <p className="text-lg font-bold text-red-800">O codigo Pix nao esta disponivel.</p>
+              <p className="text-lg font-bold text-red-800">O código Pix não está disponível.</p>
               <Button type="button" onClick={() => void createPixPayment()} className="mt-4 min-h-12 rounded-full bg-[#176c2a] px-6 text-base font-black text-white">
                 <RefreshCw className="mr-2 h-5 w-5" />
                 Gerar novo Pix
@@ -288,11 +288,11 @@ export function CartTransparentPayment({
         </div>
       ) : session.chargedAmount < 0.5 ? (
         <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-base font-bold text-amber-900">
-          O valor deste teste e muito baixo para pagamento com cartao. Teste com um pedido de pelo menos R$ 0,50.
+          O valor deste teste e muito baixo para pagamento com cartão. Teste com um pedido de pelo menos R$ 0,50.
         </div>
       ) : !mercadoPagoPublicKey ? (
         <div role="alert" className="rounded-2xl border border-red-300 bg-red-50 p-5 text-base font-bold text-red-800">
-          Pagamento com cartao indisponivel: configure NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY.
+          Pagamento com cartão indisponível: configure NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY.
         </div>
       ) : (
         <div className="rounded-3xl border border-[#b8ca7e] bg-white p-3 sm:p-6">
@@ -339,7 +339,7 @@ export function CartTransparentPayment({
             onSubmit={(formData) => payCard(formData as CardFormData)}
           />
           <p className="px-2 pb-2 text-center text-sm text-[#405348]">
-            Os dados do cartao sao protegidos pelo Mercado Pago. Nosso servidor recebe somente um token seguro.
+            Os dados do cartão sao protegidos pelo Mercado Pago. Nosso servidor recebe somente um token seguro.
           </p>
         </div>
       )}

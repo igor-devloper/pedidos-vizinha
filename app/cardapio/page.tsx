@@ -1,4 +1,4 @@
-﻿import Image from "next/image";
+import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, BadgePercent, Clock3, Flame, Heart, Star, Trophy } from "lucide-react";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Cardapio | Vizinha Salgateria",
+  title: "Cardápio | Vizinha Salgateria",
   description: "Monte seu pedido e finalize o pagamento online na Vizinha Salgateria.",
 };
 
@@ -51,6 +51,7 @@ function ProductCard({
   const promotionalPrice = Number((produto.preco * (1 - discountPercent / 100)).toFixed(2));
   const isValentinesTheme = siteTheme === "NAMORADOS";
   const isSaoJoaoTheme = siteTheme === "SAO_JOAO";
+  const isDefaultTheme = siteTheme === "PADRAO";
 
   return (
     <article
@@ -58,7 +59,9 @@ function ProductCard({
         "group flex h-full flex-col overflow-hidden rounded-[2rem] border bg-white transition duration-300 hover:-translate-y-1",
         isValentinesTheme
           ? "border-[#f4b6c5] shadow-[0_20px_60px_rgba(190,18,60,0.16)]"
-          : "border-[#dbe7b6] shadow-[0_20px_60px_rgba(27,94,32,0.16)]"
+          : isDefaultTheme
+            ? "border-[#f4a8eb] shadow-[0_20px_60px_rgba(232,0,217,0.16)]"
+            : "border-[#dbe7b6] shadow-[0_20px_60px_rgba(27,94,32,0.16)]"
       )}
     >
       <div
@@ -66,7 +69,9 @@ function ProductCard({
           "relative aspect-[4/3] overflow-hidden",
           isValentinesTheme
             ? "bg-[linear-gradient(135deg,#881337,#e11d48_52%,#f9a8d4)]"
-            : "bg-[linear-gradient(135deg,#1b5e20,#2e7d32_48%,#fdd835)]"
+            : isDefaultTheme
+              ? "bg-[linear-gradient(135deg,#e800d9,#ff6bea_54%,#bff2ec)]"
+              : "bg-[linear-gradient(135deg,#1b5e20,#2e7d32_48%,#fdd835)]"
         )}
       >
         <Image
@@ -85,13 +90,22 @@ function ProductCard({
               <span
                 className={cn(
                   "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] shadow-lg",
-                  isValentinesTheme ? "bg-[#ffe4ec] text-[#9f1239]" : "bg-[#fedf00] text-[#0b5d1e]"
+                  isValentinesTheme
+                    ? "bg-[#ffe4ec] text-[#9f1239]"
+                    : isDefaultTheme
+                      ? "bg-[#fff0fc] text-[#a31391]"
+                      : "bg-[#fedf00] text-[#0b5d1e]"
                 )}
               >
                 Promoção {discountPercent}%
               </span>
             )}
-            <span className="w-fit rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#0b5d1e] backdrop-blur">
+            <span
+              className={cn(
+                "w-fit rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] backdrop-blur",
+                isDefaultTheme ? "text-[#a31391]" : "text-[#0b5d1e]",
+              )}
+            >
               {produto.productType?.name ||
                 PRODUCT_CATEGORY_LABEL[produto.categoria as keyof typeof PRODUCT_CATEGORY_LABEL]}
             </span>
@@ -100,10 +114,19 @@ function ProductCard({
           <div
             className={cn(
               "rounded-[1.4rem] px-4 py-2 text-right text-white shadow-xl backdrop-blur",
-              isValentinesTheme ? "bg-[#5f1029]/90" : "bg-[#0b3d0b]/90"
+              isValentinesTheme
+                ? "bg-[#5f1029]/90"
+                : isDefaultTheme
+                  ? "bg-[#78145f]/90"
+                  : "bg-[#0b3d0b]/90"
             )}
           >
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#fff3a8]">
+            <p
+              className={cn(
+                "text-[10px] font-bold uppercase tracking-[0.24em]",
+                isDefaultTheme ? "text-[#bff2ec]" : "text-[#fff3a8]",
+              )}
+            >
               Preço
             </p>
             {discountPercent > 0 ? (
@@ -123,24 +146,30 @@ function ProductCard({
           "flex flex-1 flex-col gap-4 p-5",
           isValentinesTheme
             ? "bg-[linear-gradient(180deg,#ffffff,#fff1f5)]"
-            : "bg-[linear-gradient(180deg,#ffffff,#f8fde8)]"
+            : isDefaultTheme
+              ? "bg-[linear-gradient(180deg,#ffffff,#fff2fc)]"
+              : "bg-[linear-gradient(180deg,#ffffff,#f8fde8)]"
         )}
       >
         <div className="space-y-2">
-          <h2 className="text-xl font-black tracking-tight text-[#0b2d16]">
+          <h2 className={cn("text-xl font-black tracking-tight", isDefaultTheme ? "text-[#641052]" : "text-[#0b2d16]")}>
             {produto.nome}
           </h2>
-          <p className="text-sm leading-6 text-[#456148]">{produto.descricao}</p>
+          <p className={cn("text-sm leading-6", isDefaultTheme ? "text-[#72506b]" : "text-[#456148]")}>{produto.descricao}</p>
         </div>
 
         <div
           className={cn(
             "grid gap-2 rounded-[1.4rem] p-4 text-sm",
-            isValentinesTheme ? "bg-[#fff5f8] text-[#7a3149]" : "bg-[#f3f9dc] text-[#35553d]"
+            isValentinesTheme
+              ? "bg-[#fff5f8] text-[#7a3149]"
+              : isDefaultTheme
+                ? "bg-[#e9fbf8] text-[#641052]"
+                : "bg-[#f3f9dc] text-[#35553d]"
           )}
         >
           <span>{produto.totalUnidades} unidades</span>
-          <span>Ate {produto.maxTiposSalgado} tipos diferentes</span>
+          <span>Até {produto.maxTiposSalgado} tipos diferentes</span>
           <span>
             {produto.permitePagamentoParcial ? "Pagamento de 50% ou 100%" : "Pagamento integral"}
           </span>
@@ -153,11 +182,11 @@ function ProductCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className="border-[#dbe7b6] bg-[#f8fde8] text-[#0b5d1e]">
-            {produto.emPromocao ? "Em destaque" : "Disponivel"}
+          <Badge className={isDefaultTheme ? "border-[#f4a8eb] bg-[#fff0fc] text-[#a31391]" : "border-[#dbe7b6] bg-[#f8fde8] text-[#0b5d1e]"}>
+            {produto.emPromocao ? "Em destaque" : "Disponível"}
           </Badge>
           {produto.emPromocao && (
-            <div className="flex items-center gap-1 text-sm font-bold text-[#c79300]">
+            <div className={cn("flex items-center gap-1 text-sm font-bold", isDefaultTheme ? "text-[#e000cf]" : "text-[#c79300]")}>
               <Flame className="h-4 w-4" />
                Promoção 
             </div>
@@ -166,16 +195,26 @@ function ProductCard({
             <div
               className={cn(
                 "flex items-center gap-1 text-sm font-bold",
-                isValentinesTheme ? "text-[#be123c]" : "text-[#0b5d1e]"
+                isValentinesTheme
+                  ? "text-[#be123c]"
+                  : isDefaultTheme
+                    ? "text-[#d000c1]"
+                    : "text-[#0b5d1e]"
               )}
             >
-              {isValentinesTheme ? <Heart className="h-4 w-4" /> : <Trophy className="h-4 w-4" />}
-              {isValentinesTheme ? "Especial Dia dos Namorados" : "Edição Copa"}
+              {isValentinesTheme ? <Heart className="h-4 w-4" /> : isDefaultTheme ? <Star className="h-4 w-4" /> : <Trophy className="h-4 w-4" />}
+              {isValentinesTheme
+                ? "Especial Dia dos Namorados"
+                : isSaoJoaoTheme
+                  ? "Especial de São João"
+                  : isDefaultTheme
+                    ? "Especial da Vizinha"
+                    : "Edição Copa"}
             </div>
           ) : null}
         </div>
 
-        <AddToCartControls productId={produto.id} />
+        <AddToCartControls productId={produto.id} siteTheme={siteTheme} />
 
         <Link
           href={`/pedido/${produto.slug}`}
@@ -185,7 +224,9 @@ function ProductCard({
               ? "border-[#be123c] text-[#be123c] hover:bg-[#fff1f5]"
               : isSaoJoaoTheme
                 ? "border-[#cc0000] text-[#cc0000] hover:bg-[#fff0c2]"
-                : "border-[#1b7f31] text-[#1b7f31] hover:bg-[#f7fde7]"
+                : isDefaultTheme
+                  ? "border-[#e000cf] text-[#a31391] hover:bg-[#fff0fc]"
+                  : "border-[#1b7f31] text-[#1b7f31] hover:bg-[#f7fde7]"
           )}
         >
           Montar detalhes
@@ -206,9 +247,15 @@ export default async function CardapioPage() {
   const siteTheme = businessStatus.siteTheme;
   const isValentinesTheme = siteTheme === "NAMORADOS";
   const isSaoJoaoTheme = siteTheme === "SAO_JOAO";
+  const isDefaultTheme = siteTheme === "PADRAO";
 
   return (
-    <main className="px-4 py-6 sm:px-6 lg:px-8">
+    <main
+      className={cn(
+        "px-4 py-6 sm:px-6 lg:px-8",
+        isDefaultTheme && "bg-[linear-gradient(180deg,#fff7fd_0%,#f4fffd_52%,#fff0fc_100%)]",
+      )}
+    >
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {!businessStatus.isOpen ? (
           <section className="rounded-[1.8rem] border border-yellow-300 bg-[linear-gradient(135deg,#fff8bf,#fff4dc)] p-5 shadow-[0_16px_40px_rgba(234,179,8,0.18)]">
@@ -229,7 +276,9 @@ export default async function CardapioPage() {
               ? "bg-[#5f1029] shadow-[0_30px_100px_rgba(190,18,60,0.26)]"
               : isSaoJoaoTheme
                 ? "bg-[#8B4513] shadow-[0_30px_100px_rgba(139,69,19,0.28)]"
-              : "bg-[#0b3314] shadow-[0_30px_100px_rgba(11,51,20,0.32)]"
+                : isDefaultTheme
+                   ? "bg-[#9f128e] shadow-[0_30px_100px_rgba(232,0,217,0.24)]"
+                  : "bg-[#0b3314] shadow-[0_30px_100px_rgba(11,51,20,0.32)]"
           )}
         >
           <div className="relative">
@@ -240,7 +289,9 @@ export default async function CardapioPage() {
                   ? "bg-[radial-gradient(circle_at_top_left,#f9a8d455_0,transparent_24%),radial-gradient(circle_at_100%_20%,#fb718560_0,transparent_35%),linear-gradient(135deg,#5f1029_0%,#be123c_48%,#881337_78%,#f9a8d4_120%)]"
                   : isSaoJoaoTheme
                     ? "bg-[linear-gradient(45deg,rgba(255,215,0,.12)_25%,transparent_25%,transparent_75%,rgba(255,215,0,.12)_75%),linear-gradient(45deg,rgba(255,215,0,.12)_25%,transparent_25%,transparent_75%,rgba(255,215,0,.12)_75%),linear-gradient(135deg,#8B4513_0%,#CC0000_38%,#FF8C00_72%,#006400_120%)] bg-[length:36px_36px,36px_36px,auto] bg-[position:0_0,18px_18px,0_0]"
-                  : "bg-[radial-gradient(circle_at_top_left,#fdd83555_0,transparent_24%),radial-gradient(circle_at_100%_20%,#4caf5060_0,transparent_35%),linear-gradient(135deg,#0b3314_0%,#146b2e_45%,#0d431c_75%,#f4c600_120%)]"
+                    : isDefaultTheme
+                       ? "bg-[radial-gradient(circle_at_top_left,#bff2ec88_0,transparent_28%),radial-gradient(circle_at_100%_15%,#ffffff70_0,transparent_30%),linear-gradient(135deg,#8f147b_0%,#e800d9_48%,#ff6bea_76%,#bff2ec_125%)]"
+                      : "bg-[radial-gradient(circle_at_top_left,#fdd83555_0,transparent_24%),radial-gradient(circle_at_100%_20%,#4caf5060_0,transparent_35%),linear-gradient(135deg,#0b3314_0%,#146b2e_45%,#0d431c_75%,#f4c600_120%)]"
               )}
             />
             {isSaoJoaoTheme ? (
@@ -267,15 +318,17 @@ export default async function CardapioPage() {
                     />
                   </div>
                   <div>
-                    <p className="text-sm font-black uppercase tracking-[0.24em] text-[#fff3a8]">
+                    <p className={cn("text-sm font-black uppercase tracking-[0.24em]", isDefaultTheme ? "text-[#d9fffa]" : "text-[#fff3a8]")}>
                       Vizinha Salgateria
                     </p>
                     <p className="text-sm text-white/72">
-                      {isValentinesTheme
-                        ? "Edicao especial Dia dos Namorados"
+                      {isDefaultTheme
+                        ? "O sabor que mora ao lado"
+                        : isValentinesTheme
+                        ? "Edição especial de Dia dos Namorados"
                         : isSaoJoaoTheme
                           ? "São João da Vizinha 🎪 🌽 ⭐ 🎉"
-                          : "Edicao especial em clima de Copa"}
+                          : "Edição especial em clima de Copa"}
                     </p>
                   </div>
                 </div>
@@ -284,14 +337,24 @@ export default async function CardapioPage() {
                   <Badge
                     className={cn(
                       "w-fit border-white/10",
-                      isValentinesTheme ? "bg-[#ffe4ec] text-[#9f1239]" : "bg-[#fedf00] text-[#0b5d1e]"
+                      isValentinesTheme
+                        ? "bg-[#ffe4ec] text-[#9f1239]"
+                        : isDefaultTheme
+                          ? "bg-white text-[#a31391]"
+                          : "bg-[#fedf00] text-[#0b5d1e]"
                     )}
                   >
-                    {isValentinesTheme ? "Especial para presentear" : "Encomendas online"}
+                    {isDefaultTheme
+                      ? "Feito pela Vizinha"
+                      : isValentinesTheme
+                        ? "Especial para presentear"
+                        : "Encomendas online"}
                   </Badge>
 
                   <h1 className="max-w-2xl text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
-                    {isValentinesTheme
+                    {isDefaultTheme
+                      ? "Sabor de vizinha, carinho em cada pedido"
+                      : isValentinesTheme
                       ? "Amor na mesa, sabor para dividir"
                       : isSaoJoaoTheme
                         ? "São João da Vizinha"
@@ -299,7 +362,9 @@ export default async function CardapioPage() {
                   </h1>
 
                   <p className="max-w-2xl text-sm leading-7 text-white/78 sm:text-base">
-                    {isValentinesTheme
+                    {isDefaultTheme
+                      ? "Escolha seus salgados favoritos, monte a encomenda do seu jeito e finalize tudo pelo site."
+                      : isValentinesTheme
                       ? "Escolha os favoritos do casal, monte uma encomenda especial e finalize tudo pelo site."
                       : isSaoJoaoTheme
                         ? "Bandeirinhas no alto, salgado na mesa e pedido fechado no carrinho para o arraiá."
@@ -309,33 +374,39 @@ export default async function CardapioPage() {
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                    <BadgePercent className="h-5 w-5 text-[#fff3a8]" />
+                    <BadgePercent className={cn("h-5 w-5", isDefaultTheme ? "text-[#bff2ec]" : "text-[#fff3a8]")} />
                     <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
                       50% ou 100%
                     </p>
                     <p className="mt-2 text-sm text-white/72">
-                      Dependendo do produto, voce pode reservar com metade ou quitar tudo.
+                      Dependendo do produto, você pode reservar com metade ou quitar tudo.
                     </p>
                   </div>
 
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                    <Clock3 className="h-5 w-5 text-[#fff3a8]" />
+                    <Clock3 className={cn("h-5 w-5", isDefaultTheme ? "text-[#bff2ec]" : "text-[#fff3a8]")} />
                     <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
-                      Horarios
+                      Horários
                     </p>
                     <p className="mt-2 text-sm text-white/72">
-                      Terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda fechado.
+                      De terça a sábado, das 10h às 17h. Aos domingos, das 9h às 13h. Fechamos às segundas-feiras.
                     </p>
                   </div>
 
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-4 backdrop-blur">
-                    <Star className="h-5 w-5 text-[#fff3a8]" />
+                    <Star className={cn("h-5 w-5", isDefaultTheme ? "text-[#bff2ec]" : "text-[#fff3a8]")} />
                     <p className="mt-3 text-sm font-black uppercase tracking-[0.18em]">
-                      {isValentinesTheme ? "Para dividir" : "Combos especiais"}
+                      {isDefaultTheme
+                        ? "Qualidade da Vizinha"
+                        : isValentinesTheme
+                          ? "Para dividir"
+                          : "Combos especiais"}
                     </p>
                     <p className="mt-2 text-sm text-white/72">
-                      {isValentinesTheme
-                        ? "Produtos em destaque para Dia dos Namorados, presentes e momentos a dois."
+                      {isDefaultTheme
+                        ? "Produtos preparados com cuidado para deixar seus encontros ainda mais gostosos."
+                        : isValentinesTheme
+                        ? "Produtos em destaque para o Dia dos Namorados, presentes e momentos a dois."
                         : "Produtos podem ter quantidades fixas, ideais para a Copa e datas especiais."}
                     </p>
                   </div>
@@ -350,9 +421,9 @@ export default async function CardapioPage() {
                 ) : (
                   <Card className="border-white/10 bg-white/8 text-white shadow-none">
                     <CardContent className="p-8">
-                      <p className="text-lg font-bold">Estamos montando o cardapio.</p>
+                      <p className="text-lg font-bold">Estamos montando o cardápio.</p>
                       <p className="mt-2 text-sm text-white/72">
-                        Em breve os produtos da Vizinha aparecerao aqui.
+                        Em breve os produtos da Vizinha aparecerão aqui.
                       </p>
                     </CardContent>
                   </Card>
@@ -363,10 +434,17 @@ export default async function CardapioPage() {
         </section>
 
         {produtos.length === 0 ? (
-          <section className="rounded-[2rem] border border-[#dbe7b6] bg-white/90 p-10 text-center shadow-[0_18px_60px_rgba(27,94,32,0.1)]">
-            <p className="text-lg font-bold text-[#0b5d1e]">O cardapio ainda esta sendo montado.</p>
-            <p className="mt-2 text-sm text-[#456148]">
-              Em breve, novos produtos aparecerao aqui.
+          <section
+            className={cn(
+              "rounded-[2rem] border bg-white/90 p-10 text-center",
+              isDefaultTheme
+                ? "border-[#f4a8eb] shadow-[0_18px_60px_rgba(232,0,217,0.10)]"
+                : "border-[#dbe7b6] shadow-[0_18px_60px_rgba(27,94,32,0.1)]",
+            )}
+          >
+            <p className={cn("text-lg font-bold", isDefaultTheme ? "text-[#8f147b]" : "text-[#0b5d1e]")}>O cardápio ainda está sendo montado.</p>
+            <p className={cn("mt-2 text-sm", isDefaultTheme ? "text-[#72506b]" : "text-[#456148]")}>
+              Em breve, novos produtos aparecerão aqui.
             </p>
           </section>
         ) : (
@@ -376,18 +454,20 @@ export default async function CardapioPage() {
                 "flex flex-col gap-3 rounded-[2rem] px-6 py-6 text-white",
                 isValentinesTheme
                   ? "bg-[linear-gradient(135deg,#5f1029,#be123c_58%,#f9a8d4)] shadow-[0_24px_80px_rgba(190,18,60,0.22)]"
-                  : "bg-[linear-gradient(135deg,#0b3314,#146b2e_52%,#f4c600)] shadow-[0_24px_80px_rgba(11,51,20,0.28)]"
+                  : isDefaultTheme
+                    ? "bg-[linear-gradient(135deg,#8f147b,#e800d9_62%,#bff2ec)] shadow-[0_24px_80px_rgba(232,0,217,0.20)]"
+                    : "bg-[linear-gradient(135deg,#0b3314,#146b2e_52%,#f4c600)] shadow-[0_24px_80px_rgba(11,51,20,0.28)]"
               )}
             >
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#fff3a8]">
-                Cardapio
+              <p className={cn("text-xs font-black uppercase tracking-[0.24em]", isDefaultTheme ? "text-[#d9fffa]" : "text-[#fff3a8]")}>
+                Cardápio
               </p>
               <div>
                 <h2 className="text-3xl font-black tracking-tight">Produtos para encomenda</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-white/78">
                   {isValentinesTheme
-                    ? "Os produtos destacados entram no clima do Dia dos Namorados, com opcoes para dividir ou presentear."
-                    : "Cada produto ja traz suas regras de quantidade, tipos permitidos, pagamento e, se for combo, a composicao fixa."}
+                    ? "Os produtos destacados entram no clima do Dia dos Namorados, com opções para dividir ou presentear."
+                    : "Cada produto já traz suas regras de quantidade, tipos permitidos, pagamento e, se for combo, a composição fixa."}
                 </p>
               </div>
             </div>
@@ -401,6 +481,7 @@ export default async function CardapioPage() {
         )}
       </div>
       <FloatingCart
+        siteTheme={siteTheme}
         businessStatus={{
           isOpen: businessStatus.isOpen,
           message: businessStatus.message,

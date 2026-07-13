@@ -54,7 +54,7 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
 
   if (!current) {
     console.warn(
-      `[MP webhook] Order do carrinho nao encontrado para a referencia ${payment.external_reference}.`
+      `[MP webhook] Order do carrinho não encontrado para a referência ${payment.external_reference}.`
     );
     return null;
   }
@@ -107,7 +107,7 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
       });
     } catch (error) {
       throw new CartOrderPaymentApplyError(
-        "Falha ao limpar carrinho apos pagamento aprovado.",
+        "Falha ao limpar carrinho após pagamento aprovado.",
         {
           orderId: order.id,
           cartId: order.cartId,

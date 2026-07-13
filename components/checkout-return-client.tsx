@@ -123,8 +123,8 @@ export function CheckoutReturnClient({
               </h1>
               <p className="mt-3 text-sm leading-6 text-slate-500">
                 {isConfirmed
-                  ? "Seu pagamento ja foi validado. A confirmacao do pedido tambem segue para o WhatsApp."
-                  : "Estamos acompanhando a validacao do pagamento. Assim que a confirmacao cair, esta tela atualiza sozinha."}
+                  ? "Seu pagamento já foi validado. A confirmação do pedido também segue para o WhatsApp."
+                  : "Estamos acompanhando a validação do pagamento. Assim que a confirmação cair, esta tela atualiza sozinha."}
               </p>
               {!isConfirmed && refreshing ? (
                 <p className="mt-2 text-xs font-medium text-pink-600">
@@ -150,13 +150,13 @@ export function CheckoutReturnClient({
             ) : (
               <div className="rounded-[1.6rem] bg-[#fff7fb] p-5 text-sm text-slate-600">
                 O retorno foi recebido, mas ainda estamos aguardando localizar os dados do
-                pedido. Se necessario, volte em instantes.
+                pedido. Se necessário, volte em instantes.
               </div>
             )}
 
             <div className="flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild className="rounded-full bg-pink-600 text-white hover:bg-pink-700">
-                <Link href="/cardapio">Voltar ao cardapio</Link>
+                <Link href="/cardapio">Voltar ao cardápio</Link>
               </Button>
               <Button
                 asChild

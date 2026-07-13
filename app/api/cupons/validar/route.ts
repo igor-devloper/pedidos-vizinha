@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     });
 
     if (!cupom || !cupom.ativo) {
-      return NextResponse.json({ error: "Cupom invalido ou inativo." }, { status: 404 });
+      return NextResponse.json({ error: "Cupom inválido ou inativo." }, { status: 404 });
     }
 
     return NextResponse.json({
@@ -41,6 +41,6 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("POST /api/cupons/validar error", error);
-    return NextResponse.json({ error: "Nao foi possivel validar o cupom." }, { status: 400 });
+    return NextResponse.json({ error: "Não foi possível validar o cupom." }, { status: 400 });
   }
 }

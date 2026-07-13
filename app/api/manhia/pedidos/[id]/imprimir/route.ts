@@ -8,7 +8,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { MetodoPagamento } from "@prisma/client";
 import { CalendarDays, ChevronLeft, ChevronRight, LoaderCircle, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ import {
   type BusinessScheduleByWeekday,
 } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
+import type { StoreSiteTheme } from "@/lib/site-theme";
 
 type CartItem = {
   id: string;
@@ -79,9 +80,9 @@ function getSimpleCartError(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : fallback;
 
   if (/tipos|unidades/i.test(message)) return "Confira os sabores e as quantidades do pedido.";
-  if (/remover/i.test(message)) return "Nao foi possivel remover este item. Tente novamente.";
-  if (/atualizar/i.test(message)) return "Nao foi possivel salvar a alteracao. Tente novamente.";
-  if (/finalizar/i.test(message)) return "Nao foi possivel finalizar o pedido. Tente novamente.";
+  if (/remover/i.test(message)) return "Não foi possível remover este item. Tente novamente.";
+  if (/atualizar/i.test(message)) return "Não foi possível salvar a alteração. Tente novamente.";
+  if (/finalizar/i.test(message)) return "Não foi possível finalizar o pedido. Tente novamente.";
   return message;
 }
 
@@ -220,13 +221,33 @@ function getTimeSlots(
 async function readCart() {
   const response = await fetch("/api/cart", { cache: "no-store" });
   if (!response.ok) {
-    throw new Error("Nao foi possivel carregar o carrinho.");
+    throw new Error("Não foi possível carregar o carrinho.");
   }
 
   return (await response.json()) as CartData;
 }
 
-export function AddToCartControls({ productId }: { productId: string }) {
+function getCartThemeStyle(siteTheme: StoreSiteTheme) {
+  const isDefaultTheme = siteTheme === "PADRAO";
+
+  return {
+    "--cart-accent": isDefaultTheme ? "#e000cf" : "#176c2a",
+    "--cart-accent-hover": isDefaultTheme ? "#b800aa" : "#125621",
+    "--cart-dark": isDefaultTheme ? "#641052" : "#0b3d18",
+    "--cart-muted": isDefaultTheme ? "#72506b" : "#405348",
+    "--cart-border": isDefaultTheme ? "#f4a8eb" : "#b8ca7e",
+    "--cart-surface": isDefaultTheme ? "#fff0fc" : "#f7fde3",
+    "--cart-badge": isDefaultTheme ? "#bff2ec" : "#f4d330",
+  } as CSSProperties;
+}
+
+export function AddToCartControls({
+  productId,
+  siteTheme,
+}: {
+  productId: string;
+  siteTheme: StoreSiteTheme;
+}) {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -243,38 +264,38 @@ export function AddToCartControls({ productId }: { productId: string }) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel adicionar ao carrinho.");
+        throw new Error(data?.error || "Não foi possível adicionar ao carrinho.");
       }
 
       toast.success("Produto adicionado ao carrinho.");
       notifyCartChanged?.();
     } catch (error) {
-      setErrorMessage(getSimpleCartError(error, "Nao foi possivel adicionar ao carrinho."));
+      setErrorMessage(getSimpleCartError(error, "Não foi possível adicionar ao carrinho."));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="mt-auto flex flex-col gap-3">
-      <div className="flex min-h-14 items-center justify-between rounded-full border border-[#b8ca7e] bg-white px-2">
+    <div style={getCartThemeStyle(siteTheme)} className="mt-auto flex flex-col gap-3">
+      <div className="flex min-h-14 items-center justify-between rounded-full border border-[var(--cart-border)] bg-white px-2">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           onClick={() => setQuantity((current) => Math.max(1, current - 1))}
-          className="h-11 w-11 rounded-full text-[#14521b]"
+          className="h-11 w-11 rounded-full text-[var(--cart-accent)]"
           aria-label="Diminuir quantidade"
         >
           <Minus className="h-4 w-4" />
         </Button>
-        <span className="min-w-10 text-center text-lg font-black text-[#0b3d18]">{quantity}</span>
+        <span className="min-w-10 text-center text-lg font-black text-[var(--cart-dark)]">{quantity}</span>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           onClick={() => setQuantity((current) => current + 1)}
-          className="h-11 w-11 rounded-full text-[#14521b]"
+          className="h-11 w-11 rounded-full text-[var(--cart-accent)]"
           aria-label="Aumentar quantidade"
         >
           <Plus className="h-4 w-4" />
@@ -285,7 +306,7 @@ export function AddToCartControls({ productId }: { productId: string }) {
         type="button"
         disabled={loading}
         onClick={() => void addToCart()}
-        className="min-h-12 rounded-full bg-[#176c2a] text-base font-bold text-white hover:bg-[#125621]"
+        className="min-h-12 rounded-full bg-[var(--cart-accent)] text-base font-bold text-white hover:bg-[var(--cart-accent-hover)]"
       >
         {loading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShoppingCart className="mr-2 h-4 w-4" />}
         Adicionar
@@ -299,8 +320,10 @@ export function AddToCartControls({ productId }: { productId: string }) {
 
 export function FloatingCart({
   businessStatus,
+  siteTheme,
 }: {
   businessStatus: CartBusinessStatusData;
+  siteTheme: StoreSiteTheme;
 }) {
   const [cart, setCart] = useState<CartData>(EMPTY_CART);
   const [open, setOpen] = useState(false);
@@ -325,6 +348,7 @@ export function FloatingCart({
   const [deliveryTime, setDeliveryTime] = useState(formatTimeInputValue(minDeliveryDate));
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(minDeliveryDate));
+  const cartThemeStyle = getCartThemeStyle(siteTheme);
   const selectedItemsSavePromises = useRef(new Set<Promise<void>>());
 
   const loadCart = async () => {
@@ -366,10 +390,10 @@ export function FloatingCart({
         body: JSON.stringify({ quantity: nextQuantity, selectedItems }),
       });
 
-      if (!response.ok) throw new Error("Nao foi possivel atualizar.");
+      if (!response.ok) throw new Error("Não foi possível atualizar.");
       updateCart((await response.json()) as CartData);
     } catch (error) {
-      setItemError({ id: item.id, message: getSimpleCartError(error, "Nao foi possivel alterar a quantidade.") });
+      setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível alterar a quantidade.") });
     } finally {
       setLoadingId(null);
     }
@@ -381,10 +405,10 @@ export function FloatingCart({
       setLoadingId(item.id);
       const response = await fetch(`/api/cart/item/${item.id}`, { method: "DELETE" });
 
-      if (!response.ok) throw new Error("Nao foi possivel remover.");
+      if (!response.ok) throw new Error("Não foi possível remover.");
       updateCart((await response.json()) as CartData);
     } catch (error) {
-      setItemError({ id: item.id, message: getSimpleCartError(error, "Nao foi possivel remover este item.") });
+      setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível remover este item.") });
     } finally {
       setLoadingId(null);
     }
@@ -446,7 +470,7 @@ export function FloatingCart({
       }
 
       if (selected.length > maxTypes) {
-        return `${item.name}: escolha no maximo ${maxTypes} tipos.`;
+        return `${item.name}: escolha no máximo ${maxTypes} tipos.`;
       }
 
       if (item.category === "COMBO" && item.comboItens.length > 0) {
@@ -457,7 +481,7 @@ export function FloatingCart({
           const requiredQuantity = comboItem.quantidade * item.quantity;
 
           if (!selectedItem || selectedItem.quantidade !== requiredQuantity) {
-            return `${item.name}: esse combo possui composicao fixa.`;
+            return `${item.name}: esse combo possui composição fixa.`;
           }
         }
       }
@@ -470,11 +494,11 @@ export function FloatingCart({
     : customerName.trim().length < 2
       ? "Informe o nome para finalizar o pedido."
       : !/^\S+@\S+\.\S+$/.test(customerEmail.trim())
-        ? "Informe um e-mail valido para o pagamento."
+        ? "Informe um e-mail válido para o pagamento."
       : customerPhone.replace(/\D/g, "").length < 10
-        ? "Informe um WhatsApp valido para finalizar o pedido."
+        ? "Informe um WhatsApp válido para finalizar o pedido."
         : !deliveryDate || !deliveryTimeIsValid
-          ? "Informe uma data e horario validos."
+          ? "Informe uma data e horário válidos."
           : storeClosedBlocksSelectedDate
             ? "Escolha uma data futura para continuar."
             : null;
@@ -518,7 +542,7 @@ export function FloatingCart({
         !data.paymentMethod ||
         typeof data.chargedAmount !== "number"
       ) {
-        throw new Error(data?.error || "Nao foi possivel finalizar.");
+        throw new Error(data?.error || "Não foi possível finalizar.");
       }
 
       setCheckoutSession({
@@ -555,10 +579,10 @@ export function FloatingCart({
       body: JSON.stringify({ quantity: item.quantity, selectedItems: normalizedSelectedItems }),
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Nao foi possivel atualizar os tipos.");
+        if (!response.ok) throw new Error("Não foi possível atualizar os tipos.");
       })
       .catch((error) => {
-        setItemError({ id: item.id, message: getSimpleCartError(error, "Nao foi possivel salvar os sabores.") });
+        setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível salvar os sabores.") });
         void loadCart();
       })
       .finally(() => {
@@ -600,13 +624,14 @@ export function FloatingCart({
     <>
       <button
         type="button"
+        style={cartThemeStyle}
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0b3d18] text-white shadow-[0_18px_50px_rgba(11,61,24,0.35)] transition hover:bg-[#156326]"
+        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--cart-dark)] text-white shadow-[0_18px_50px_rgba(100,16,82,0.28)] transition hover:bg-[var(--cart-accent-hover)]"
         aria-label="Abrir carrinho"
       >
         <ShoppingCart className="h-6 w-6" />
         {cart.itemCount > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#f4d330] px-1 text-xs font-black text-[#0b3d18]">
+          <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-[var(--cart-badge)] px-1 text-xs font-black text-[var(--cart-dark)]">
             {cart.itemCount}
           </span>
         ) : null}
@@ -623,6 +648,7 @@ export function FloatingCart({
         }}
       >
         <CartContent
+          style={cartThemeStyle}
           className={cn(
             "grid grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-white p-0",
             isDesktop
@@ -631,16 +657,16 @@ export function FloatingCart({
           )}
         >
           <DialogHeader className={cn(
-            "flex-row items-center justify-between border-b border-[#d7e3b4] bg-white px-4 py-3 text-left sm:px-6",
+            "flex-row items-center justify-between border-b border-[var(--cart-border)] bg-white px-4 py-3 text-left sm:px-6",
             !isDesktop && "pt-6"
           )}>
             <div>
               {isDesktop ? (
-                <DialogTitle className="text-xl font-black text-[#0b3d18] sm:text-2xl">Seu carrinho</DialogTitle>
+                <DialogTitle className="text-xl font-black text-[var(--cart-dark)] sm:text-2xl">Seu carrinho</DialogTitle>
               ) : (
-                <DrawerTitle className="text-xl font-black text-[#0b3d18]">Seu carrinho</DrawerTitle>
+                <DrawerTitle className="text-xl font-black text-[var(--cart-dark)]">Seu carrinho</DrawerTitle>
               )}
-              <p className="mt-1 text-sm font-medium text-[#3f5f45]">
+              <p className="mt-1 text-sm font-medium text-[var(--cart-muted)]">
                 {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"}
               </p>
             </div>
@@ -649,7 +675,7 @@ export function FloatingCart({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-11 w-11 shrink-0 rounded-full border-[#9fb66a] text-[#174d22]"
+                className="h-11 w-11 shrink-0 rounded-full border-[var(--cart-border)] text-[var(--cart-accent)]"
                 aria-label="Fechar carrinho"
               >
                 <X className="h-5 w-5" />
@@ -659,7 +685,7 @@ export function FloatingCart({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-11 w-11 shrink-0 rounded-full border-[#9fb66a] text-[#174d22]"
+                className="h-11 w-11 shrink-0 rounded-full border-[var(--cart-border)] text-[var(--cart-accent)]"
                 aria-label="Fechar carrinho"
               >
                 <X className="h-5 w-5" />
@@ -667,7 +693,7 @@ export function FloatingCart({
             </DrawerClose>}
           </DialogHeader>
 
-          <div className="min-h-0 overflow-y-auto overscroll-contain bg-[#f8fbeF] px-4 py-5 sm:px-6">
+          <div className="min-h-0 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
           {checkoutSession ? (
             <CartTransparentPayment
               session={checkoutSession}
@@ -678,23 +704,23 @@ export function FloatingCart({
               }}
             />
           ) : cart.items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#aabd73] bg-white p-8 text-center text-base font-medium text-[#405348]">
-              Seu carrinho esta vazio.
+            <div className="rounded-2xl border border-dashed border-[var(--cart-border)] bg-white p-8 text-center text-base font-medium text-[var(--cart-muted)]">
+              Seu carrinho está vazio.
             </div>
           ) : (
             <div className="space-y-4">
               {cart.items.map((item) => (
                 <div
                   key={item.id}
-                  className="grid gap-4 rounded-2xl border border-[#cad99b] bg-[#fbfff0] p-4 md:grid-cols-[88px_minmax(0,1fr)_auto] lg:gap-6 lg:p-5"
+                  className="grid gap-4 rounded-2xl border border-[var(--cart-border)] bg-[var(--cart-surface)] p-4 md:grid-cols-[88px_minmax(0,1fr)_auto] lg:gap-6 lg:p-5"
                 >
                   <div className="relative h-20 overflow-hidden rounded-xl bg-white sm:h-16">
                     <Image src={item.image} alt={item.name} fill unoptimized className="object-cover" />
                   </div>
                   <div>
-                    <p className="text-lg font-black leading-snug text-[#0b3d18]">{item.name}</p>
-                    <p className="text-base text-[#46594c]">{item.type}</p>
-                    <p className="mt-1 text-lg font-bold text-[#14521b]">
+                    <p className="text-lg font-black leading-snug text-[var(--cart-dark)]">{item.name}</p>
+                    <p className="text-base text-[var(--cart-muted)]">{item.type}</p>
+                    <p className="mt-1 text-lg font-bold text-[var(--cart-accent)]">
                       {formatCurrency(item.subtotal)}
                     </p>
                   </div>
@@ -705,7 +731,7 @@ export function FloatingCart({
                       size="icon"
                       disabled={loadingId === item.id}
                       onClick={() => void setItemQuantity(item, item.quantity - 1)}
-                      className="h-11 w-11 rounded-full border-[#9fb66a]"
+                      className="h-11 w-11 rounded-full border-[var(--cart-border)]"
                       aria-label={`Diminuir quantidade de ${item.name}`}
                     >
                       <Minus className="h-4 w-4" />
@@ -717,7 +743,7 @@ export function FloatingCart({
                       size="icon"
                       disabled={loadingId === item.id}
                       onClick={() => void setItemQuantity(item, item.quantity + 1)}
-                      className="h-11 w-11 rounded-full border-[#9fb66a]"
+                      className="h-11 w-11 rounded-full border-[var(--cart-border)]"
                       aria-label={`Aumentar quantidade de ${item.name}`}
                     >
                       <Plus className="h-4 w-4" />
@@ -740,10 +766,10 @@ export function FloatingCart({
                     </p>
                   ) : null}
                   <div className="space-y-3 md:col-span-3">
-                    <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[#dfeab9] bg-white p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[var(--cart-border)] bg-white p-3 sm:p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-base font-bold text-[#0b3d18]">Sabores do pedido</p>
-                        <p className="text-sm font-semibold text-[#405348]">
+                        <p className="text-base font-bold text-[var(--cart-dark)]">Sabores do pedido</p>
+                        <p className="text-sm font-semibold text-[var(--cart-muted)]">
                           {item.selectedItems.reduce((sum, entry) => sum + Number(entry.quantidade || 0), 0)}
                           /{item.totalUnidades * item.quantity} un
                         </p>
@@ -754,7 +780,7 @@ export function FloatingCart({
                           (entry, index) => (
                             <div
                               key={`${item.id}-${index}`}
-                              className="grid gap-3 rounded-[1.25rem] border border-[#edf3d7] bg-[linear-gradient(180deg,#fbfff0,#f7fde3)] p-3 md:grid-cols-[minmax(220px,1fr)_140px_auto] lg:gap-4 lg:p-4"
+                              className="grid gap-3 rounded-[1.25rem] border border-[var(--cart-surface)] bg-[linear-gradient(180deg,var(--cart-surface),var(--cart-surface))] p-3 md:grid-cols-[minmax(220px,1fr)_140px_auto] lg:gap-4 lg:p-4"
                             >
                               <div className="space-y-2">
                                 <label className="text-sm font-medium text-[#284a2e]">
@@ -766,14 +792,14 @@ export function FloatingCart({
                                   <Input
                                     value={entry.tipo}
                                     disabled
-                                    className="h-11 border-[#d8e8a4] bg-white"
+                                    className="h-11 border-[var(--cart-border)] bg-white"
                                   />
                                 ) : item.saboresSugeridos.length > 0 ? (
                                   <Select
                                     value={entry.tipo}
                                     onValueChange={(value) => patchSelectedItem(item, index, { tipo: value })}
                                   >
-                                    <SelectTrigger className="h-11 w-full border-[#d8e8a4] bg-white">
+                                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
                                       <SelectValue placeholder="Selecione o salgado" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -791,7 +817,7 @@ export function FloatingCart({
                                       patchSelectedItem(item, index, { tipo: event.target.value })
                                     }
                                     placeholder="Ex: coxinha"
-                                    className="h-11 border-[#d8e8a4] bg-white"
+                                    className="h-11 border-[var(--cart-border)] bg-white"
                                   />
                                 )}
                               </div>
@@ -812,7 +838,7 @@ export function FloatingCart({
                                       ),
                                     })
                                   }
-                                  className="h-11 border-[#d8e8a4] bg-white"
+                                  className="h-11 border-[var(--cart-border)] bg-white"
                                 />
                               </div>
 
@@ -822,7 +848,7 @@ export function FloatingCart({
                                   variant="outline"
                                   disabled={item.category === "COMBO" || item.selectedItems.length <= 1}
                                   onClick={() => removeSelectedItem(item, index)}
-                                  className="h-11 w-full rounded-xl border-[#d8e8a4] text-[#1b5e20] hover:bg-[#eff8d0] sm:w-auto"
+                                  className="h-11 w-full rounded-xl border-[var(--cart-border)] text-[var(--cart-accent)] hover:bg-[var(--cart-surface)] sm:w-auto"
                                 >
                                   <Minus className="mr-2 h-4 w-4" />
                                   Remover
@@ -834,7 +860,7 @@ export function FloatingCart({
                       </div>
 
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm text-[#405348]">
+                        <p className="text-sm text-[var(--cart-muted)]">
                           Maximo de {item.maxTiposSalgado * item.quantity} tipos para este item.
                         </p>
                         <Button
@@ -850,7 +876,7 @@ export function FloatingCart({
                               { tipo: "", quantidade: 0 },
                             ])
                           }
-                          className="min-h-11 rounded-xl border-[#9fb66a] text-base font-semibold text-[#14521b]"
+                          className="min-h-11 rounded-xl border-[var(--cart-border)] text-base font-semibold text-[var(--cart-accent)]"
                         >
                           <Plus className="mr-2 h-4 w-4" />
                           Tipo
@@ -862,58 +888,58 @@ export function FloatingCart({
               ))}
 
               <div className="pt-2">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#52705a]">Finalizacao</p>
-                <h2 className="mt-1 text-xl font-black text-[#0b3d18]">Complete os 3 passos</h2>
-                <p className="mt-1 text-sm text-[#405348]">Preencha de cima para baixo. Leva menos de um minuto.</p>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#52705a]">Finalização</p>
+                <h2 className="mt-1 text-xl font-black text-[var(--cart-dark)]">Complete os 3 passos</h2>
+                <p className="mt-1 text-sm text-[var(--cart-muted)]">Preencha de cima para baixo. Leva menos de um minuto.</p>
               </div>
 
-              <section className="rounded-2xl border border-[#b8ca7e] bg-white p-4" aria-labelledby="cart-step-customer">
+              <section className="rounded-2xl border border-[var(--cart-border)] bg-white p-4" aria-labelledby="cart-step-customer">
                 <div className="mb-4 flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#176c2a] text-base font-black text-white">1</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cart-accent)] text-base font-black text-white">1</span>
                   <div>
-                    <h3 id="cart-step-customer" className="text-lg font-black text-[#0b3d18]">Seus dados</h3>
-                    <p className="text-sm text-[#405348]">Usaremos o WhatsApp para confirmar o pedido.</p>
+                    <h3 id="cart-step-customer" className="text-lg font-black text-[var(--cart-dark)]">Seus dados</h3>
+                    <p className="text-sm text-[var(--cart-muted)]">Usaremos o WhatsApp para confirmar o pedido.</p>
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <label htmlFor="cart-customer-name" className="text-base font-bold text-[#0b3d18]">Seu nome</label>
+                  <label htmlFor="cart-customer-name" className="text-base font-bold text-[var(--cart-dark)]">Seu nome</label>
                   <Input id="cart-customer-name" value={customerName} onChange={(event) => { setCustomerName(event.target.value); setActionError(null); }} placeholder="Digite seu nome" required className="h-12 text-base" aria-invalid={customerName.length > 0 && customerName.trim().length < 2} />
                   {customerName.length > 0 && customerName.trim().length < 2 ? (
                     <p role="alert" className="text-sm font-semibold text-red-700">Informe o nome para finalizar o pedido.</p>
                   ) : null}
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="cart-customer-phone" className="text-base font-bold text-[#0b3d18]">Seu WhatsApp</label>
+                  <label htmlFor="cart-customer-phone" className="text-base font-bold text-[var(--cart-dark)]">Seu WhatsApp</label>
                   <Input id="cart-customer-phone" type="tel" inputMode="tel" value={customerPhone} onChange={(event) => { setCustomerPhone(formatWhatsAppInput(event.target.value)); setActionError(null); }} placeholder="(00) 00000-0000" required className="h-12 text-base" aria-invalid={customerPhone.length > 0 && customerPhone.replace(/\D/g, "").length < 10} />
                   {customerPhone.length > 0 && customerPhone.replace(/\D/g, "").length < 10 ? (
-                    <p role="alert" className="text-sm font-semibold text-red-700">Informe um WhatsApp valido para finalizar o pedido.</p>
+                    <p role="alert" className="text-sm font-semibold text-red-700">Informe um WhatsApp válido para finalizar o pedido.</p>
                   ) : null}
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <label htmlFor="cart-customer-email" className="text-base font-bold text-[#0b3d18]">Seu e-mail</label>
-                  <Input id="cart-customer-email" type="email" inputMode="email" autoComplete="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setActionError(null); }} placeholder="voce@exemplo.com" required className="h-12 text-base" aria-invalid={customerEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(customerEmail.trim())} />
-                  {/* <p className="text-sm text-[#405348]">O Mercado Pago usa o e-mail para processar Pix e cartao.</p> */}
+                  <label htmlFor="cart-customer-email" className="text-base font-bold text-[var(--cart-dark)]">Seu e-mail</label>
+                  <Input id="cart-customer-email" type="email" inputMode="email" autoComplete="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setActionError(null); }} placeholder="email@exemplo.com" required className="h-12 text-base" aria-invalid={customerEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(customerEmail.trim())} />
+                  {/* <p className="text-sm text-[var(--cart-muted)]">O Mercado Pago usa o e-mail para processar Pix e cartão.</p> */}
                   {customerEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(customerEmail.trim()) ? (
-                    <p role="alert" className="text-sm font-semibold text-red-700">Informe um e-mail valido para o pagamento.</p>
+                    <p role="alert" className="text-sm font-semibold text-red-700">Informe um e-mail válido para o pagamento.</p>
                   ) : null}
                 </div>
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-[#b8ca7e] bg-[#fbfff0] p-4" aria-labelledby="cart-step-schedule">
+              <section className="rounded-2xl border border-[var(--cart-border)] bg-[var(--cart-surface)] p-4" aria-labelledby="cart-step-schedule">
                 <div className="mb-3 flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#176c2a] text-base font-black text-white">2</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cart-accent)] text-base font-black text-white">2</span>
                   <div>
-                    <h3 id="cart-step-schedule" className="text-lg font-black text-[#0b3d18]">Data e horario</h3>
-                    <p className="text-sm text-[#405348]">Escolha quando deseja  retirar.</p>
+                    <h3 id="cart-step-schedule" className="text-lg font-black text-[var(--cart-dark)]">Data e horário</h3>
+                    <p className="text-sm text-[var(--cart-muted)]">Escolha quando deseja  retirar.</p>
                   </div>
                 </div>
                 <div className="mb-4 rounded-xl border border-[#c6d590] bg-white p-3 text-sm text-[#284a2e]">
-                  <p><strong>Antecedencia minima:</strong> {businessStatus.minimumLeadHours} {businessStatus.minimumLeadHours === 1 ? "hora" : "horas"}.</p>
+                  <p><strong>Antecedência mínima:</strong> {businessStatus.minimumLeadHours} {businessStatus.minimumLeadHours === 1 ? "hora" : "horas"}.</p>
                   <p className="mt-1 capitalize">
                     <strong>Funcionamento em {selectedWeekday}:</strong>{" "}
-                    {selectedSchedule ? `das ${selectedSchedule.openHour}h as ${selectedSchedule.closeHour}h` : "fechado"}.
+                    {selectedSchedule ? `das ${selectedSchedule.openHour}h às ${selectedSchedule.closeHour}h` : "fechado"}.
                   </p>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -922,22 +948,22 @@ export function FloatingCart({
                       type="button"
                       variant="outline"
                       onClick={() => setCalendarOpen((current) => !current)}
-                      className="h-11 w-full justify-between border-[#d6e7a2] bg-white px-3 text-left text-[#284a2e] hover:bg-[#f7fde3]"
+                      className="h-11 w-full justify-between border-[var(--cart-border)] bg-white px-3 text-left text-[#284a2e] hover:bg-[var(--cart-surface)]"
                     >
                       <span className="truncate">{formatDateLabel(deliveryDate)}</span>
                       <CalendarDays className="h-4 w-4 shrink-0" />
                     </Button>
 
                     {calendarOpen ? (
-                      <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-[18rem] rounded-2xl border border-[#d8e8a4] bg-white p-4 shadow-[0_24px_60px_rgba(27,94,32,0.18)]">
+                      <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-[18rem] rounded-2xl border border-[var(--cart-border)] bg-white p-4 shadow-[0_24px_60px_rgba(27,94,32,0.18)]">
                         <div className="mb-4 flex items-center justify-between">
-                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, -1))} className="h-11 w-11 rounded-full text-[#14521b] hover:bg-[#f7fde3]">
+                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, -1))} className="h-11 w-11 rounded-full text-[var(--cart-accent)] hover:bg-[var(--cart-surface)]">
                             <ChevronLeft className="h-4 w-4" />
                           </Button>
-                          <p className="text-sm font-semibold capitalize text-[#0b2d16]">
+                          <p className="text-sm font-semibold capitalize text-[var(--cart-dark)]">
                             {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(displayMonth)}
                           </p>
-                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, 1))} className="h-11 w-11 rounded-full text-[#14521b] hover:bg-[#f7fde3]">
+                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, 1))} className="h-11 w-11 rounded-full text-[var(--cart-accent)] hover:bg-[var(--cart-surface)]">
                             <ChevronRight className="h-4 w-4" />
                           </Button>
                         </div>
@@ -960,7 +986,7 @@ export function FloatingCart({
                                 onClick={() => selectDeliveryDate(dateKey)}
                                 className={cn(
                                   "h-11 rounded-xl text-sm transition",
-                                  isSelected ? "bg-[#1b7f31] font-semibold text-white" : "text-[#284a2e] hover:bg-[#f7fde3]",
+                                  isSelected ? "bg-[var(--cart-accent)] font-semibold text-white" : "text-[#284a2e] hover:bg-[var(--cart-surface)]",
                                   !currentMonth && !isSelected && "text-[#9aad8a]",
                                   isDisabled && "cursor-not-allowed opacity-35 hover:bg-transparent"
                                 )}
@@ -975,8 +1001,8 @@ export function FloatingCart({
                   </div>
 
                   <Select value={deliveryTime} onValueChange={(value) => { setDeliveryTime(value); setActionError(null); }}>
-                    <SelectTrigger className="h-11 w-full border-[#d6e7a2] bg-white">
-                      <SelectValue placeholder="Selecione o horario" />
+                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
+                      <SelectValue placeholder="Selecione o horário" />
                     </SelectTrigger>
                     <SelectContent>
                       {timeSlots.map((time) => (
@@ -988,32 +1014,32 @@ export function FloatingCart({
                   </Select>
                 </div>
                 {selectedDateHasNoSchedule ? (
-                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">Nao atendemos nessa data. Escolha um dia com horario ativo na operacao.</p>
+                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">Não atendemos nessa data. Escolha um dia com horário ativo na operação.</p>
                 ) : storeClosedBlocksSelectedDate ? (
-                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">A loja esta fechada para pedidos de hoje. Escolha uma data futura para continuar.</p>
+                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">A loja está fechada para pedidos de hoje. Escolha uma data futura para continuar.</p>
                 ) : !deliveryTimeIsValid ? (
-                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">Informe uma data e horario validos.</p>
+                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">Informe uma data e horário válidos.</p>
                 ) : (
-                  <p className="mt-2 text-sm text-[#48654f]">Esse horario é para a Retirada do seu pedido.</p>
+                  <p className="mt-2 text-sm text-[#48654f]">Esse horário é para a retirada do seu pedido.</p>
                 )}
               </section>
 
-              <section className="rounded-2xl border border-[#b8ca7e] bg-white p-4" aria-labelledby="cart-step-payment">
+              <section className="rounded-2xl border border-[var(--cart-border)] bg-white p-4" aria-labelledby="cart-step-payment">
                 <div className="mb-4 flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#176c2a] text-base font-black text-white">3</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cart-accent)] text-base font-black text-white">3</span>
                   <div>
-                    <h3 id="cart-step-payment" className="text-lg font-black text-[#0b3d18]">Pagamento</h3>
-                    <p className="text-sm text-[#405348]">Confira quanto pagar agora e escolha a forma.</p>
+                    <h3 id="cart-step-payment" className="text-lg font-black text-[var(--cart-dark)]">Pagamento</h3>
+                    <p className="text-sm text-[var(--cart-muted)]">Confira quanto pagar agora e escolha a forma.</p>
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-base font-bold text-[#0b3d18]">Quanto pagar agora</label>
+                  <label className="text-base font-bold text-[var(--cart-dark)]">Quanto pagar agora</label>
                   <Select
                     value={String(paymentPercentage)}
                     onValueChange={(value) => setPaymentPercentage(Number(value) as 50 | 100)}
                   >
-                    <SelectTrigger className="h-11 w-full border-[#d6e7a2] bg-white">
+                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
                       <SelectValue placeholder="Percentual" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1024,19 +1050,19 @@ export function FloatingCart({
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-[#405348]">
+                  <p className="text-sm text-[var(--cart-muted)]">
                     Base: {formatCurrency(paymentPreview.baseAmount)}
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-base font-bold text-[#0b3d18]">Forma de pagamento</label>
+                  <label className="text-base font-bold text-[var(--cart-dark)]">Forma de pagamento</label>
                   <Select
                     value={paymentMethod}
                     onValueChange={(value) => setPaymentMethod(value as MetodoPagamento)}
                   >
-                    <SelectTrigger className="h-11 w-full border-[#d6e7a2] bg-white">
-                      <SelectValue placeholder="Metodo" />
+                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
+                      <SelectValue placeholder="Método" />
                     </SelectTrigger>
                     <SelectContent>
                       {SUPPORTED_PAYMENT_METHODS.filter((method) =>
@@ -1050,7 +1076,7 @@ export function FloatingCart({
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-[#405348]">
+                  <p className="text-sm text-[var(--cart-muted)]">
                     {selectedPaymentMethod?.description || "Escolha a forma de pagamento."}
                   </p>
                 </div>
@@ -1062,7 +1088,7 @@ export function FloatingCart({
           </div>
 
           {cart.items.length > 0 && !checkoutSession ? (
-            <div className="border-t border-[#c9d99a] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(11,61,24,0.10)] sm:px-6">
+            <div className="border-t border-[var(--cart-border)] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(11,61,24,0.10)] sm:px-6">
               {(actionError || checkoutGuidance) ? (
                 <p role="alert" className="mb-2 text-sm font-bold text-red-700">
                   {actionError || checkoutGuidance}
@@ -1070,15 +1096,15 @@ export function FloatingCart({
               ) : null}
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#405348]">Total do pedido</p>
-                  <p className="text-2xl font-black leading-tight text-[#0b3d18]">{formatCurrency(cart.totalAmount)}</p>
-                  <p className="text-sm text-[#405348]">Agora: {formatCurrency(paymentPreview.totalToCharge)}</p>
+                  <p className="text-sm font-semibold text-[var(--cart-muted)]">Total do pedido</p>
+                  <p className="text-2xl font-black leading-tight text-[var(--cart-dark)]">{formatCurrency(cart.totalAmount)}</p>
+                  <p className="text-sm text-[var(--cart-muted)]">Agora: {formatCurrency(paymentPreview.totalToCharge)}</p>
                 </div>
                 <Button
                   type="button"
                   disabled={checkingOut || !canCheckout || Boolean(cartValidation)}
                   onClick={() => void checkout()}
-                  className="min-h-12 flex-1 rounded-full bg-[#176c2a] px-5 text-base font-black text-white hover:bg-[#125621] sm:flex-none"
+                  className="min-h-12 flex-1 rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)] sm:flex-none"
                 >
                   {checkingOut ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> : null}
                   {checkingOut ? "Enviando pedido..." : "Finalizar pedido"}
@@ -1088,7 +1114,7 @@ export function FloatingCart({
                 type="button"
                 variant="ghost"
                 onClick={() => void clearCart()}
-                className="mt-2 min-h-11 w-full text-base font-semibold text-[#14521b]"
+                className="mt-2 min-h-11 w-full text-base font-semibold text-[var(--cart-accent)]"
               >
                 Limpar carrinho
               </Button>

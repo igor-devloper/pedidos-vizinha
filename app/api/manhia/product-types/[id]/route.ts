@@ -4,7 +4,7 @@ import { isValidManhiaSessionToken, MANHIA_COOKIE_NAME } from "@/lib/admin-auth"
 import { prisma } from "@/lib/db";
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
 }
 
 function getToken(req: Request) {
@@ -34,7 +34,7 @@ function parseBody(body: {
   }
 
   if (minQuantity !== null && (!Number.isInteger(minQuantity) || minQuantity < 1)) {
-    return { error: "Quantidade minima invalida." };
+    return { error: "Quantidade mínima invalida." };
   }
 
   return {

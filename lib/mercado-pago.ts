@@ -65,36 +65,36 @@ export class MercadoPagoApiError extends Error {
 }
 
 const MERCADO_PAGO_STATUS_MESSAGES: Record<string, string> = {
-  bad_filled_card_data: "Confira os dados do cartao e tente novamente.",
-  card_disabled: "Este cartao esta bloqueado ou desabilitado. Fale com o banco ou use outro cartao.",
-  cc_rejected_bad_filled_card_number: "Confira o numero do cartao.",
-  cc_rejected_bad_filled_date: "Confira a data de validade do cartao.",
-  cc_rejected_bad_filled_other: "Confira os dados do cartao e tente novamente.",
-  cc_rejected_bad_filled_security_code: "Confira o codigo de seguranca do cartao.",
-  cc_rejected_call_for_authorize: "O banco precisa autorizar esta compra. Fale com o banco ou use outro cartao.",
-  cc_rejected_card_disabled: "Este cartao esta bloqueado ou desabilitado. Fale com o banco ou use outro cartao.",
-  cc_rejected_duplicated_payment: "Este pagamento ja foi enviado. Aguarde a confirmacao antes de tentar novamente.",
-  cc_rejected_high_risk: "O pagamento nao foi autorizado. Use outra forma de pagamento.",
-  cc_rejected_insufficient_amount: "Saldo ou limite insuficiente. Use outro cartao ou forma de pagamento.",
-  cc_rejected_invalid_installments: "O numero de parcelas escolhido nao esta disponivel.",
-  cc_rejected_max_attempts: "O limite de tentativas foi atingido. Use outro cartao ou forma de pagamento.",
-  cc_rejected_other_reason: "O banco nao autorizou o pagamento. Tente novamente ou use outro cartao.",
-  high_risk: "O pagamento nao foi autorizado. Use outra forma de pagamento.",
-  insufficient_amount: "Saldo ou limite insuficiente. Use outro cartao ou forma de pagamento.",
-  invalid_installments: "O numero de parcelas escolhido nao esta disponivel.",
-  max_attempts_exceeded: "O limite de tentativas foi atingido. Use outro cartao ou forma de pagamento.",
-  rejected_by_issuer: "O banco nao autorizou o pagamento. Tente novamente ou use outro cartao.",
-  required_call_for_authorize: "O banco precisa autorizar esta compra. Fale com o banco ou use outro cartao.",
+  bad_filled_card_data: "Confira os dados do cartão e tente novamente.",
+  card_disabled: "Este cartão está bloqueado ou desabilitado. Fale com o banco ou use outro cartão.",
+  cc_rejected_bad_filled_card_number: "Confira o número do cartão.",
+  cc_rejected_bad_filled_date: "Confira a data de validade do cartão.",
+  cc_rejected_bad_filled_other: "Confira os dados do cartão e tente novamente.",
+  cc_rejected_bad_filled_security_code: "Confira o código de segurança do cartão.",
+  cc_rejected_call_for_authorize: "O banco precisa autorizar esta compra. Fale com o banco ou use outro cartão.",
+  cc_rejected_card_disabled: "Este cartão está bloqueado ou desabilitado. Fale com o banco ou use outro cartão.",
+  cc_rejected_duplicated_payment: "Este pagamento já foi enviado. Aguarde a confirmação antes de tentar novamente.",
+  cc_rejected_high_risk: "O pagamento não foi autorizado. Use outra forma de pagamento.",
+  cc_rejected_insufficient_amount: "Saldo ou limite insuficiente. Use outro cartão ou forma de pagamento.",
+  cc_rejected_invalid_installments: "O número de parcelas escolhido não está disponível.",
+  cc_rejected_max_attempts: "O limite de tentativas foi atingido. Use outro cartão ou forma de pagamento.",
+  cc_rejected_other_reason: "O banco não autorizou o pagamento. Tente novamente ou use outro cartão.",
+  high_risk: "O pagamento não foi autorizado. Use outra forma de pagamento.",
+  insufficient_amount: "Saldo ou limite insuficiente. Use outro cartão ou forma de pagamento.",
+  invalid_installments: "O número de parcelas escolhido não está disponível.",
+  max_attempts_exceeded: "O limite de tentativas foi atingido. Use outro cartão ou forma de pagamento.",
+  rejected_by_issuer: "O banco não autorizou o pagamento. Tente novamente ou use outro cartão.",
+  required_call_for_authorize: "O banco precisa autorizar esta compra. Fale com o banco ou use outro cartão.",
 };
 
 export function getMercadoPagoPaymentStatusMessage(statusDetail?: string | null) {
-  if (!statusDetail) return "Nao foi possivel processar o pagamento. Tente novamente.";
-  return MERCADO_PAGO_STATUS_MESSAGES[statusDetail] || "O pagamento nao foi autorizado. Tente novamente ou use outra forma de pagamento.";
+  if (!statusDetail) return "Não foi possível processar o pagamento. Tente novamente.";
+  return MERCADO_PAGO_STATUS_MESSAGES[statusDetail] || "O pagamento não foi autorizado. Tente novamente ou use outra forma de pagamento.";
 }
 
 export function getMercadoPagoErrorMessage(error: unknown) {
   if (!(error instanceof MercadoPagoApiError)) {
-    return "Nao foi possivel processar o pagamento. Tente novamente.";
+    return "Não foi possível processar o pagamento. Tente novamente.";
   }
 
   const normalizedMessage = `${error.code || ""} ${error.message}`.toLowerCase();
@@ -103,7 +103,7 @@ export function getMercadoPagoErrorMessage(error: unknown) {
     error.code === "17" ||
     normalizedMessage.includes("unauthorized use of live credentials")
   ) {
-    return "As credenciais do Mercado Pago nao correspondem ao ambiente atual. Configure o par de Public Key e Access Token de teste ou ative o par de producao da mesma integracao.";
+    return "As credenciais do Mercado Pago não correspondem ao ambiente atual. Configure o par de Public Key e Access Token de teste ou ative o par de produção da mesma integração.";
   }
   const statusDetail = Object.keys(MERCADO_PAGO_STATUS_MESSAGES).find((detail) =>
     normalizedMessage.includes(detail)
@@ -111,13 +111,13 @@ export function getMercadoPagoErrorMessage(error: unknown) {
 
   if (statusDetail) return getMercadoPagoPaymentStatusMessage(statusDetail);
   if (error.status === 401 || error.status === 403) {
-    return "O pagamento esta temporariamente indisponivel. Tente novamente mais tarde.";
+    return "O pagamento está temporariamente indisponível. Tente novamente mais tarde.";
   }
   if (error.status === 429) {
     return "Muitas tentativas de pagamento. Aguarde um momento e tente novamente.";
   }
 
-  return "Nao foi possivel processar o pagamento. Confira os dados e tente novamente.";
+  return "Não foi possível processar o pagamento. Confira os dados e tente novamente.";
 }
 
 type CartMercadoPagoOrder = {
@@ -358,7 +358,7 @@ export async function createCartMercadoPagoPreference({
   const selected = methods.find((method) => method.id === paymentMethod);
 
   if (!selected) {
-    throw new Error("Metodo de pagamento indisponivel no Mercado Pago.");
+    throw new Error("Método de pagamento indisponível no Mercado Pago.");
   }
 
   const excludedPaymentTypes = methods
@@ -434,7 +434,7 @@ export async function createCartMercadoPagoPixPayment({
   );
 
   if (!pixMethod) {
-    throw new Error("Pix indisponivel no Mercado Pago.");
+    throw new Error("Pix indisponível no Mercado Pago.");
   }
 
   const payment = await mercadoPagoRequest<MercadoPagoPaymentResponse>("/v1/payments", {
@@ -484,7 +484,7 @@ export async function createCartMercadoPagoCardPayment({
   );
 
   if (!cardPaymentsEnabled) {
-    throw new Error("Pagamento com cartao indisponivel no Mercado Pago.");
+    throw new Error("Pagamento com cartão indisponível no Mercado Pago.");
   }
 
   const payment = await mercadoPagoRequest<MercadoPagoPaymentResponse>("/v1/payments", {

@@ -6,7 +6,7 @@ import { slugify } from "@/lib/pedidos";
 import { type ProdutoPayloadInput, validateProdutoPayload } from "@/lib/produtos";
 
 function unauthorizedResponse() {
-  return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+  return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
 }
 
 function getToken(req: Request) {

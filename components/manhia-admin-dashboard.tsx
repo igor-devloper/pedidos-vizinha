@@ -244,11 +244,11 @@ const PEDIDO_STATUS_OPTIONS = [
 const WEEKDAY_OPTIONS: Array<{ value: WeekdayIndex; label: string }> = [
   { value: 0, label: "Domingo" },
   { value: 1, label: "Segunda" },
-  { value: 2, label: "Terca" },
+  { value: 2, label: "Terça" },
   { value: 3, label: "Quarta" },
   { value: 4, label: "Quinta" },
   { value: 5, label: "Sexta" },
-  { value: 6, label: "Sabado" },
+  { value: 6, label: "Sábado" },
 ];
 
 const KANBAN_COLUMNS = [
@@ -286,7 +286,7 @@ async function fileToDataUrl(file: File) {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () =>
-      reject(new Error("NÃ£o foi possÃ­vel ler a imagem."));
+      reject(new Error("Não foi possível ler a imagem."));
     reader.readAsDataURL(file);
   });
 }
@@ -386,6 +386,12 @@ function getNextOperationalStatus(status: PedidoAdmin["status"]) {
   return null;
 }
 
+function getNextSimpleOrderStatus(status: SimpleOrderAdmin["status"]) {
+  if (status === "PAID") return "READY" as const;
+  if (status === "READY") return "DELIVERED" as const;
+  return null;
+}
+
 export function ManhiaAdminDashboard({
   initialProdutos,
   initialPedidos,
@@ -444,11 +450,43 @@ export function ManhiaAdminDashboard({
     [produtos],
   );
   const totalBaseVendido = useMemo(
-    () =>
-      pedidos
+    () => {
+      const totalPedidos = pedidos
         .filter((pedido) => pedido.status !== "CANCELADO")
-        .reduce((total, pedido) => total + Number(pedido.subtotal || 0), 0),
-    [pedidos],
+        .reduce((total, pedido) => total + Number(pedido.subtotal || 0), 0);
+      const totalOrders = simpleOrders
+        .filter((order) => order.status !== "CANCELLED")
+        .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
+
+      return totalPedidos + totalOrders;
+    },
+    [pedidos, simpleOrders],
+  );
+  const totalRecebido = useMemo(
+    () => {
+      const recebidoPedidos = pedidos
+        .filter(
+          (pedido) =>
+            pedido.status !== "PENDENTE_PAGAMENTO" &&
+            pedido.status !== "CANCELADO",
+        )
+        .reduce(
+          (total, pedido) => total + Number(pedido.totalCobrado || 0),
+          0,
+        );
+      const recebidoOrders = simpleOrders
+        .filter(
+          (order) => order.status !== "PENDING" && order.status !== "CANCELLED",
+        )
+        .reduce(
+          (total, order) =>
+            total + Number(order.chargedAmount || order.totalAmount || 0),
+          0,
+        );
+
+      return recebidoPedidos + recebidoOrders;
+    },
+    [pedidos, simpleOrders],
   );
   const pedidosPorStatus = useMemo(
     () => ({
@@ -665,7 +703,7 @@ export function ManhiaAdminDashboard({
         cache: "no-store",
       });
       if (!response.ok) {
-        throw new Error("NÃ£o foi possÃ­vel atualizar os pedidos.");
+        throw new Error("Não foi possível atualizar os pedidos.");
       }
 
       const data = (await response.json()) as
@@ -836,7 +874,7 @@ export function ManhiaAdminDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "NÃ£o foi possÃ­vel salvar o produto.");
+        throw new Error(data?.error || "Não foi possível salvar o produto.");
       }
 
       const produto = data as ProdutoAdmin;
@@ -856,7 +894,7 @@ export function ManhiaAdminDashboard({
       router.refresh();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar.",
+        error instanceof Error ? error.message : "Não foi possível salvar.",
       );
     } finally {
       setSaving(false);
@@ -921,7 +959,7 @@ export function ManhiaAdminDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel salvar o tipo.");
+        throw new Error(data?.error || "Não foi possível salvar o tipo.");
       }
 
       const productType = data as ProductTypeAdmin;
@@ -939,7 +977,7 @@ export function ManhiaAdminDashboard({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Nao foi possivel salvar o tipo.",
+          : "Não foi possível salvar o tipo.",
       );
     } finally {
       setSavingProductType(false);
@@ -972,7 +1010,7 @@ export function ManhiaAdminDashboard({
       } | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel excluir o tipo.");
+        throw new Error(data?.error || "Não foi possível excluir o tipo.");
       }
 
       setProductTypes((current) =>
@@ -984,7 +1022,7 @@ export function ManhiaAdminDashboard({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Nao foi possivel excluir o tipo.",
+          : "Não foi possível excluir o tipo.",
       );
     } finally {
       setDeletingProductTypeId(null);
@@ -1003,7 +1041,7 @@ export function ManhiaAdminDashboard({
       } | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "NÃ£o foi possÃ­vel excluir o produto.");
+        throw new Error(data?.error || "Não foi possível excluir o produto.");
       }
 
       setProdutos((current) => current.filter((item) => item.id !== produtoId));
@@ -1014,7 +1052,7 @@ export function ManhiaAdminDashboard({
       router.refresh();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel excluir.",
+        error instanceof Error ? error.message : "Não foi possível excluir.",
       );
     } finally {
       setDeletingId(null);
@@ -1042,7 +1080,7 @@ export function ManhiaAdminDashboard({
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel salvar o cupom.");
+        throw new Error(data?.error || "Não foi possível salvar o cupom.");
       }
 
       const cupom = data as CupomAdmin;
@@ -1062,7 +1100,7 @@ export function ManhiaAdminDashboard({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Nao foi possivel salvar o cupom.",
+          : "Não foi possível salvar o cupom.",
       );
     } finally {
       setSavingCupom(false);
@@ -1095,7 +1133,7 @@ export function ManhiaAdminDashboard({
       } | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Nao foi possivel excluir o cupom.");
+        throw new Error(data?.error || "Não foi possível excluir o cupom.");
       }
 
       setCupons((current) => current.filter((item) => item.id !== cupomId));
@@ -1108,7 +1146,7 @@ export function ManhiaAdminDashboard({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Nao foi possivel excluir o cupom.",
+          : "Não foi possível excluir o cupom.",
       );
     } finally {
       setDeletingCupomId(null);
@@ -1118,9 +1156,9 @@ export function ManhiaAdminDashboard({
   const handleCopyCupom = async (codigo: string) => {
     try {
       await navigator.clipboard.writeText(codigo);
-      toast.success("Codigo copiado.");
+      toast.success("Código copiado.");
     } catch {
-      toast.error("Nao foi possivel copiar o codigo.");
+      toast.error("Não foi possível copiar o código.");
     }
   };
 
@@ -1142,7 +1180,7 @@ export function ManhiaAdminDashboard({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "NÃ£o foi possÃ­vel atualizar o pedido.",
+          data?.error || "Não foi possível atualizar o pedido.",
         );
       }
 
@@ -1181,7 +1219,7 @@ export function ManhiaAdminDashboard({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Nao foi possivel confirmar o pagamento.",
+          data?.error || "Não foi possível confirmar o pagamento.",
         );
       }
 
@@ -1288,7 +1326,7 @@ export function ManhiaAdminDashboard({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Nao foi possivel salvar as configuracoes.",
+          data?.error || "Não foi possível salvar as configurações.",
         );
       }
 
@@ -1308,13 +1346,13 @@ export function ManhiaAdminDashboard({
         featuredProductId:
           data?.featuredProductId ?? nextSettings.featuredProductId ?? null,
       });
-      toast.success("Configuracoes salvas.");
+      toast.success("Configurações salvas.");
       router.refresh();
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Falha ao salvar configuracoes.",
+          : "Falha ao salvar configurações.",
       );
     } finally {
       setSavingSettings(false);
@@ -1334,7 +1372,7 @@ export function ManhiaAdminDashboard({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Nao foi possivel enviar para a impressora.",
+          data?.error || "Não foi possível enviar para a impressora.",
         );
       }
 
@@ -1346,8 +1384,8 @@ export function ManhiaAdminDashboard({
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? `${error.message} Abrindo impressao pelo navegador.`
-          : "Falha ao imprimir. Abrindo impressao pelo navegador.",
+          ? `${error.message} Abrindo impressão pelo navegador.`
+          : "Falha ao imprimir. Abrindo impressão pelo navegador.",
       );
       window.open(
         `/manhia/pedidos/${pedidoId}/imprimir`,
@@ -1372,7 +1410,7 @@ export function ManhiaAdminDashboard({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Nao foi possivel enviar o carrinho para a impressora.",
+          data?.error || "Não foi possível enviar o carrinho para a impressora.",
         );
       }
 
@@ -1412,7 +1450,7 @@ export function ManhiaAdminDashboard({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Nao foi possivel atualizar o pedido do carrinho.",
+          data?.error || "Não foi possível atualizar o pedido do carrinho.",
         );
       }
 
@@ -1455,7 +1493,7 @@ export function ManhiaAdminDashboard({
 
       if (!response.ok) {
         throw new Error(
-          data?.error || "Nao foi possivel confirmar o pagamento.",
+          data?.error || "Não foi possível confirmar o pagamento.",
         );
       }
 
@@ -1483,7 +1521,7 @@ export function ManhiaAdminDashboard({
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f7fde7,#fffaf3_42%,#eef8db)] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#f7fde7,#fffaf3_42%,#eef8db)] px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
           <div className="grid gap-0 lg:grid-cols-[280px_1fr_auto]">
@@ -1499,12 +1537,19 @@ export function ManhiaAdminDashboard({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 border-y border-[#e4edc9] bg-[#fbfff0] sm:grid-cols-5 lg:border-y-0">
+            <div className="grid grid-cols-2 border-y border-[#e4edc9] bg-[#fbfff0] sm:grid-cols-3 lg:border-y-0 xl:grid-cols-6">
               {[
-                { label: "Pedidos", value: pedidos.length },
                 {
-                  label: "Valor base",
+                  label: "Pedidos",
+                  value: pedidos.length + simpleOrders.length,
+                },
+                {
+                  label: "Valor vendido",
                   value: formatCurrency(totalBaseVendido),
+                },
+                {
+                  label: "Recebido",
+                  value: formatCurrency(totalRecebido),
                 },
                 { label: "Produtos", value: ativos },
                 {
@@ -1514,7 +1559,9 @@ export function ManhiaAdminDashboard({
                 {
                   label: "Tema",
                   value:
-                    settings.siteTheme === "NAMORADOS"
+                    settings.siteTheme === "PADRAO"
+                      ? "Padrão"
+                      : settings.siteTheme === "NAMORADOS"
                       ? "Namorados"
                       : settings.siteTheme === "SAO_JOAO"
                         ? "São João"
@@ -1560,7 +1607,7 @@ export function ManhiaAdminDashboard({
             </div>
           </div>
 
-          <nav className="grid border-t border-[#e4edc9] bg-white sm:grid-cols-6">
+          <nav className="grid grid-cols-3 border-t border-[#e4edc9] bg-white sm:grid-cols-6">
             {[
               { id: "pedidos" as const, label: "Pedidos", icon: ShoppingBag },
               { id: "salgados" as const, label: "Salgados", icon: ChefHat },
@@ -1581,7 +1628,7 @@ export function ManhiaAdminDashboard({
                   type="button"
                   onClick={() => setActiveTab(item.id)}
                   className={cn(
-                    "flex h-14 items-center justify-center gap-2 border-b border-[#e4edc9] text-sm font-bold uppercase tracking-wide transition sm:border-b-0 sm:border-r",
+                    "flex h-14 items-center justify-center gap-1.5 border-b border-r border-[#e4edc9] px-2 text-[11px] font-bold uppercase tracking-wide transition sm:gap-2 sm:border-b-0 sm:text-sm",
                     activeTab === item.id
                       ? "bg-[#fff3a8] text-[#0b3d18]"
                       : "bg-white text-[#48654f] hover:bg-[#f7fde7]",
@@ -1610,7 +1657,7 @@ export function ManhiaAdminDashboard({
 
               <div className="flex flex-wrap items-center gap-3">
                 <Badge className="border-[#d6e7a2] bg-[#f7fde7] px-4 py-2 text-[#284a2e]">
-                  Impressao automatica via servico
+                  Impressão automatica via serviço
                 </Badge>
                 <Button
                   type="button"
@@ -1664,7 +1711,7 @@ export function ManhiaAdminDashboard({
                             </Badge>
                           </div>
                           <p className="mt-1 text-sm text-slate-500">
-                            {order.customerName || "Cliente nao informado"} -{" "}
+                            {order.customerName || "Cliente não informado"} -{" "}
                             {formatDateTime(
                               order.scheduledAt || order.createdAt,
                             )}
@@ -1730,7 +1777,7 @@ export function ManhiaAdminDashboard({
               </section>
             ) : null}
 
-            {pedidos.length === 0 ? (
+            {pedidos.length === 0 && simpleOrders.length === 0 ? (
               <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
                 <CardContent className="py-10 text-center text-sm text-slate-500">
                   Nenhum pedido recebido ainda.
@@ -1830,6 +1877,166 @@ export function ManhiaAdminDashboard({
                     </div>
                   </section>
                 ) : null}
+
+                <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-3 lg:hidden">
+                  {KANBAN_COLUMNS.map((column) => (
+                    <section
+                      key={`mobile:${column.status}`}
+                      className={cn(
+                        "min-w-[calc(100vw-2.5rem)] snap-center rounded-[1.6rem] border p-4 shadow-sm sm:min-w-[70vw]",
+                        column.accent,
+                      )}
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">
+                            {column.title}
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            {column.description}
+                          </p>
+                        </div>
+                        <Badge className={column.badge}>
+                          {kanbanPedidosPorStatus[column.status].length}
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-3">
+                        {kanbanPedidosPorStatus[column.status].map((entry) => {
+                          if (entry.kind === "pedido") {
+                            const { pedido } = entry;
+                            const nextStatus = getNextOperationalStatus(
+                              pedido.status,
+                            );
+
+                            return (
+                              <article
+                                key={`mobile:pedido:${pedido.id}`}
+                                className="rounded-2xl border border-[#d6e7a2] bg-white p-4 shadow-sm"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="font-bold text-slate-900">
+                                        {pedido.codigo}
+                                      </h4>
+                                      <Badge className={getPedidoStatusMeta(pedido.status).tone}>
+                                        {getPedidoStatusMeta(pedido.status).label}
+                                      </Badge>
+                                    </div>
+                                    <p className="mt-1 truncate text-sm text-slate-500">
+                                      {pedido.clienteNome}
+                                    </p>
+                                  </div>
+                                  <p className="shrink-0 font-bold text-[#0b3d18]">
+                                    {formatCurrency(Number(pedido.subtotal))}
+                                  </p>
+                                </div>
+                                <p className="mt-3 text-sm text-slate-600">
+                                  {formatDateTime(pedido.dataEntrega)} • {pedido.totalUnidades} un
+                                </p>
+                                <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                                  {pedido.itens
+                                    .map((item) => `${item.tipo}: ${item.quantidade}`)
+                                    .join(" • ")}
+                                </p>
+                                <div className="mt-4 grid grid-cols-2 gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={printingPedidoId === pedido.id}
+                                    onClick={() => void handlePrint(pedido.id)}
+                                    className="rounded-full border-[#d6e7a2] text-[#1b5e20]"
+                                  >
+                                    <Printer className="mr-2 h-4 w-4" />
+                                    Imprimir
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    disabled={!nextStatus || statusLoadingId === pedido.id}
+                                    onClick={() =>
+                                      nextStatus
+                                        ? void handleUpdatePedidoStatus(pedido.id, nextStatus)
+                                        : undefined
+                                    }
+                                    className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                                  >
+                                    {nextStatus ? "Avançar" : "Finalizado"}
+                                  </Button>
+                                </div>
+                              </article>
+                            );
+                          }
+
+                          const { order } = entry;
+                          const nextStatus = getNextSimpleOrderStatus(order.status);
+
+                          return (
+                            <article
+                              key={`mobile:cart:${order.id}`}
+                              className="rounded-2xl border border-[#d6e7a2] bg-white p-4 shadow-sm"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="font-bold text-slate-900">
+                                      {getSimpleOrderCode(order)}
+                                    </h4>
+                                    <Badge className="border-[#d6e7a2] bg-[#f7fde7] text-[#1b5e20]">
+                                      Carrinho
+                                    </Badge>
+                                  </div>
+                                  <p className="mt-1 truncate text-sm text-slate-500">
+                                    {order.customerName || "Cliente não informado"}
+                                  </p>
+                                </div>
+                                <p className="shrink-0 font-bold text-[#0b3d18]">
+                                  {formatCurrency(Number(order.totalAmount))}
+                                </p>
+                              </div>
+                              <p className="mt-3 text-sm text-slate-600">
+                                {formatDateTime(getSimpleOrderDate(order))}
+                              </p>
+                              <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                                {getSimpleOrderSalgadosSummary(order)}
+                              </p>
+                              <div className="mt-4 grid grid-cols-2 gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={printingPedidoId === order.id}
+                                  onClick={() => void handlePrintSimpleOrder(order.id)}
+                                  className="rounded-full border-[#d6e7a2] text-[#1b5e20]"
+                                >
+                                  <Printer className="mr-2 h-4 w-4" />
+                                  Imprimir
+                                </Button>
+                                <Button
+                                  type="button"
+                                  disabled={!nextStatus || statusLoadingId === order.id}
+                                  onClick={() =>
+                                    nextStatus
+                                      ? void handleUpdateSimpleOrderStatus(order.id, nextStatus)
+                                      : undefined
+                                  }
+                                  className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                                >
+                                  {nextStatus ? "Avançar" : "Finalizado"}
+                                </Button>
+                              </div>
+                            </article>
+                          );
+                        })}
+
+                        {kanbanPedidosPorStatus[column.status].length === 0 ? (
+                          <p className="rounded-2xl border border-dashed border-[#b8ca91] bg-white/50 p-5 text-center text-sm text-slate-500">
+                            Sem pedidos nesta etapa.
+                          </p>
+                        ) : null}
+                      </div>
+                    </section>
+                  ))}
+                </div>
 
                 <div className="hidden gap-4 lg:grid lg:grid-cols-3">
                   {KANBAN_COLUMNS.map((column) => (
@@ -1943,7 +2150,7 @@ export function ManhiaAdminDashboard({
                               </span>
                             </div>
                             <p className="mt-1 truncate text-sm text-slate-500">
-                              {order.customerName || "Cliente nao informado"} -{" "}
+                              {order.customerName || "Cliente não informado"} -{" "}
                               {formatDateTime(getSimpleOrderDate(order))}
                             </p>
                             <p className="mt-1 truncate text-xs text-slate-500">
@@ -1975,7 +2182,7 @@ export function ManhiaAdminDashboard({
                   return (
                     <Card
                       key={pedido.id}
-                      className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 lg:hidden"
+                      className="hidden"
                     >
                       <CardContent className="space-y-4 p-5">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1990,7 +2197,7 @@ export function ManhiaAdminDashboard({
                               </Badge>
                             </div>
                             <p className="text-sm text-slate-500">
-                              {pedido.clienteNome} â€¢ {pedido.clienteTelefone}
+                              {pedido.clienteNome} • {pedido.clienteTelefone}
                             </p>
                             <p className="text-sm text-slate-500">
                               Entrega: {formatDateTime(pedido.dataEntrega)}
@@ -2019,7 +2226,7 @@ export function ManhiaAdminDashboard({
                               {pedido.produtoNomeSnapshot}
                             </p>
                             <p className="mt-1 text-sm text-slate-500">
-                              {pedido.totalUnidades} unidades â€¢{" "}
+                              {pedido.totalUnidades} unidades •{" "}
                               {pedido.totalTipos} tipos
                             </p>
                           </div>
@@ -2039,10 +2246,10 @@ export function ManhiaAdminDashboard({
 
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-[#1b7f31]">
-                              ObservaÃ§Ãµes
+                              Observações
                             </p>
                             <p className="mt-2 text-sm text-slate-700">
-                              {pedido.observacoes || "Sem observaÃ§Ãµes."}
+                              {pedido.observacoes || "Sem observações."}
                             </p>
                           </div>
                         </div>
@@ -2440,7 +2647,7 @@ export function ManhiaAdminDashboard({
             <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
               <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
                 <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
-                  Divulgacao
+                  Divulgação
                 </p>
                 <CardTitle className="text-[#0b3d18]">
                   {editingCupomId ? "Editar cupom" : "Novo cupom"}
@@ -2450,7 +2657,7 @@ export function ManhiaAdminDashboard({
                 <form className="space-y-4" onSubmit={handleCupomSubmit}>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">
-                      Codigo do cupom
+                      Código do cupom
                     </label>
                     <Input
                       value={cupomForm.codigo}
@@ -2546,7 +2753,7 @@ export function ManhiaAdminDashboard({
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">
-                      Observacao interna
+                      Observação interna
                     </label>
                     <Textarea
                       value={cupomForm.descricao}
@@ -2607,7 +2814,7 @@ export function ManhiaAdminDashboard({
                         onClick={resetCupomForm}
                         className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
                       >
-                        Cancelar edicao
+                        Cancelar edição
                       </Button>
                     ) : null}
                   </div>
@@ -2727,8 +2934,8 @@ export function ManhiaAdminDashboard({
                       Loja {settings.isOpen ? "aberta" : "fechada"}
                     </h2>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-[#48654f]">
-                      Esse controle muda o cardapio e impede novos pedidos
-                      quando a loja esta fechada.
+                      Esse controle muda o cardápio e impede novos pedidos
+                      quando a loja está fechada.
                     </p>
                   </div>
 
@@ -2753,7 +2960,7 @@ export function ManhiaAdminDashboard({
                   <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-[#284a2e]">
-                        Antecedencia minima para pedido
+                        Antecedência mínima para pedido
                       </label>
                       <Input
                         type="number"
@@ -2782,7 +2989,7 @@ export function ManhiaAdminDashboard({
                       }
                       className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]"
                     >
-                      {savingSettings ? "Salvando..." : "Salvar horario"}
+                      {savingSettings ? "Salvando..." : "Salvar horário"}
                     </Button>
                   </div>
                 </div>
@@ -2791,7 +2998,7 @@ export function ManhiaAdminDashboard({
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <p className="text-sm font-bold text-[#284a2e]">
-                        Horario da operacao por dia
+                        Horário da operação por dia
                       </p>
                       <p className="mt-1 text-sm leading-6 text-[#48654f]">
                         Defina quais dias aceitam pedidos e o intervalo de
@@ -2808,7 +3015,7 @@ export function ManhiaAdminDashboard({
                       }
                       className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]"
                     >
-                      {savingSettings ? "Salvando..." : "Salvar horarios"}
+                      {savingSettings ? "Salvando..." : "Salvar horários"}
                     </Button>
                   </div>
 
@@ -2883,18 +3090,18 @@ export function ManhiaAdminDashboard({
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                       <p className="text-sm font-bold text-[#284a2e]">
-                        Pedidos no mesmo horario
+                        Pedidos no mesmo horário
                       </p>
                       <p className="mt-1 text-sm leading-6 text-[#48654f]">
-                        Quando desligado, cada horario aceita apenas uma
+                        Quando desligado, cada horário aceita apenas uma
                         encomenda ativa.
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-[#48654f]">
                         {settings.allowMultipleOrdersPerSlot
-                          ? "Varios por horario"
-                          : "Um por horario"}
+                          ? "Vários por horário"
+                          : "Um por horário"}
                       </span>
                       <Checkbox
                         id="allow-multiple-orders-per-slot"
@@ -2916,25 +3123,36 @@ export function ManhiaAdminDashboard({
                       Tema do site
                     </p>
                     <h3 className="mt-1 text-xl font-bold text-[#5f1029]">
-                      {settings.siteTheme === "NAMORADOS"
+                      {settings.siteTheme === "PADRAO"
+                        ? "Identidade padrão da Vizinha"
+                        : settings.siteTheme === "NAMORADOS"
                         ? "Dia dos Namorados em destaque"
                         : settings.siteTheme === "SAO_JOAO"
                           ? "São João em destaque"
                           : "Tema da Copa ativo"}
                     </h3>
                     <p className="mt-2 text-sm leading-6 text-[#7a3149]">
-                      Troque a vitrine e a pagina do produto entre Copa, Dia dos
-                      Namorados e São João.
+                      Escolha entre a identidade padrão da Vizinha e os temas
+                      sazonais de Copa, Dia dos Namorados e São João.
                     </p>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {[
+                      {
+                        value: "PADRAO" as const,
+                        title: "Padrão da Vizinha",
+                        description:
+                          "Identidade oficial da marca para usar durante todo o ano.",
+                        icon: Star,
+                        activeClass:
+                          "border-[#e000cf] bg-[#fff0fc] text-[#8f147b]",
+                      },
                       {
                         value: "NAMORADOS" as const,
                         title: "Dia dos Namorados",
                         description:
-                          "Destaca combos para casal, presentes e clima romantico.",
+                          "Destaca combos para casais, presentes e um clima romântico.",
                         icon: Heart,
                         activeClass:
                           "border-[#e11d48] bg-[#ffe4ec] text-[#881337]",
@@ -2943,7 +3161,7 @@ export function ManhiaAdminDashboard({
                         value: "COPA" as const,
                         title: "Copa",
                         description:
-                          "Volta para o visual verde e amarelo com combos especiais.",
+                          "Aplica o visual verde e amarelo com combos especiais.",
                         icon: Trophy,
                         activeClass:
                           "border-[#1b7f31] bg-[#f7fde7] text-[#0b3d18]",
@@ -2952,7 +3170,7 @@ export function ManhiaAdminDashboard({
                         value: "SAO_JOAO" as const,
                         title: "São João",
                         description:
-                          "Bandeirinhas, milho, estrelas e clima de arraia.",
+                          "Traz bandeirinhas, milho, estrelas e clima de arraiá.",
                         icon: FerrisWheel,
                         activeClass:
                           "border-[#ff8c00] bg-[#fff3a8] text-[#8b4513]",
@@ -2993,7 +3211,13 @@ export function ManhiaAdminDashboard({
                     })}
                   </div>
 
-                  {settings.siteTheme === "NAMORADOS" ? (
+                  {settings.siteTheme === "PADRAO" ? (
+                    <div className="rounded-[1rem] border border-[#1b7f31] bg-white px-4 py-3 text-sm leading-6 text-[#284a2e]">
+                      <strong className="text-[#0b3d18]">No site:</strong>{" "}
+                      a identidade da Vizinha aparece com mensagens atemporais
+                      e as cores principais da marca.
+                    </div>
+                  ) : settings.siteTheme === "NAMORADOS" ? (
                     <div className="rounded-[1rem] border border-[#e11d48] bg-white px-4 py-3 text-sm leading-6 text-[#7a3149]">
                       <strong className="text-[#be123c]">No site:</strong>{" "}
                       textos, etiquetas e destaques passam a falar de Dia dos
@@ -3002,8 +3226,8 @@ export function ManhiaAdminDashboard({
                   ) : settings.siteTheme === "SAO_JOAO" ? (
                     <div className="rounded-[1rem] border border-[#ff8c00] bg-white px-4 py-3 text-sm leading-6 text-[#8b4513]">
                       <strong className="text-[#cc0000]">No site:</strong>{" "}
-                      bandeirinhas, textura xadrez, fonte Lobster nos titulos e
-                      emojis 🎪 🌽 ⭐ 🎉 entram no cardapio.
+                      bandeirinhas, textura xadrez e emojis 🎪 🌽 ⭐ 🎉 entram
+                      no cardápio.
                     </div>
                   ) : null}
                 </div>
@@ -3014,11 +3238,11 @@ export function ManhiaAdminDashboard({
                       Produto em destaque
                     </p>
                     <h3 className="mt-1 text-xl font-bold text-[#0b3d18]">
-                      Escolha o produto principal do cardapio
+                      Escolha o produto principal do cardápio
                     </h3>
                     <p className="mt-2 text-sm leading-6 text-[#48654f]">
                       Esse produto aparece no bloco grande da vitrine. Produtos
-                      ocultos nao aparecem no cardapio publico.
+                      ocultos não aparecem no cardápio público.
                     </p>
                   </div>
 
@@ -3041,7 +3265,7 @@ export function ManhiaAdminDashboard({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="AUTO">
-                            Automatico: primeiro produto ativo
+                            Automático: primeiro produto ativo
                           </SelectItem>
                           {produtos.map((produto) => (
                             <SelectItem key={produto.id} value={produto.id}>
@@ -3082,27 +3306,31 @@ export function ManhiaAdminDashboard({
                     icon: CheckCheck,
                   },
                   {
-                    label: "Antecedencia",
+                    label: "Antecedência",
                     value: `${settings.minimumLeadHours}h`,
                     icon: Clock,
                   },
                   {
-                    label: "Pedidos por horario",
+                    label: "Pedidos por horário",
                     value: settings.allowMultipleOrdersPerSlot
-                      ? "Varios"
-                      : "Unico",
+                      ? "Vários"
+                      : "Único",
                     icon: TicketPercent,
                   },
                   {
                     label: "Tema do site",
                     value:
-                      settings.siteTheme === "NAMORADOS"
+                      settings.siteTheme === "PADRAO"
+                        ? "Padrão"
+                        : settings.siteTheme === "NAMORADOS"
                         ? "Namorados"
                         : settings.siteTheme === "SAO_JOAO"
                           ? "São João"
                           : "Copa",
                     icon:
-                      settings.siteTheme === "NAMORADOS"
+                      settings.siteTheme === "PADRAO"
+                        ? Star
+                        : settings.siteTheme === "NAMORADOS"
                         ? Heart
                         : settings.siteTheme === "SAO_JOAO"
                           ? FerrisWheel
@@ -3113,7 +3341,7 @@ export function ManhiaAdminDashboard({
                     value:
                       produtos.find(
                         (produto) => produto.id === settings.featuredProductId,
-                      )?.nome || "Automatico",
+                      )?.nome || "Automático",
                     icon: Star,
                   },
                 ].map((item) => {
@@ -3449,7 +3677,7 @@ export function ManhiaAdminDashboard({
                           htmlFor="produto-promocao"
                           className="text-sm leading-6 text-slate-600"
                         >
-                          Destacar este produto como promocao.
+                          Destacar este produto como promoção.
                         </label>
                         {form.emPromocao ? (
                           <div className="grid gap-2 sm:max-w-48">
@@ -3490,7 +3718,7 @@ export function ManhiaAdminDashboard({
                         htmlFor="produto-ativo"
                         className="text-sm leading-6 text-slate-600"
                       >
-                        Deixar visivel no cardapio.
+                        Deixar visível no cardápio.
                       </label>
                     </div>
                   </div>
@@ -3499,7 +3727,7 @@ export function ManhiaAdminDashboard({
                     <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-[#d6e7a2] bg-[#f7fde7]">
                       <Image
                         src={form.imagemBase64}
-                        alt={form.nome || "PrÃ©via do produto"}
+                        alt={form.nome || "Prévia do produto"}
                         fill
                         unoptimized
                         className="object-cover"
@@ -3547,7 +3775,7 @@ export function ManhiaAdminDashboard({
               <div className="flex flex-col gap-2 border-b border-[#e4edc9] bg-[#0b3d18] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-[#f4d330]">
-                    Cardapio
+                    Cardápio
                   </p>
                   <h2 className="text-xl font-bold">Produtos cadastrados</h2>
                 </div>
@@ -3606,7 +3834,7 @@ export function ManhiaAdminDashboard({
                             {produto.productTypeName || produto.categoria}
                           </span>
                           <span>{produto.totalUnidades} un</span>
-                          <span>Ate {produto.maxTiposSalgado} tipos</span>
+                          <span>Até {produto.maxTiposSalgado} tipos</span>
                           <span>
                             {produto.permitePagamentoParcial
                               ? "50% ou 100%"

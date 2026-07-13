@@ -89,14 +89,14 @@ export async function POST(req: Request) {
 
     if (customerPhone.replace(/\D/g, "").length < 10) {
       return NextResponse.json(
-        { error: "Informe um WhatsApp valido para finalizar o pedido." },
+        { error: "Informe um WhatsApp válido para finalizar o pedido." },
         { status: 400 },
       );
     }
 
     if (!/^\S+@\S+\.\S+$/.test(customerEmail)) {
       return NextResponse.json(
-        { error: "Informe um e-mail valido para o pagamento." },
+        { error: "Informe um e-mail válido para o pagamento." },
         { status: 400 },
       );
     }
@@ -139,7 +139,7 @@ export async function POST(req: Request) {
 
     if (!scheduledAt) {
       return NextResponse.json(
-        { error: "Informe uma data e horario validos." },
+        { error: "Informe uma data e horário válidos." },
         { status: 400 },
       );
     }
@@ -151,7 +151,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "A loja esta fechada para pedidos de hoje. Escolha uma data futura para continuar.",
+            "A loja está fechada para pedidos de hoje. Escolha uma data futura para continuar.",
         },
         { status: 400 },
       );
@@ -183,7 +183,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              "Esse horario ja esta reservado para outro pedido. Escolha outro horario para continuar.",
+              "Esse horário já está reservado para outro pedido. Escolha outro horário para continuar.",
           },
           { status: 409 },
         );

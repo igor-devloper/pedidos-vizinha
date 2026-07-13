@@ -313,7 +313,7 @@ model StoreSettings {
   /// Permite mais de um pedido no mesmo horário de entrega.
   allowMultipleOrdersPerSlot Boolean  @default(false)
   operationSchedule          Json     @default("{}")
-  siteTheme                  String   @default("COPA")
+  siteTheme                  String   @default("PADRAO")
   featuredProductId          String?
   updatedAt                  DateTime @updatedAt
 }

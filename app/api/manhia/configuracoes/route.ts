@@ -24,7 +24,7 @@ export async function GET(req: Request) {
         minimumLeadHours: 2,
         allowMultipleOrdersPerSlot: false,
         operationSchedule: DEFAULT_OPERATION_SCHEDULE,
-        siteTheme: "COPA",
+        siteTheme: "PADRAO",
       },
     });
 
@@ -104,7 +104,7 @@ export async function PATCH(req: Request) {
         minimumLeadHours: patch.minimumLeadHours ?? 2,
         allowMultipleOrdersPerSlot: patch.allowMultipleOrdersPerSlot ?? false,
         operationSchedule: patch.operationSchedule ?? DEFAULT_OPERATION_SCHEDULE,
-        siteTheme: patch.siteTheme ?? "COPA",
+        siteTheme: patch.siteTheme ?? "PADRAO",
         featuredProductId: patch.featuredProductId ?? null,
       },
     });

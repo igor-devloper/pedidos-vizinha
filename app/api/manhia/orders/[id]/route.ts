@@ -14,7 +14,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   if (!isManhiaRequestAuthenticated(req)) {
-    return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
   try {
@@ -26,7 +26,7 @@ export async function PATCH(
   } catch (error) {
     console.error("PATCH /api/manhia/orders/[id] error", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Nao foi possivel atualizar o pedido." },
+      { error: error instanceof Error ? error.message : "Não foi possível atualizar o pedido." },
       { status: 400 }
     );
   }
