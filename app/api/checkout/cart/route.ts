@@ -17,6 +17,7 @@ import {
   validatePedidoAgainstProduto,
 } from "@/lib/pedidos";
 import { getProdutoComboItens } from "@/lib/produtos";
+import { createRaffleCode } from "@/lib/raffle";
 
 function parseLocalScheduledAt(value?: string) {
   if (!value) return null;
@@ -235,8 +236,15 @@ export async function POST(req: Request) {
             };
           }),
         },
+        raffleEntry: {
+          create: {
+            code: createRaffleCode(),
+            customerName,
+            customerPhone,
+          },
+        },
       } as Prisma.OrderUncheckedCreateInput,
-      include: { items: true },
+      include: { items: true, raffleEntry: true },
     });
 
     const response = NextResponse.json({
@@ -244,6 +252,7 @@ export async function POST(req: Request) {
       externalReference: order.externalReference,
       paymentMethod,
       chargedAmount: payment.totalToCharge,
+      raffleCode: order.raffleEntry?.code,
     });
 
     if (isNew) {

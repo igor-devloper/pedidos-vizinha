@@ -1,4 +1,4 @@
-import {
+﻿import {
   type Order,
   type OrderItem,
   type OrderStatus,
@@ -18,6 +18,7 @@ import {
 
 type CartOrderWithItems = Order & {
   items: OrderItem[];
+  raffleEntry?: { code: string } | null;
   code?: string | null;
   scheduledAt?: Date | string | null;
 };
@@ -38,8 +39,8 @@ function formatScheduledAt(order: Pick<CartOrderWithItems, "scheduledAt">) {
   const date = getScheduledAtDate(order.scheduledAt);
   if (!date) return null;
 
-  // O carrinho salva o horário local como UTC fixo para não somar/subtrair 3h.
-  // Por isso formatamos pelos campos UTC, sem conversão de fuso.
+  // O carrinho salva o horÃ¡rio local como UTC fixo para nÃ£o somar/subtrair 3h.
+  // Por isso formatamos pelos campos UTC, sem conversÃ£o de fuso.
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
@@ -94,7 +95,7 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
     `#PEDIDO CARRINHO ${cartOrderCode(order)}`,
     "-".repeat(30),
     "#CLIENTE",
-    `Nome: ${order.customerName || "Não informado"}`,
+    `Nome: ${order.customerName || "NÃ£o informado"}`,
     order.customerPhone ? `WhatsApp: ${order.customerPhone}` : null,
     order.customerEmail ? `E-mail: ${order.customerEmail}` : null,
     formatScheduledAt(order)
@@ -117,31 +118,38 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
 
 function buildCartOrderClientMessage(order: CartOrderWithItems) {
   return formatWhatsAppMessage([
-    "✅ *Pedido Confirmado!*",
+    "âœ… *Pedido Confirmado!*",
     [
-      `👤 *Cliente:* ${order.customerName || "Não informado"}`,
-      order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
+      `ðŸ‘¤ *Cliente:* ${order.customerName || "NÃ£o informado"}`,
+      order.customerPhone ? `ðŸ“ž *WhatsApp:* ${order.customerPhone}` : null,
       formatScheduledAt(order)
-        ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}`
+        ? `ðŸ—“ï¸ *Entrega/retirada:* ${formatScheduledAt(order)}`
         : null,
     ],
+    order.raffleEntry
+      ? [
+          "ðŸŽ *Sorteio de Dia dos Pais*",
+          "Seu pagamento confirmou sua participaÃ§Ã£o!",
+          `Seu cÃ³digo da sorte: *${order.raffleEntry.code}*`,
+        ]
+      : null,
     [
       WHATSAPP_SECTION_DIVIDER,
-      `🛍️ *Pedido #${cartOrderCode(order)}*`,
+      `ðŸ›ï¸ *Pedido #${cartOrderCode(order)}*`,
       WHATSAPP_SECTION_DIVIDER,
     ],
     [
-      "📦 *Itens:*",
+      "ðŸ“¦ *Itens:*",
       ...formatWhatsAppList(formatCartOrderItems(order)).map(
         (item) => `  ${item}`,
       ),
-      `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
-      `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
+      `ðŸ’° *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
+      `ðŸ’³ *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
       `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
-      "Obrigada pela preferência!",
+      "Obrigada pela preferÃªncia!",
       `_${BUSINESS_INFO.name}_`,
     ],
   ]);
@@ -149,27 +157,27 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
 
 function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
   return formatWhatsAppMessage([
-    "🔔 *Novo Pedido Pago!*",
+    "ðŸ”” *Novo Pedido Pago!*",
     [
-      `👤 *Cliente:* ${order.customerName || "Não informado"}`,
-      order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
-      order.customerEmail ? `✉️ *E-mail:* ${order.customerEmail}` : null,
+      `ðŸ‘¤ *Cliente:* ${order.customerName || "NÃ£o informado"}`,
+      order.customerPhone ? `ðŸ“ž *WhatsApp:* ${order.customerPhone}` : null,
+      order.customerEmail ? `âœ‰ï¸ *E-mail:* ${order.customerEmail}` : null,
       formatScheduledAt(order)
-        ? `🗓️ *Entrega/retirada:* ${formatScheduledAt(order)}`
+        ? `ðŸ—“ï¸ *Entrega/retirada:* ${formatScheduledAt(order)}`
         : null,
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
-      `🛍️ *Pedido #${cartOrderCode(order)}*`,
+      `ðŸ›ï¸ *Pedido #${cartOrderCode(order)}*`,
       WHATSAPP_SECTION_DIVIDER,
     ],
     [
-      "📦 *Itens:*",
+      "ðŸ“¦ *Itens:*",
       ...formatWhatsAppList(formatCartOrderItems(order)).map(
         (item) => `  ${item}`,
       ),
-      `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
-      `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
+      `ðŸ’° *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
+      `ðŸ’³ *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
       `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
     ],
   ]);
@@ -193,20 +201,20 @@ function buildCartOrderReadyMessage(
     order.saldoTotalCobrado !== null;
 
   return formatWhatsAppMessage([
-    "🍽️ *Seu pedido está pronto!*",
+    "ðŸ½ï¸ *Seu pedido estÃ¡ pronto!*",
     [
       `Oi, ${order.customerName || "cliente"}!`,
-      `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* já está pronto.`,
+      `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* jÃ¡ estÃ¡ pronto.`,
     ],
     hasPendingBalance
       ? [
-          "💰 *Falta o pagamento da 2ª parte*",
+          "ðŸ’° *Falta o pagamento da 2Âª parte*",
           `Valor para quitar agora: *${formatCurrency(Number(order.saldoTotalCobrado))}*`,
-          "🔗 *Acesse sua cobrança para pagar:*",
+          "ðŸ”— *Acesse sua cobranÃ§a para pagar:*",
           order.saldoInitPoint!,
         ]
       : null,
-    `📲 Se precisar falar com a equipe, chame no WhatsApp: ${BUSINESS_INFO.supportPhone}`,
+    `ðŸ“² Se precisar falar com a equipe, chame no WhatsApp: ${BUSINESS_INFO.supportPhone}`,
   ]);
 }
 
@@ -264,7 +272,7 @@ async function ensureCartOrderBalanceCharge(order: CartOrderWithItems) {
 async function loadCartOrder(id: string) {
   return prisma.order.findUnique({
     where: { id },
-    include: { items: true },
+    include: { items: true, raffleEntry: true },
   });
 }
 
@@ -284,7 +292,7 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
         );
         if (!result.ok) {
           throw new Error(
-            "Envio para cliente não confirmado pelo serviço de WhatsApp.",
+            "Envio para cliente nÃ£o confirmado pelo serviÃ§o de WhatsApp.",
           );
         }
       } catch (error) {
@@ -315,7 +323,7 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
         );
         if (!result.ok) {
           throw new Error(
-            "Envio para Vizinha não confirmado pelo serviço de WhatsApp.",
+            "Envio para Vizinha nÃ£o confirmado pelo serviÃ§o de WhatsApp.",
           );
         }
       } catch (error) {
@@ -361,7 +369,7 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
 
     const printed = await prisma.order.findUnique({
       where: { id: order.id },
-      include: { items: true },
+      include: { items: true, raffleEntry: true },
     });
 
     return printed || { ...order, impressoAutomaticamenteAt: claimedAt };
@@ -394,7 +402,7 @@ export async function processPaidCartOrdersSideEffects() {
         { notificadoVizinhaAt: null },
       ],
     },
-    include: { items: true },
+    include: { items: true, raffleEntry: true },
     take: 20,
   });
 
@@ -408,7 +416,7 @@ export async function printCartOrderReceipt(id: string) {
   const order = await loadCartOrder(id);
 
   if (!order) {
-    throw new Error("Pedido do carrinho não encontrado.");
+    throw new Error("Pedido do carrinho nÃ£o encontrado.");
   }
 
   await sendCartOrderToPrintService({
@@ -425,7 +433,7 @@ export async function printCartOrderReceipt(id: string) {
   return prisma.order.update({
     where: { id: order.id },
     data: { impressoAutomaticamenteAt: order.impressoAutomaticamenteAt || new Date() },
-    include: { items: true },
+    include: { items: true, raffleEntry: true },
   });
 }
 
@@ -433,7 +441,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
   const current = await loadCartOrder(id);
 
   if (!current) {
-    throw new Error("Pedido do carrinho não encontrado.");
+    throw new Error("Pedido do carrinho nÃ£o encontrado.");
   }
 
   const enteringReady = status === "READY" && current.status !== "READY";
@@ -471,7 +479,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
         ? null
         : current.saldoCobrancaEnviadaAt,
     },
-    include: { items: true },
+    include: { items: true, raffleEntry: true },
   });
 
   if (shouldPrepareReady && order.customerPhone) {
@@ -489,7 +497,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
         );
         if (!result.ok) {
           throw new Error(
-            "Envio de pronto para cliente não confirmado pelo serviço de WhatsApp.",
+            "Envio de pronto para cliente nÃ£o confirmado pelo serviÃ§o de WhatsApp.",
           );
         }
         if (order.paymentPercentage === 50 && !order.saldoPagoAt) {
@@ -555,11 +563,11 @@ export async function markCartOrderPaidManually({
   const order = await loadCartOrder(id);
 
   if (!order) {
-    throw new Error("Pedido do carrinho não encontrado.");
+    throw new Error("Pedido do carrinho nÃ£o encontrado.");
   }
 
   if (order.status === "CANCELLED") {
-    throw new Error("Pedido cancelado não pode ser confirmado.");
+    throw new Error("Pedido cancelado nÃ£o pode ser confirmado.");
   }
 
   const updated = await prisma.order.update({
@@ -568,7 +576,7 @@ export async function markCartOrderPaidManually({
       status: "PAID",
       mercadoPagoPaymentId: `manual-cash-${order.id}`,
     },
-    include: { items: true },
+    include: { items: true, raffleEntry: true },
   });
 
   if (order.cartId) {
@@ -606,3 +614,4 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
     })),
   };
 }
+

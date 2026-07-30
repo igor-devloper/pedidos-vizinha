@@ -237,6 +237,7 @@ type PedidoSummaryShape = Pick<
   | "status"
 > & {
   itens: Pick<PedidoItem, "tipo" | "quantidade">[];
+  raffleEntry?: { code: string } | null;
 };
 
 function calculatePedidoPaymentSummary(pedido: PedidoSummaryShape) {
@@ -298,6 +299,13 @@ export function buildWhatsappMessageForClient(pedido: PedidoSummaryShape) {
       payment.remaining > 0 ? `   Restante: ${formatCurrency(payment.remaining)}` : "   Restante: R$ 0,00",
     ],
     pedido.observacoes ? `📝 *Observações:* ${pedido.observacoes}` : null,
+    pedido.raffleEntry
+      ? [
+          "🎁 *Sorteio de Dia dos Pais*",
+          "Seu pagamento confirmou sua participação!",
+          `Seu código da sorte: *${pedido.raffleEntry.code}*`,
+        ]
+      : null,
     [
       WHATSAPP_SECTION_DIVIDER,
       `⏰ Tolerância combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,

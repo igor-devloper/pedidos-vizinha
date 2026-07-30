@@ -1,4 +1,4 @@
-import { PedidoStatus, Prisma, type Pedido, type PedidoItem } from "@prisma/client";
+﻿import { PedidoStatus, Prisma, type Pedido, type PedidoItem } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import {
@@ -21,6 +21,7 @@ import { sendWhatsappImage, sendWhatsappText } from "@/lib/whatsapp";
 
 type PedidoWithItens = Pedido & {
   itens: PedidoItem[];
+  raffleEntry?: { code: string } | null;
 };
 
 type PedidoWithReadyFields = PedidoWithItens & {
@@ -37,7 +38,7 @@ type PedidoWithReadyFields = PedidoWithItens & {
 
 export class PedidoPaymentReferenceNotFoundError extends Error {
   constructor(public readonly externalReference: string) {
-    super(`Pedido não encontrado para a referência ${externalReference}.`);
+    super(`Pedido nÃ£o encontrado para a referÃªncia ${externalReference}.`);
     this.name = "PedidoPaymentReferenceNotFoundError";
   }
 }
@@ -45,7 +46,7 @@ export class PedidoPaymentReferenceNotFoundError extends Error {
 async function loadPedidoById(id: string) {
   return prisma.pedido.findUnique({
     where: { id },
-    include: { itens: true },
+    include: { itens: true, raffleEntry: true },
   });
 }
 
@@ -57,7 +58,7 @@ async function loadPedidoByReference(externalReference: string) {
         { saldoExternalReference: externalReference } as never,
       ],
     },
-    include: { itens: true },
+    include: { itens: true, raffleEntry: true },
   });
 }
 
@@ -69,6 +70,7 @@ export async function getPedidoForView(idOrCode: string) {
     include: {
       itens: true,
       produto: true,
+      raffleEntry: true,
     },
   });
 }
@@ -227,7 +229,7 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
       try {
         const result = await sendWhatsappText(pedido.clienteTelefone, clientMessage);
         if (!result.ok) {
-          throw new Error("Envio para cliente não confirmado pelo serviço de WhatsApp.");
+          throw new Error("Envio para cliente nÃ£o confirmado pelo serviÃ§o de WhatsApp.");
         }
       } catch (error) {
         await prisma.pedido.updateMany({
@@ -265,7 +267,7 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
       try {
         const result = await sendWhatsappText(BUSINESS_INFO.ownerPhone, ownerMessage);
         if (!result.ok) {
-          throw new Error("Envio para Vizinha não confirmado pelo serviço de WhatsApp.");
+          throw new Error("Envio para Vizinha nÃ£o confirmado pelo serviÃ§o de WhatsApp.");
         }
       } catch (error) {
         await prisma.pedido.updateMany({
@@ -308,7 +310,7 @@ async function printAcceptedPedido(pedido: PedidoWithItens) {
 
     const printed = await prisma.pedido.findUnique({
       where: { id: pedido.id },
-      include: { itens: true },
+      include: { itens: true, raffleEntry: true },
     });
 
     return printed || { ...pedido, impressoAutomaticamenteAt: claimedAt };
@@ -337,7 +339,7 @@ export async function processPaidPedidosSideEffects() {
         { notificadoVizinhaAt: null },
       ],
     },
-    include: { itens: true },
+    include: { itens: true, raffleEntry: true },
     take: 20,
   });
 
@@ -359,7 +361,7 @@ export async function markPedidoPaidManually({
   const pedidoAtual = await loadPedidoById(id);
 
   if (!pedidoAtual) {
-    throw new Error("Pedido não encontrado.");
+    throw new Error("Pedido nÃ£o encontrado.");
   }
 
   const manualPayload = {
@@ -381,7 +383,7 @@ export async function markPedidoPaidManually({
       mpStatusDetail: observacao?.trim() || "Pagamento manual confirmado",
       mpWebhookPayload: manualPayload,
     } as never,
-    include: { itens: true },
+    include: { itens: true, raffleEntry: true },
   } as never);
 
   await notifyPaidPedido(pedido as PedidoWithItens);
@@ -448,7 +450,7 @@ export async function handleMercadoPagoPaymentUpdate({
       mpStatusDetail: isBalancePayment ? pedido.mpStatusDetail : statusDetail || pedido.mpStatusDetail,
       mpWebhookPayload: webhookPayload,
     } as never,
-    include: { itens: true },
+    include: { itens: true, raffleEntry: true },
   } as never);
 
   if (!isBalancePayment && status === "approved") {
@@ -463,7 +465,7 @@ export async function syncPedidoPaymentByExternalReference(externalReference: st
   const pedido = await loadPedidoByReference(externalReference);
 
   if (!pedido) {
-    throw new Error(`Pedido não encontrado para a referência ${externalReference}.`);
+    throw new Error(`Pedido nÃ£o encontrado para a referÃªncia ${externalReference}.`);
   }
 
   if (pedido.status !== PedidoStatus.PENDENTE_PAGAMENTO) {
@@ -495,7 +497,7 @@ export async function updatePedidoStatus(id: string, status: PedidoStatus) {
   const pedidoAtual = await loadPedidoById(id);
 
   if (!pedidoAtual) {
-    throw new Error("Pedido não encontrado.");
+    throw new Error("Pedido nÃ£o encontrado.");
   }
 
   const pedidoAtualWithReady = pedidoAtual as PedidoWithReadyFields;
@@ -564,7 +566,7 @@ export async function markPedidoPrinted(id: string) {
   const pedido = await loadPedidoById(id);
 
   if (!pedido) {
-    throw new Error("Pedido não encontrado.");
+    throw new Error("Pedido nÃ£o encontrado.");
   }
 
   if (pedido.impressoAutomaticamenteAt) {
@@ -576,7 +578,7 @@ export async function markPedidoPrinted(id: string) {
     data: {
       impressoAutomaticamenteAt: new Date(),
     },
-    include: { itens: true },
+    include: { itens: true, raffleEntry: true },
   });
 }
 
@@ -584,7 +586,7 @@ export async function printPedidoReceipt(id: string) {
   const pedido = await loadPedidoById(id);
 
   if (!pedido) {
-    throw new Error("Pedido não encontrado.");
+    throw new Error("Pedido nÃ£o encontrado.");
   }
 
   await sendPedidoToPrintService(pedido, "manual");
@@ -594,7 +596,7 @@ export async function printPedidoReceipt(id: string) {
     data: {
       impressoAutomaticamenteAt: pedido.impressoAutomaticamenteAt || new Date(),
     },
-    include: { itens: true },
+    include: { itens: true, raffleEntry: true },
   });
 }
 
@@ -602,8 +604,9 @@ export async function getPedidoReceipt(id: string) {
   const pedido = await loadPedidoById(id);
 
   if (!pedido) {
-    throw new Error("Pedido não encontrado.");
+    throw new Error("Pedido nÃ£o encontrado.");
   }
 
   return buildPrintableReceipt(pedido);
 }
+

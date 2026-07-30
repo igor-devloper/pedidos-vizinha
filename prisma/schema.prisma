@@ -137,6 +137,7 @@ model Order {
   cartId String?
   cart   Cart?       @relation(fields: [cartId], references: [id], onDelete: SetNull)
   items  OrderItem[]
+  raffleEntry RaffleEntry?
 }
 
 model OrderItem {
@@ -288,6 +289,28 @@ model Pedido {
   cupomId   String?
   cupom     CupomDesconto? @relation(fields: [cupomId], references: [id], onDelete: SetNull)
   itens     PedidoItem[]
+  raffleEntry RaffleEntry?
+}
+
+model RaffleEntry {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  customerName String
+  customerPhone String?
+  createdAt    DateTime @default(now())
+
+  orderId String? @unique
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pedidoId String? @unique
+  pedido   Pedido? @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  draws   RaffleDraw[]
+}
+
+model RaffleDraw {
+  id        String   @id @default(cuid())
+  drawnAt   DateTime @default(now())
+  entryId   String
+  entry     RaffleEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
 }
 
 model PedidoItem {

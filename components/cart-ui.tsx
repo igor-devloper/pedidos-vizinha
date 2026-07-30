@@ -1099,6 +1099,9 @@ export function FloatingCart({
                   <p className="text-sm font-semibold text-[var(--cart-muted)]">Total do pedido</p>
                   <p className="text-2xl font-black leading-tight text-[var(--cart-dark)]">{formatCurrency(cart.totalAmount)}</p>
                   <p className="text-sm text-[var(--cart-muted)]">Agora: {formatCurrency(paymentPreview.totalToCharge)}</p>
+                  <p className="mt-1 text-xs font-bold text-amber-700">
+                    🎁 Esta compra gera um código para o Sorteio de Dia dos Pais.
+                  </p>
                 </div>
                 <Button
                   type="button"
