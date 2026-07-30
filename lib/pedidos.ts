@@ -278,7 +278,9 @@ export function buildPedidoSummary(pedido: PedidoSummaryShape) {
   ]);
 }
 
-export function buildWhatsappMessageForClient(pedido: PedidoSummaryShape) {
+// Mantido temporariamente como referencia do layout anterior.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function buildWhatsappMessageForClientLegacy(pedido: PedidoSummaryShape) {
   const composition = formatWhatsAppList(
     pedido.itens.map((item) => `${item.tipo} — ${item.quantidade} un`)
   );
@@ -310,6 +312,52 @@ export function buildWhatsappMessageForClient(pedido: PedidoSummaryShape) {
       WHATSAPP_SECTION_DIVIDER,
       `⏰ Tolerância combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,
       "Obrigada pela preferência! 🥰",
+      `_${BUSINESS_INFO.name}_`,
+    ],
+  ]);
+}
+
+export function buildWhatsappMessageForClient(pedido: PedidoSummaryShape) {
+  const composition = formatWhatsAppList(
+    pedido.itens.map((item) => `${item.tipo} - ${item.quantidade} un`),
+  );
+  const payment = calculatePedidoPaymentSummary(pedido);
+
+  return formatWhatsAppMessage([
+    "✅ *PEDIDO CONFIRMADO*",
+    [
+      `👤 *Cliente:* ${pedido.clienteNome}`,
+      `📞 *WhatsApp:* ${pedido.clienteTelefone}`,
+    ],
+    [
+      WHATSAPP_SECTION_DIVIDER,
+      `🛍️ *Pedido #${pedido.codigo}*`,
+      WHATSAPP_SECTION_DIVIDER,
+    ],
+    [
+      `📦 *Produto:* ${pedido.produtoNomeSnapshot}`,
+      "🧆 *Composicao:*",
+      ...composition.map((item) => `  ${item}`),
+      `📅 *Entrega:* ${formatDateTime(pedido.dataEntrega)}`,
+      `💰 *Total do pedido:* ${formatCurrency(payment.subtotal)}`,
+      `💳 *Pagamento:* ${pedido.metodoPagamentoLabel} (${pedido.percentualPagamento}% pago)`,
+      `   Pago agora: ${formatCurrency(payment.paidNow)}`,
+      payment.remaining > 0
+        ? `   Restante: ${formatCurrency(payment.remaining)}`
+        : "   Restante: R$ 0,00",
+    ],
+    pedido.observacoes ? `*Observacoes:* ${pedido.observacoes}` : null,
+    pedido.raffleEntry
+      ? [
+          "🎁 *SORTEIO DE DIA DOS PAIS*",
+          "Seu pagamento confirmou sua participacao!",
+          `Seu codigo da sorte: *${pedido.raffleEntry.code}*`,
+        ]
+      : null,
+    [
+      WHATSAPP_SECTION_DIVIDER,
+      `⏰ Tolerancia combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,
+      "🥰 Obrigada pela preferencia!",
       `_${BUSINESS_INFO.name}_`,
     ],
   ]);
@@ -521,6 +569,9 @@ export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
     ...receiptField("Subtotal", formatCurrency(Number(pedido.subtotal))),
     ...receiptField("Taxa serviço", formatCurrency(Number(pedido.taxaValor))),
     `TOTAL: ${formatCurrency(Number(pedido.totalCobrado))}`,
+    pedido.raffleEntry ? separator : null,
+    pedido.raffleEntry ? "#SORTEIO DIA DOS PAIS" : null,
+    pedido.raffleEntry ? `CODIGO: ${pedido.raffleEntry.code}` : null,
     pedido.observacoes ? separator : null,
     pedido.observacoes ? "#OBS" : null,
     ...(pedido.observacoes ? wrapReceiptText(pedido.observacoes) : []),

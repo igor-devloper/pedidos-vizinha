@@ -1,6 +1,7 @@
-const WHATSAPP_SENTENCE_BREAK = /([.!?])\s+(?=(?:[A-ZÀ-Ý0-9_*]|https?:\/\/|www\.))/g;
+const WHATSAPP_SENTENCE_BREAK =
+  /([.!?])\s+(?=(?:[A-Z0-9_*]|https?:\/\/|www\.))/g;
 
-export const WHATSAPP_SECTION_DIVIDER = "━━━━━━━━━━━━━━━━━━";
+export const WHATSAPP_SECTION_DIVIDER = "\u2501".repeat(18);
 
 type WhatsAppBlock =
   | string
@@ -34,18 +35,21 @@ function normalizeBlock(block: string) {
 export function formatWhatsAppMessage(blocks: WhatsAppBlock[]) {
   return blocks
     .flatMap((block) => {
-      if (!block) {
-        return [];
-      }
+      if (!block) return [];
 
-      const value = Array.isArray(block) ? block.filter(Boolean).join("\n") : block;
+      const value = Array.isArray(block)
+        ? block.filter(Boolean).join("\n")
+        : block;
       const normalized = normalizeBlock(value);
       return normalized ? [normalized] : [];
     })
     .join("\n\n");
 }
 
-export function formatWhatsAppList(items: Array<string | null | undefined | false>, bullet = "•") {
+export function formatWhatsAppList(
+  items: Array<string | null | undefined | false>,
+  bullet = "\u2022",
+) {
   return items.filter(Boolean).map((item) => `${bullet} ${item}`);
 }
 

@@ -111,6 +111,9 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
     `Total pedido: ${formatCurrency(Number(order.totalAmount))}`,
     `Taxa: ${formatCurrency(Number(order.feeAmount))}`,
     `COBRADO: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
+    order.raffleEntry ? "-".repeat(30) : null,
+    order.raffleEntry ? "#SORTEIO DIA DOS PAIS" : null,
+    order.raffleEntry ? `CODIGO: ${order.raffleEntry.code}` : null,
   ];
 
   return lines.filter(Boolean).join("\n");
@@ -118,38 +121,38 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
 
 function buildCartOrderClientMessage(order: CartOrderWithItems) {
   return formatWhatsAppMessage([
-    "âœ… *Pedido Confirmado!*",
+    "✅ *PEDIDO CONFIRMADO*",
     [
-      `ðŸ‘¤ *Cliente:* ${order.customerName || "NÃ£o informado"}`,
-      order.customerPhone ? `ðŸ“ž *WhatsApp:* ${order.customerPhone}` : null,
+      `👤 *Cliente:* ${order.customerName || "Nao informado"}`,
+      order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
       formatScheduledAt(order)
-        ? `ðŸ—“ï¸ *Entrega/retirada:* ${formatScheduledAt(order)}`
+        ? `📅 *Entrega/retirada:* ${formatScheduledAt(order)}`
         : null,
     ],
     order.raffleEntry
       ? [
-          "ðŸŽ *Sorteio de Dia dos Pais*",
-          "Seu pagamento confirmou sua participaÃ§Ã£o!",
-          `Seu cÃ³digo da sorte: *${order.raffleEntry.code}*`,
+          "🎁 *SORTEIO DE DIA DOS PAIS*",
+          "Seu pagamento confirmou sua participação!",
+          `Seu codigo da sorte: *${order.raffleEntry.code}*`,
         ]
       : null,
     [
       WHATSAPP_SECTION_DIVIDER,
-      `ðŸ›ï¸ *Pedido #${cartOrderCode(order)}*`,
+      `🛍️ *Pedido #${cartOrderCode(order)}*`,
       WHATSAPP_SECTION_DIVIDER,
     ],
     [
-      "ðŸ“¦ *Itens:*",
+      "📦 *Itens:*",
       ...formatWhatsAppList(formatCartOrderItems(order)).map(
         (item) => `  ${item}`,
       ),
-      `ðŸ’° *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
-      `ðŸ’³ *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
+      `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
+      `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
       `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
-      "Obrigada pela preferÃªncia!",
+      "🥰 Obrigada pela preferência!",
       `_${BUSINESS_INFO.name}_`,
     ],
   ]);
