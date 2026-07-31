@@ -68,23 +68,23 @@ function formatCartOrderItems(order: CartOrderWithItems) {
   return order.items.flatMap((item) => {
     const selectedItems = Array.isArray(item.selectedItems)
       ? item.selectedItems
-          .map((entry) => {
-            if (!entry || typeof entry !== "object") {
-              return null;
-            }
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return null;
+          }
 
-            const typed = entry as { tipo?: unknown; quantidade?: unknown };
-            const tipo =
-              typeof typed.tipo === "string" ? typed.tipo.trim() : "";
-            const quantidade = Number(typed.quantidade);
+          const typed = entry as { tipo?: unknown; quantidade?: unknown };
+          const tipo =
+            typeof typed.tipo === "string" ? typed.tipo.trim() : "";
+          const quantidade = Number(typed.quantidade);
 
-            if (!tipo || !Number.isFinite(quantidade) || quantidade <= 0) {
-              return null;
-            }
+          if (!tipo || !Number.isFinite(quantidade) || quantidade <= 0) {
+            return null;
+          }
 
-            return `  - ${tipo}: ${quantidade} un`;
-          })
-          .filter((entry): entry is string => Boolean(entry))
+          return `  - ${tipo}: ${quantidade} un`;
+        })
+        .filter((entry): entry is string => Boolean(entry))
       : [];
 
     return [
@@ -202,20 +202,22 @@ function buildCartOrderReadyMessage(
     order.saldoTotalCobrado !== null;
 
   return formatWhatsAppMessage([
-    "ðŸ½ï¸ *Seu pedido estÃ¡ pronto!*",
+    "🎉🍽️ *Seu pedido está pronto para retirada!*",
     [
-      `Oi, ${order.customerName || "cliente"}!`,
-      `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* jÃ¡ estÃ¡ pronto.`,
+      `Olá, ${order.customerName || "cliente"}! 👋`,
+      `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* já está prontinho. 😍`,
+      "📍 Já pode vir retirar!",
     ],
     hasPendingBalance
       ? [
-          "ðŸ’° *Falta o pagamento da 2Âª parte*",
-          `Valor para quitar agora: *${formatCurrency(Number(order.saldoTotalCobrado))}*`,
-          "ðŸ”— *Acesse sua cobranÃ§a para pagar:*",
-          order.saldoInitPoint!,
-        ]
+        "💰 *Falta apenas o pagamento da 2ª parte*",
+        `Valor restante: *${formatCurrency(Number(order.saldoTotalCobrado))}*`,
+        "🔗 Pague por este link:",
+        order.saldoInitPoint!,
+      ]
       : null,
-    `ðŸ“² Se precisar falar com a equipe, chame no WhatsApp: ${BUSINESS_INFO.supportPhone}`,
+    "🙏 Agradecemos pela preferência e esperamos você!",
+    `💬 Qualquer dúvida, fale conosco no WhatsApp: ${BUSINESS_INFO.supportPhone}`,
   ]);
 }
 
