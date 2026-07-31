@@ -11,6 +11,11 @@ import { sendCartOrderToPrintService } from "@/lib/print-service";
 import { BUSINESS_INFO } from "@/lib/site-config";
 import { sendWhatsappText } from "@/lib/whatsapp";
 import {
+  buildRaffleWhatsappMessage,
+  createRaffleCode,
+  RAFFLE_START_AT,
+} from "@/lib/raffle";
+import {
   formatWhatsAppList,
   formatWhatsAppMessage,
   WHATSAPP_SECTION_DIVIDER,
@@ -129,13 +134,6 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
         ? `📅 *Entrega/retirada:* ${formatScheduledAt(order)}`
         : null,
     ],
-    order.raffleEntry
-      ? [
-          "🎁 *SORTEIO DE DIA DOS PAIS*",
-          "Seu pagamento confirmou sua participação!",
-          `Seu codigo da sorte: *${order.raffleEntry.code}*`,
-        ]
-      : null,
     [
       WHATSAPP_SECTION_DIVIDER,
       `🛍️ *Pedido #${cartOrderCode(order)}*`,
@@ -160,27 +158,27 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
 
 function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
   return formatWhatsAppMessage([
-    "ðŸ”” *Novo Pedido Pago!*",
+    "🔔 *NOVO PEDIDO PAGO!*",
     [
-      `ðŸ‘¤ *Cliente:* ${order.customerName || "NÃ£o informado"}`,
-      order.customerPhone ? `ðŸ“ž *WhatsApp:* ${order.customerPhone}` : null,
-      order.customerEmail ? `âœ‰ï¸ *E-mail:* ${order.customerEmail}` : null,
+      `👤 *Cliente:* ${order.customerName || "Não informado"}`,
+      order.customerPhone ? `📞 *WhatsApp:* ${order.customerPhone}` : null,
+      order.customerEmail ? `✉️ *E-mail:* ${order.customerEmail}` : null,
       formatScheduledAt(order)
-        ? `ðŸ—“ï¸ *Entrega/retirada:* ${formatScheduledAt(order)}`
+        ? `📅 *Entrega/retirada:* ${formatScheduledAt(order)}`
         : null,
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
-      `ðŸ›ï¸ *Pedido #${cartOrderCode(order)}*`,
+      `🛍️ *Pedido #${cartOrderCode(order)}*`,
       WHATSAPP_SECTION_DIVIDER,
     ],
     [
-      "ðŸ“¦ *Itens:*",
+      "📦 *Itens:*",
       ...formatWhatsAppList(formatCartOrderItems(order)).map(
         (item) => `  ${item}`,
       ),
-      `ðŸ’° *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
-      `ðŸ’³ *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
+      `💰 *Total do pedido:* ${formatCurrency(Number(order.totalAmount))}`,
+      `💳 *Pagamento:* ${order.paymentMethodLabel} (${order.paymentPercentage}% pago)`,
       `   Pago agora: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
     ],
   ]);
@@ -279,7 +277,26 @@ async function loadCartOrder(id: string) {
   });
 }
 
+async function ensureCartOrderRaffleEntry(order: CartOrderWithItems) {
+  if (order.raffleEntry) return order;
+
+  const raffleEntry = await prisma.raffleEntry.upsert({
+    where: { orderId: order.id },
+    update: {},
+    create: {
+      orderId: order.id,
+      code: createRaffleCode(),
+      customerName: order.customerName || "Cliente",
+      customerPhone: order.customerPhone,
+    },
+  });
+
+  return { ...order, raffleEntry };
+}
+
 async function notifyPaidCartOrder(order: CartOrderWithItems) {
+  let confirmationDelivered = Boolean(order.notificadoClienteAt);
+
   if (!order.notificadoClienteAt && order.customerPhone) {
     const claimedAt = new Date();
     const claim = await prisma.order.updateMany({
@@ -298,12 +315,50 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
             "Envio para cliente nÃ£o confirmado pelo serviÃ§o de WhatsApp.",
           );
         }
+        confirmationDelivered = true;
       } catch (error) {
         await prisma.order.updateMany({
           where: { id: order.id, notificadoClienteAt: claimedAt },
           data: { notificadoClienteAt: null },
         });
         console.error("Falha ao notificar cliente do carrinho via WhatsApp", {
+          orderId: order.id,
+          error,
+        });
+      }
+    }
+  }
+
+  if (
+    confirmationDelivered &&
+    !order.raffleNotificadoAt &&
+    order.customerPhone &&
+    order.raffleEntry
+  ) {
+    const claimedAt = new Date();
+    const claim = await prisma.order.updateMany({
+      where: { id: order.id, raffleNotificadoAt: null },
+      data: { raffleNotificadoAt: claimedAt },
+    });
+
+    if (claim.count > 0) {
+      try {
+        const result = await sendWhatsappText(
+          order.customerPhone,
+          buildRaffleWhatsappMessage({
+            customerName: order.customerName,
+            code: order.raffleEntry.code,
+          }),
+        );
+        if (!result.ok) {
+          throw new Error("Mensagem do sorteio não confirmada pelo WhatsApp.");
+        }
+      } catch (error) {
+        await prisma.order.updateMany({
+          where: { id: order.id, raffleNotificadoAt: claimedAt },
+          data: { raffleNotificadoAt: null },
+        });
+        console.error("Falha ao enviar código do sorteio ao cliente", {
           orderId: order.id,
           error,
         });
@@ -391,18 +446,21 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
 }
 
 export async function acceptPaidCartOrder(order: CartOrderWithItems) {
-  await notifyPaidCartOrder(order);
-  return printAcceptedCartOrder(order);
+  const orderWithRaffle = await ensureCartOrderRaffleEntry(order);
+  await notifyPaidCartOrder(orderWithRaffle);
+  return printAcceptedCartOrder(orderWithRaffle);
 }
 
 export async function processPaidCartOrdersSideEffects() {
   const orders = await prisma.order.findMany({
     where: {
       status: "PAID",
+      createdAt: { gte: RAFFLE_START_AT },
       OR: [
         { impressoAutomaticamenteAt: null },
         { notificadoClienteAt: null },
         { notificadoVizinhaAt: null },
+        { raffleNotificadoAt: null },
       ],
     },
     include: { items: true, raffleEntry: true },
@@ -617,4 +675,3 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
     })),
   };
 }
-

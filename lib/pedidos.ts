@@ -347,13 +347,6 @@ export function buildWhatsappMessageForClient(pedido: PedidoSummaryShape) {
         : "   Restante: R$ 0,00",
     ],
     pedido.observacoes ? `*Observacoes:* ${pedido.observacoes}` : null,
-    pedido.raffleEntry
-      ? [
-          "🎁 *SORTEIO DE DIA DOS PAIS*",
-          "Seu pagamento confirmou sua participacao!",
-          `Seu codigo da sorte: *${pedido.raffleEntry.code}*`,
-        ]
-      : null,
     [
       WHATSAPP_SECTION_DIVIDER,
       `⏰ Tolerancia combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,

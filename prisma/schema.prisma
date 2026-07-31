@@ -125,6 +125,7 @@ model Order {
   feeAmount                 Decimal         @default(0) @db.Decimal(10, 2)
   chargedAmount             Decimal         @default(0) @db.Decimal(10, 2)
   notificadoClienteAt       DateTime?
+  raffleNotificadoAt        DateTime?
   notificadoVizinhaAt       DateTime?
   notificadoProntoClienteAt DateTime?
   prontoAt                  DateTime?
@@ -276,6 +277,7 @@ model Pedido {
   mpStatusDetail            String?
   mpWebhookPayload          Json?
   notificadoClienteAt       DateTime?
+  raffleNotificadoAt        DateTime?
   notificadoVizinhaAt       DateTime?
   prontoAt                  DateTime?
   notificadoProntoClienteAt DateTime?
