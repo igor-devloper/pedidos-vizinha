@@ -736,6 +736,7 @@ export function FloatingCart({
       </button>
 
       <CartRoot
+        modal={false}
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen);
@@ -749,7 +750,7 @@ export function FloatingCart({
         <CartContent
           style={cartThemeStyle}
           className={cn(
-            "grid grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-white p-0",
+            "grid grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden bg-white p-0",
             isDesktop
               ? "h-[min(90vh,56rem)] w-[94vw] max-w-none rounded-2xl sm:w-[94vw] sm:max-w-none md:w-[92vw] md:max-w-5xl lg:w-[88vw] lg:max-w-6xl xl:w-[80vw] [&>[data-slot=dialog-close]]:hidden"
               : "rounded-t-3xl border-x-0 border-b-0 [&>[data-slot=drawer-header]]:pt-2"
@@ -768,6 +769,11 @@ export function FloatingCart({
               <p className="mt-1 text-sm font-medium text-[var(--cart-muted)]">
                 {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"}
               </p>
+              {!checkoutSession && (actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)) ? (
+                <p role="alert" className="mt-1 max-w-xl text-sm font-bold text-red-700">
+                  {actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)}
+                </p>
+              ) : null}
             </div>
             {isDesktop ? <DialogClose asChild>
               <Button
@@ -844,6 +850,13 @@ export function FloatingCart({
                   <div className="mt-3 flex justify-between gap-4 rounded-xl bg-[var(--cart-surface)] p-3 text-lg font-black text-[var(--cart-dark)]"><span>Total a pagar agora</span><span>{formatCurrency(paymentPreview.totalToCharge)}</span></div>
                   {paymentPercentage === 50 ? <p className="pt-1 text-xs">Restante do pedido: {formatCurrency(orderTotal - paymentPreview.baseAmount)}.</p> : null}
                 </div>
+              </div>
+              <div className="grid grid-cols-[auto_1fr] gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <Button type="button" variant="outline" disabled={checkingOut} onClick={() => { setCheckoutStep("FORM"); setActionError(null); window.setTimeout(() => cartScrollRef.current?.scrollTo({ top: 0 }), 0); }} className="min-h-12 rounded-full border-[var(--cart-border)] px-5 font-bold text-[var(--cart-dark)]">Voltar</Button>
+                <Button type="button" disabled={checkingOut} onClick={() => void checkout()} className="min-h-12 rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]">
+                  {checkingOut ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> : null}
+                  {checkingOut ? "Preparando pagamento..." : `Pagar ${formatCurrency(paymentPreview.totalToCharge)}`}
+                </Button>
               </div>
             </div>
           ) : (
@@ -1241,37 +1254,19 @@ export function FloatingCart({
                 </div>
               </section>
 
+              <Button
+                type="button"
+                disabled={checkingOut || !canCheckout || Boolean(cartValidation)}
+                onClick={showReview}
+                className="min-h-12 w-full rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]"
+              >
+                Finalizar pedido
+              </Button>
+
             </div>
           )}
           </div>
 
-          {cart.items.length > 0 && !checkoutSession ? (
-            <div className="border-t border-[var(--cart-border)] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(11,61,24,0.10)] sm:px-6">
-              {(actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)) ? (
-                <p role="alert" className="mb-2 text-sm font-bold text-red-700">
-                  {actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)}
-                </p>
-              ) : null}
-              {checkoutStep === "REVIEW" ? (
-                <div className="grid grid-cols-[auto_1fr] gap-3">
-                  <Button type="button" variant="outline" disabled={checkingOut} onClick={() => { setCheckoutStep("FORM"); setActionError(null); window.setTimeout(() => cartScrollRef.current?.scrollTo({ top: 0 }), 0); }} className="min-h-12 rounded-full border-[var(--cart-border)] px-5 font-bold text-[var(--cart-dark)]">Voltar</Button>
-                  <Button type="button" disabled={checkingOut} onClick={() => void checkout()} className="min-h-12 rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]">
-                    {checkingOut ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> : null}
-                    {checkingOut ? "Preparando pagamento..." : `Pagar ${formatCurrency(paymentPreview.totalToCharge)}`}
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  disabled={checkingOut || !canCheckout || Boolean(cartValidation)}
-                  onClick={showReview}
-                  className="min-h-12 w-full rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]"
-                >
-                  Finalizar pedido
-                </Button>
-              )}
-            </div>
-          ) : null}
         </CartContent>
       </CartRoot>
     </>

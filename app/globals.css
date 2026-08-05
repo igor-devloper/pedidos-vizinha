@@ -124,6 +124,8 @@
    diretamente no body pelo Google, portanto os seletores precisam ser globais. */
 .pac-container {
   z-index: 10000 !important;
+  pointer-events: auto !important;
+  touch-action: manipulation;
   margin-top: 6px;
   overflow: hidden;
   border: 1px solid #f4a8eb !important;
@@ -141,6 +143,9 @@
   font-size: 13px !important;
   line-height: 20px !important;
   cursor: pointer;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .pac-item:first-child { border-top: 0 !important; }
