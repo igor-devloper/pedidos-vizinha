@@ -30,6 +30,7 @@ import {
 } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 import type { StoreSiteTheme } from "@/lib/site-theme";
+import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
 
 type CartItem = {
   id: string;
@@ -74,7 +75,49 @@ type SelectedItem = {
   quantidade: number;
 };
 
+type GoogleAddressComponent = { long_name: string; types: string[] };
+type GooglePlace = {
+  place_id?: string;
+  formatted_address?: string;
+  address_components?: GoogleAddressComponent[];
+  geometry?: { location?: { lat(): number; lng(): number } };
+};
+type GoogleMapsApi = {
+  maps: {
+    LatLngBounds: new (southWest: { lat: number; lng: number }, northEast: { lat: number; lng: number }) => unknown;
+    places: { Autocomplete: new (input: HTMLInputElement, options: object) => { setBounds(bounds: unknown): void; addListener(event: string, callback: () => void): void; getPlace(): GooglePlace } };
+  };
+};
+
 const PAYMENT_PERCENTAGES = [50, 100] as const;
+let googleMapsLoadPromise: Promise<void> | null = null;
+
+function preloadGoogleMaps() {
+  if (typeof window === "undefined") return Promise.resolve();
+  if ((window as unknown as { google?: GoogleMapsApi }).google?.maps?.places) return Promise.resolve();
+  if (googleMapsLoadPromise) return googleMapsLoadPromise;
+
+  googleMapsLoadPromise = new Promise((resolve, reject) => {
+    let attempts = 0;
+    const waitForPlaces = () => {
+      if ((window as unknown as { google?: GoogleMapsApi }).google?.maps?.places) return resolve();
+      attempts += 1;
+      if (attempts >= 100) return reject(new Error("Google Places não carregou."));
+      window.setTimeout(waitForPlaces, 75);
+    };
+    const existing = document.querySelector<HTMLScriptElement>('script[data-vizinha-google-maps]');
+    if (!existing) {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "")}&libraries=places&language=pt-BR&region=BR`;
+      script.async = true;
+      script.dataset.vizinhaGoogleMaps = "true";
+      script.onerror = () => reject(new Error("Falha ao carregar o Google Maps."));
+      document.head.appendChild(script);
+    }
+    waitForPlaces();
+  });
+  return googleMapsLoadPromise;
+}
 
 function getSimpleCartError(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : fallback;
@@ -337,6 +380,11 @@ export function FloatingCart({
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>("PICKUP");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryReference, setDeliveryReference] = useState("");
+  const [deliveryPlace, setDeliveryPlace] = useState({ placeId: "", neighborhood: "", city: "", latitude: 0, longitude: 0 });
+  const addressInputRef = useRef<HTMLInputElement>(null);
   const [paymentPercentage, setPaymentPercentage] = useState<50 | 100>(50);
   const [paymentMethod, setPaymentMethod] = useState<MetodoPagamento>(MetodoPagamento.PIX);
   const minDeliveryDate = useMemo(
@@ -350,6 +398,36 @@ export function FloatingCart({
   const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(minDeliveryDate));
   const cartThemeStyle = getCartThemeStyle(siteTheme);
   const selectedItemsSavePromises = useRef(new Set<Promise<void>>());
+
+  useEffect(() => { void preloadGoogleMaps().catch(() => undefined); }, []);
+
+  useEffect(() => {
+    if (fulfillmentType !== "DELIVERY" || !addressInputRef.current) return;
+    let cancelled = false;
+    const setup = () => {
+      if (cancelled || !addressInputRef.current) return;
+      const google = (window as unknown as { google?: GoogleMapsApi }).google;
+      if (!google?.maps?.places) return;
+      const autocomplete = new google.maps.places.Autocomplete(addressInputRef.current, {
+        componentRestrictions: { country: "br" },
+        fields: ["place_id", "formatted_address", "address_components", "geometry"],
+        types: ["address"],
+      });
+      autocomplete.setBounds(new google.maps.LatLngBounds({ lat: -7.25, lng: -35.05 }, { lat: -6.85, lng: -34.75 }));
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        const component = (type: string) => place.address_components?.find((item) => item.types.includes(type))?.long_name || "";
+        const neighborhood = component("sublocality_level_1") || component("sublocality") || component("neighborhood");
+        const formattedAddress = place.formatted_address || addressInputRef.current?.value || "";
+        if (addressInputRef.current) addressInputRef.current.value = formattedAddress;
+        setDeliveryAddress(formattedAddress);
+        setDeliveryPlace({ placeId: place.place_id || "", neighborhood, city: component("administrative_area_level_2"), latitude: place.geometry?.location?.lat() || 0, longitude: place.geometry?.location?.lng() || 0 });
+        setActionError(null);
+      });
+    };
+    void preloadGoogleMaps().then(setup).catch(() => setActionError("Não foi possível carregar o Google Maps. Verifique sua conexão e tente novamente."));
+    return () => { cancelled = true; };
+  }, [fulfillmentType]);
 
   const loadCart = async () => {
     try {
@@ -446,16 +524,19 @@ export function FloatingCart({
       customerPhone.replace(/\D/g, "").length >= 10 &&
       Boolean(deliveryDate) &&
       deliveryTimeIsValid &&
-      !storeClosedBlocksSelectedDate,
-    [cart.items.length, checkingOut, customerEmail, customerName, customerPhone, deliveryDate, deliveryTimeIsValid, storeClosedBlocksSelectedDate]
+      !storeClosedBlocksSelectedDate &&
+      (fulfillmentType === "PICKUP" || Boolean(deliveryPlace.placeId && deliveryPlace.neighborhood && deliveryReference.trim().length >= 3)),
+    [cart.items.length, checkingOut, customerEmail, customerName, customerPhone, deliveryDate, deliveryTimeIsValid, storeClosedBlocksSelectedDate, fulfillmentType, deliveryPlace, deliveryReference]
   );
   const allowsPartialPayment = useMemo(
     () => cart.items.length > 0 && cart.items.every((item) => item.permitePagamentoParcial),
     [cart.items]
   );
+  const deliveryFee = fulfillmentType === "DELIVERY" ? getDeliveryFee(deliveryPlace.neighborhood) : { fee: 0, label: "Retirada", agreed: true };
+  const orderTotal = Number((cart.totalAmount + deliveryFee.fee).toFixed(2));
   const paymentPreview = useMemo(
-    () => calculatePaymentAmounts(cart.totalAmount, paymentPercentage, paymentMethod),
-    [cart.totalAmount, paymentPercentage, paymentMethod]
+    () => calculatePaymentAmounts(orderTotal, paymentPercentage, paymentMethod),
+    [orderTotal, paymentPercentage, paymentMethod]
   );
   const selectedPaymentMethod = SUPPORTED_PAYMENT_METHODS.find((method) => method.id === paymentMethod);
   const cartValidation = useMemo(() => {
@@ -497,6 +578,10 @@ export function FloatingCart({
         ? "Informe um e-mail válido para o pagamento."
       : customerPhone.replace(/\D/g, "").length < 10
         ? "Informe um WhatsApp válido para finalizar o pedido."
+        : fulfillmentType === "DELIVERY" && (!deliveryPlace.placeId || !deliveryPlace.neighborhood)
+          ? "Selecione o endereço completo em uma sugestão do Google Maps."
+          : fulfillmentType === "DELIVERY" && deliveryReference.trim().length < 3
+            ? "Informe um ponto de referência para o entregador."
         : !deliveryDate || !deliveryTimeIsValid
           ? "Informe uma data e horário válidos."
           : storeClosedBlocksSelectedDate
@@ -529,6 +614,14 @@ export function FloatingCart({
           paymentPercentage,
           paymentMethod,
           scheduledAt,
+          fulfillmentType,
+          deliveryAddress,
+          deliveryReference,
+          deliveryNeighborhood: deliveryPlace.neighborhood,
+          deliveryCity: deliveryPlace.city,
+          deliveryPlaceId: deliveryPlace.placeId,
+          deliveryLatitude: deliveryPlace.latitude,
+          deliveryLongitude: deliveryPlace.longitude,
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -693,7 +786,7 @@ export function FloatingCart({
             </DrawerClose>}
           </DialogHeader>
 
-          <div className="min-h-0 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
+          <div className="min-h-0 scroll-pb-32 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
           {checkoutSession ? (
             <CartTransparentPayment
               session={checkoutSession}
@@ -826,6 +919,8 @@ export function FloatingCart({
                                 <label className="text-sm font-medium text-[#284a2e]">Quantidade</label>
                                 <Input
                                   type="number"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
                                   min="0"
                                   step="1"
                                   disabled={item.category === "COMBO"}
@@ -927,12 +1022,29 @@ export function FloatingCart({
                 </div>
               </section>
 
+              <section className="rounded-2xl border border-[var(--cart-border)] bg-white p-4">
+                <h3 className="text-lg font-black text-[var(--cart-dark)]">Como você quer receber?</h3>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <Button type="button" variant={fulfillmentType === "PICKUP" ? "default" : "outline"} onClick={() => { setFulfillmentType("PICKUP"); setActionError(null); }} className="h-12">Retirada</Button>
+                  <Button type="button" variant={fulfillmentType === "DELIVERY" ? "default" : "outline"} onClick={() => { setFulfillmentType("DELIVERY"); setActionError(null); }} className="h-12">Entrega</Button>
+                </div>
+                {fulfillmentType === "DELIVERY" ? (
+                  <div className="mt-4 space-y-2">
+                    <label htmlFor="cart-delivery-address" className="text-base font-bold text-[var(--cart-dark)]">Endereço de entrega</label>
+                    <Input ref={addressInputRef} id="cart-delivery-address" autoComplete="off" defaultValue={deliveryAddress} onInput={() => { if (deliveryPlace.placeId) { setDeliveryPlace({ placeId: "", neighborhood: "", city: "", latitude: 0, longitude: 0 }); setDeliveryAddress(""); } }} placeholder="Digite rua e número e escolha uma sugestão" className="h-12 text-base" />
+                    <label htmlFor="cart-delivery-reference" className="pt-2 text-base font-bold text-[var(--cart-dark)]">Ponto de referência</label>
+                    <Input id="cart-delivery-reference" value={deliveryReference} onChange={(event) => setDeliveryReference(event.target.value)} placeholder="Ex.: próximo à praça, portão azul" className="h-12 text-base" />
+                    {deliveryPlace.placeId ? <p className="text-sm font-bold text-[#284a2e]">{deliveryPlace.neighborhood}: {deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "taxa a combinar"}</p> : <p className="text-sm text-[var(--cart-muted)]">Selecione uma sugestão do Google para confirmar o local.</p>}
+                  </div>
+                ) : null}
+              </section>
+
               <section className="rounded-2xl border border-[var(--cart-border)] bg-[var(--cart-surface)] p-4" aria-labelledby="cart-step-schedule">
                 <div className="mb-3 flex items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cart-accent)] text-base font-black text-white">2</span>
                   <div>
                     <h3 id="cart-step-schedule" className="text-lg font-black text-[var(--cart-dark)]">Data e horário</h3>
-                    <p className="text-sm text-[var(--cart-muted)]">Escolha quando deseja  retirar.</p>
+                    <p className="text-sm text-[var(--cart-muted)]">Escolha quando deseja {fulfillmentType === "DELIVERY" ? "receber" : "retirar"}.</p>
                   </div>
                 </div>
                 <div className="mb-4 rounded-xl border border-[#c6d590] bg-white p-3 text-sm text-[#284a2e]">
@@ -1020,7 +1132,7 @@ export function FloatingCart({
                 ) : !deliveryTimeIsValid ? (
                   <p role="alert" className="mt-2 text-sm font-semibold text-red-700">Informe uma data e horário válidos.</p>
                 ) : (
-                  <p className="mt-2 text-sm text-[#48654f]">Esse horário é para a retirada do seu pedido.</p>
+                  <p className="mt-2 text-sm text-[#48654f]">Esse horário é para a {fulfillmentType === "DELIVERY" ? "entrega" : "retirada"} do seu pedido.</p>
                 )}
               </section>
 
@@ -1097,7 +1209,8 @@ export function FloatingCart({
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--cart-muted)]">Total do pedido</p>
-                  <p className="text-2xl font-black leading-tight text-[var(--cart-dark)]">{formatCurrency(cart.totalAmount)}</p>
+                  <p className="text-2xl font-black leading-tight text-[var(--cart-dark)]">{formatCurrency(orderTotal)}</p>
+                  {fulfillmentType === "DELIVERY" ? <p className="text-xs text-[var(--cart-muted)]">Entrega: {deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "a combinar (não cobrada agora)"}</p> : null}
                   <p className="text-sm text-[var(--cart-muted)]">Agora: {formatCurrency(paymentPreview.totalToCharge)}</p>
                   <p className="mt-1 text-xs font-bold text-amber-700">
                     🎁 Esta compra gera um código para o Sorteio de Dia dos Pais.

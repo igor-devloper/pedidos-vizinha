@@ -134,6 +134,19 @@ model Order {
   updatedAt                 DateTime        @updatedAt
   code                      String?         @unique
   scheduledAt               DateTime?
+  fulfillmentType           String          @default("PICKUP")
+  deliveryAddress           String?
+  deliveryReference         String?
+  deliveryNeighborhood      String?
+  deliveryCity              String?
+  deliveryPlaceId           String?
+  deliveryLatitude          Decimal?        @db.Decimal(10, 7)
+  deliveryLongitude         Decimal?        @db.Decimal(10, 7)
+  deliveryMapsUrl           String?
+  deliveryFee               Decimal         @default(0) @db.Decimal(10, 2)
+  deliveryFeeAgreed         Boolean         @default(true)
+  provisionAmount           Decimal         @default(0) @db.Decimal(10, 2)
+  provisionTransferredAt    DateTime?
 
   cartId String?
   cart   Cart?       @relation(fields: [cartId], references: [id], onDelete: SetNull)
@@ -285,6 +298,8 @@ model Pedido {
   impressoAutomaticamenteAt DateTime?
   createdAt                 DateTime        @default(now())
   updatedAt                 DateTime        @updatedAt
+  provisionAmount           Decimal         @default(0) @db.Decimal(10, 2)
+  provisionTransferredAt    DateTime?
 
   produtoId String
   produto   Produto        @relation(fields: [produtoId], references: [id], onDelete: Restrict)
@@ -340,6 +355,7 @@ model StoreSettings {
   operationSchedule          Json     @default("{}")
   siteTheme                  String   @default("PADRAO")
   featuredProductId          String?
+  motorcycleCourierPhone     String?
   updatedAt                  DateTime @updatedAt
 }
 

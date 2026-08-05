@@ -28,6 +28,17 @@ type CartOrderWithItems = Order & {
   scheduledAt?: Date | string | null;
 };
 
+function formatFulfillment(order: CartOrderWithItems) {
+  if (order.fulfillmentType !== "DELIVERY") return ["Modalidade: RETIRADA"];
+  return [
+    "Modalidade: ENTREGA",
+    `Endereço: ${order.deliveryAddress || "Não informado"}`,
+    order.deliveryReference ? `Referência: ${order.deliveryReference}` : null,
+    order.deliveryMapsUrl ? `Google Maps: ${order.deliveryMapsUrl}` : null,
+    `Taxa de entrega: ${order.deliveryFeeAgreed ? formatCurrency(Number(order.deliveryFee)) : "A COMBINAR"}`,
+  ].filter((line): line is string => Boolean(line));
+}
+
 function cartOrderCode(
   order: Pick<CartOrderWithItems, "id"> & { code?: string | null },
 ) {
@@ -100,7 +111,9 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
     `#PEDIDO CARRINHO ${cartOrderCode(order)}`,
     "-".repeat(30),
     "#CLIENTE",
+    `FEITO EM: ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(order.createdAt)}`,
     `Nome: ${order.customerName || "NÃ£o informado"}`,
+    ...formatFulfillment(order),
     order.customerPhone ? `WhatsApp: ${order.customerPhone}` : null,
     order.customerEmail ? `E-mail: ${order.customerEmail}` : null,
     formatScheduledAt(order)
@@ -133,6 +146,7 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
       formatScheduledAt(order)
         ? `📅 *Entrega/retirada:* ${formatScheduledAt(order)}`
         : null,
+      ...formatFulfillment(order).map((line) => `📍 *${line}*`),
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
@@ -166,6 +180,7 @@ function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
       formatScheduledAt(order)
         ? `📅 *Entrega/retirada:* ${formatScheduledAt(order)}`
         : null,
+      ...formatFulfillment(order).map((line) => `📍 *${line}*`),
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
@@ -193,6 +208,10 @@ function buildCartOrderReadyMessage(
     | "saldoInitPoint"
     | "saldoTotalCobrado"
     | "saldoPagoAt"
+    | "fulfillmentType"
+    | "deliveryAddress"
+    | "deliveryMapsUrl"
+    | "scheduledAt"
   >,
 ) {
   const hasPendingBalance =
@@ -206,7 +225,9 @@ function buildCartOrderReadyMessage(
     [
       `Olá, ${order.customerName || "cliente"}! 👋`,
       `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* já está prontinho. 😍`,
-      "📍 Já pode vir retirar!",
+      order.fulfillmentType === "DELIVERY"
+        ? `🛵 Vamos enviar para ${order.deliveryAddress || "o endereço combinado"}${formatScheduledAt(order) ? ` no horário combinado de ${formatScheduledAt(order)}` : ""}${order.deliveryMapsUrl ? `. Local: ${order.deliveryMapsUrl}` : "."}`
+        : "📍 Já pode vir retirar!",
     ],
     hasPendingBalance
       ? [
@@ -638,6 +659,10 @@ export async function markCartOrderPaidManually({
     data: {
       status: "PAID",
       mercadoPagoPaymentId: `manual-cash-${order.id}`,
+      provisionAmount: order.status !== "PAID"
+        ? Number((Number(order.provisionAmount) + Number(order.chargedAmount) * 0.1).toFixed(2))
+        : order.provisionAmount,
+      provisionTransferredAt: order.status !== "PAID" ? null : order.provisionTransferredAt,
     },
     include: { items: true, raffleEntry: true },
   });
@@ -666,6 +691,15 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
     paymentMethodLabel: order.paymentMethodLabel,
     chargedAmount: Number(order.chargedAmount),
     createdAt: order.createdAt.toISOString(),
+    fulfillmentType: order.fulfillmentType === "DELIVERY" ? "DELIVERY" as const : "PICKUP" as const,
+    deliveryAddress: order.deliveryAddress,
+    deliveryReference: order.deliveryReference,
+    deliveryNeighborhood: order.deliveryNeighborhood,
+    deliveryMapsUrl: order.deliveryMapsUrl,
+    deliveryFee: Number(order.deliveryFee),
+    deliveryFeeAgreed: order.deliveryFeeAgreed,
+    provisionAmount: Number(order.provisionAmount),
+    provisionTransferredAt: order.provisionTransferredAt?.toISOString() || null,
     items: order.items.map((item) => ({
       id: item.id,
       productName: item.productName,

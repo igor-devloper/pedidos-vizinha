@@ -120,3 +120,30 @@
     @apply bg-background text-foreground;
   }
 }
+/* Sugestões de endereço do Google Places no carrinho. O container é criado
+   diretamente no body pelo Google, portanto os seletores precisam ser globais. */
+.pac-container {
+  z-index: 10000 !important;
+  margin-top: 6px;
+  overflow: hidden;
+  border: 1px solid #f4a8eb !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: 0 18px 45px rgb(100 16 82 / 18%) !important;
+  font-family: inherit !important;
+}
+
+.pac-item {
+  min-height: 54px;
+  padding: 9px 14px !important;
+  border-top: 1px solid #fde1f9 !important;
+  color: #72506b !important;
+  font-size: 13px !important;
+  line-height: 20px !important;
+  cursor: pointer;
+}
+
+.pac-item:first-child { border-top: 0 !important; }
+.pac-item:hover, .pac-item-selected { background: #fff0fc !important; }
+.pac-item-query { color: #641052 !important; font-size: 14px !important; font-weight: 700 !important; }
+.pac-icon { margin-top: 7px !important; }

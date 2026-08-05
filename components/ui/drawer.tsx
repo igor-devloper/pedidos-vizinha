@@ -13,14 +13,14 @@ import { cn } from "@/lib/utils"
  * a altura real visível da tela e atualiza sozinho quando o teclado
  * abre/fecha ou a página rola.
  */
-function useVisualViewportHeight() {
-  const [height, setHeight] = React.useState<number | null>(null)
+function useVisualViewportMetrics() {
+  const [metrics, setMetrics] = React.useState<{ height: number; offsetTop: number } | null>(null)
 
   React.useEffect(() => {
     const viewport = window.visualViewport
 
     const update = () => {
-      setHeight(viewport ? viewport.height : window.innerHeight)
+      setMetrics({ height: viewport ? viewport.height : window.innerHeight, offsetTop: viewport?.offsetTop || 0 })
     }
 
     update()
@@ -42,7 +42,7 @@ function useVisualViewportHeight() {
     }
   }, [])
 
-  return height
+  return metrics
 }
 
 function Drawer(props: React.ComponentProps<typeof DrawerPrimitive.Root>) {
@@ -62,7 +62,7 @@ function DrawerClose(props: React.ComponentProps<typeof DrawerPrimitive.Close>) 
 }
 
 function DrawerOverlay({ className, style, ...props }: React.ComponentProps<typeof DrawerPrimitive.Overlay>) {
-  const viewportHeight = useVisualViewportHeight()
+  const viewport = useVisualViewportMetrics()
 
   return (
     <DrawerPrimitive.Overlay
@@ -70,7 +70,8 @@ function DrawerOverlay({ className, style, ...props }: React.ComponentProps<type
       className={cn("fixed inset-x-0 top-0 z-50 bg-black/50", className)}
       style={{
         // Altura real da tela visível (ignora o espaco tomado pelo teclado no iOS).
-        height: viewportHeight ? `${viewportHeight}px` : "100dvh",
+        height: viewport ? `${viewport.height}px` : "100dvh",
+        top: viewport ? `${viewport.offsetTop}px` : 0,
         ...style,
       }}
       {...props}
@@ -79,7 +80,17 @@ function DrawerOverlay({ className, style, ...props }: React.ComponentProps<type
 }
 
 function DrawerContent({ className, style, children, ...props }: React.ComponentProps<typeof DrawerPrimitive.Content>) {
-  const viewportHeight = useVisualViewportHeight()
+  const viewport = useVisualViewportMetrics()
+
+  React.useEffect(() => {
+    const keepFocusedFieldVisible = (event: FocusEvent) => {
+      const target = event.target
+      if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) return
+      window.setTimeout(() => target.scrollIntoView({ block: "center", behavior: "smooth" }), 250)
+    }
+    document.addEventListener("focusin", keepFocusedFieldVisible)
+    return () => document.removeEventListener("focusin", keepFocusedFieldVisible)
+  }, [])
 
   return (
     <DrawerPortal>
@@ -94,8 +105,10 @@ function DrawerContent({ className, style, children, ...props }: React.Component
           // Sobrescreve qualquer h-[...dvh...] vindo de fora: a altura real
           // medida pela Visual Viewport API sempre vence, inclusive com o
           // teclado do iOS aberto.
-          height: viewportHeight ? `${Math.max(viewportHeight - 12, 320)}px` : undefined,
-          maxHeight: viewportHeight ? `${viewportHeight}px` : "96vh",
+          height: viewport ? `${Math.max(viewport.height - 8, 180)}px` : undefined,
+          maxHeight: viewport ? `${viewport.height}px` : "96dvh",
+          top: viewport ? `${viewport.offsetTop + 8}px` : undefined,
+          bottom: viewport ? "auto" : undefined,
           ...style,
         }}
         {...props}

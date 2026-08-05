@@ -100,6 +100,7 @@ export default async function ImprimirPedidoPage({
             Vizinha Salgateria
           </p>
           <p>Pedido {pedido.codigo}</p>
+          <p>Feito em: {formatDateTime(pedido.createdAt.toISOString())}</p>
           <p>{formatDateTime(pedido.dataEntrega.toISOString())}</p>
         </div>
 

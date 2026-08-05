@@ -18,6 +18,7 @@ import {
 } from "@/lib/pedidos";
 import { getProdutoComboItens } from "@/lib/produtos";
 import { createRaffleCode } from "@/lib/raffle";
+import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
 
 function parseLocalScheduledAt(value?: string) {
   if (!value) return null;
@@ -69,6 +70,14 @@ export async function POST(req: Request) {
       paymentPercentage?: number;
       paymentMethod?: MetodoPagamento;
       scheduledAt?: string;
+      fulfillmentType?: FulfillmentType;
+      deliveryAddress?: string;
+      deliveryReference?: string;
+      deliveryNeighborhood?: string;
+      deliveryCity?: string;
+      deliveryPlaceId?: string;
+      deliveryLatitude?: number;
+      deliveryLongitude?: number;
     };
     const { cart, isNew, sessionId } = await getCurrentCart();
     const snapshot = serializeCart(cart);
@@ -80,6 +89,23 @@ export async function POST(req: Request) {
     const customerName = body.customerName?.trim() || "";
     const customerEmail = body.customerEmail?.trim() || "";
     const customerPhone = body.customerPhone?.trim() || "";
+    const fulfillmentType: FulfillmentType = body.fulfillmentType === "DELIVERY" ? "DELIVERY" : "PICKUP";
+    const deliveryAddress = body.deliveryAddress?.trim() || "";
+    const deliveryReference = body.deliveryReference?.trim() || "";
+    const deliveryNeighborhood = body.deliveryNeighborhood?.trim() || "";
+    const deliveryCity = body.deliveryCity?.trim() || "";
+
+    if (fulfillmentType === "DELIVERY" && (!deliveryAddress || !body.deliveryPlaceId || !deliveryNeighborhood)) {
+      return NextResponse.json({ error: "Selecione um endereço válido nas sugestões do Google Maps." }, { status: 400 });
+    }
+    if (fulfillmentType === "DELIVERY" && deliveryReference.length < 3) {
+      return NextResponse.json({ error: "Informe um ponto de referência para o entregador." }, { status: 400 });
+    }
+
+    const delivery = fulfillmentType === "DELIVERY"
+      ? getDeliveryFee(deliveryNeighborhood)
+      : { fee: 0, label: "Retirada", agreed: true };
+    const orderTotal = Number((snapshot.totalAmount + delivery.fee).toFixed(2));
 
     if (customerName.length < 2) {
       return NextResponse.json(
@@ -192,7 +218,7 @@ export async function POST(req: Request) {
     }
 
     const payment = calculatePaymentAmounts(
-      snapshot.totalAmount,
+      orderTotal,
       paymentPercentage,
       paymentMethod,
     );
@@ -208,7 +234,18 @@ export async function POST(req: Request) {
         customerName,
         customerEmail,
         customerPhone,
-        totalAmount: snapshot.totalAmount,
+        totalAmount: orderTotal,
+        fulfillmentType,
+        deliveryAddress: fulfillmentType === "DELIVERY" ? deliveryAddress : null,
+        deliveryReference: fulfillmentType === "DELIVERY" ? deliveryReference : null,
+        deliveryNeighborhood: fulfillmentType === "DELIVERY" ? deliveryNeighborhood : null,
+        deliveryCity: fulfillmentType === "DELIVERY" ? deliveryCity : null,
+        deliveryPlaceId: fulfillmentType === "DELIVERY" ? body.deliveryPlaceId : null,
+        deliveryLatitude: fulfillmentType === "DELIVERY" ? body.deliveryLatitude : null,
+        deliveryLongitude: fulfillmentType === "DELIVERY" ? body.deliveryLongitude : null,
+        deliveryMapsUrl: fulfillmentType === "DELIVERY" ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}&query_place_id=${encodeURIComponent(body.deliveryPlaceId || "")}` : null,
+        deliveryFee: delivery.fee,
+        deliveryFeeAgreed: delivery.agreed,
         paymentPercentage,
         paymentMethod,
         paymentMethodLabel: payment.methodLabel,

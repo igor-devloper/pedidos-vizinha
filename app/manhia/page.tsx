@@ -145,6 +145,8 @@ async function getPedidos(): Promise<PedidoAdmin[]> {
         ).notificadoToleranciaAt?.toISOString() || null,
       impressoAutomaticamenteAt:
         pedido.impressoAutomaticamenteAt?.toISOString() || null,
+      provisionAmount: Number(pedido.provisionAmount),
+      provisionTransferredAt: pedido.provisionTransferredAt?.toISOString() || null,
       itens: pedido.itens.map((item) => ({
         id: item.id,
         tipo: item.tipo,
@@ -214,6 +216,7 @@ export default async function ManhiaPage() {
     operationSchedule: normalizeOperationSchedule(settingsRaw.operationSchedule),
     siteTheme: normalizeStoreSiteTheme(settingsRaw.siteTheme),
     featuredProductId: settingsRaw.featuredProductId,
+    motorcycleCourierPhone: settingsRaw.motorcycleCourierPhone,
   };
 
   return (

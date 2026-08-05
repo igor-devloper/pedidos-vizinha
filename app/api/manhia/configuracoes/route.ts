@@ -54,6 +54,7 @@ export async function PATCH(req: Request) {
       operationSchedule?: unknown;
       siteTheme?: StoreSiteTheme;
       featuredProductId?: string | null;
+      motorcycleCourierPhone?: string | null;
     } | null;
 
     if (!body || typeof body !== "object") {
@@ -67,6 +68,7 @@ export async function PATCH(req: Request) {
       operationSchedule?: BusinessScheduleByWeekday;
       siteTheme?: StoreSiteTheme;
       featuredProductId?: string | null;
+      motorcycleCourierPhone?: string | null;
     } = {};
 
     if (typeof body.isOpen === "boolean") {
@@ -95,6 +97,12 @@ export async function PATCH(req: Request) {
       patch.featuredProductId = null;
     }
 
+    if (typeof body.motorcycleCourierPhone === "string") {
+      patch.motorcycleCourierPhone = body.motorcycleCourierPhone.trim() || null;
+    } else if (body.motorcycleCourierPhone === null) {
+      patch.motorcycleCourierPhone = null;
+    }
+
     const settings = await prisma.storeSettings.upsert({
       where: { id: "singleton" },
       update: patch,
@@ -106,6 +114,7 @@ export async function PATCH(req: Request) {
         operationSchedule: patch.operationSchedule ?? DEFAULT_OPERATION_SCHEDULE,
         siteTheme: patch.siteTheme ?? "PADRAO",
         featuredProductId: patch.featuredProductId ?? null,
+        motorcycleCourierPhone: patch.motorcycleCourierPhone ?? null,
       },
     });
 

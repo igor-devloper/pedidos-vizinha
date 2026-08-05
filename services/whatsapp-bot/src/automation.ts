@@ -23,7 +23,7 @@ import {
   buildFallbackHelpMessage,
   buildHumanHandoffMessage,
   buildMediaRetryMessage,
-  buildNoDeliveryMessage,
+  buildDeliveryMessage,
   buildOwnerHandoffAlertMessage,
   buildOwnerApprovedAckMessage,
   buildOwnerCommandHelpMessage,
@@ -177,10 +177,6 @@ function isDeliveryRequest(text: string) {
   ].some((term) => text.includes(term));
 }
 
-function alreadyWarnedNoDelivery(lead: BotLead) {
-  return normalizeText(lead.lastOutboundText || "").includes("nao fazemos entregas");
-}
-
 function tokenizeSearchTerms(text: string) {
   const ignoredTerms = new Set([
     "qual",
@@ -313,22 +309,14 @@ async function maybeHandleDeliveryRequest(job: InboundMessageJob, lead: BotLead)
     return false;
   }
 
-  if (alreadyWarnedNoDelivery(lead)) {
-    return transferToHumanAttendant(
-      job,
-      lead,
-      "Como você insiste na entrega, vou encaminhar para atendimento humano. Só reforçando: no momento não fazemos entregas de jeito nenhum."
-    );
-  }
-
   const nextLead = await updateLead(lead.id, {
     lastInboundText: job.text,
     stage: lead.stage === "new" ? "awaiting_intent" : lead.stage,
-    intent: "retirada",
-    observacoes: "Cliente perguntou sobre entrega; informado que nao fazemos entregas.",
+    intent: "entrega",
+    observacoes: "Cliente perguntou sobre entrega; tabela de taxas e checkout enviados.",
   });
 
-  await sendAndTrack(job, nextLead || lead, buildNoDeliveryMessage());
+  await sendAndTrack(job, nextLead || lead, buildDeliveryMessage(config.cardapioUrl));
   return true;
 }
 

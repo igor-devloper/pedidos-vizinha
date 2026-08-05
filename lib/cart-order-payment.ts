@@ -62,6 +62,11 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
   const orderStatus = getOrderStatusFromMercadoPagoStatus(payment.status);
   const isBalancePayment =
     current.saldoExternalReference === payment.external_reference;
+  const shouldProvision = payment.status === "approved" &&
+    (isBalancePayment ? !current.saldoPagoAt : current.status !== "PAID");
+  const paidAmount = isBalancePayment
+    ? Number(current.saldoTotalCobrado || 0)
+    : Number(current.chargedAmount || 0);
   let order;
 
   try {
@@ -72,10 +77,18 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
             saldoPaymentId: String(payment.id),
             saldoPagoAt:
               payment.status === "approved" ? new Date() : current.saldoPagoAt,
+            provisionAmount: shouldProvision
+              ? Number((Number(current.provisionAmount) + paidAmount * 0.1).toFixed(2))
+              : current.provisionAmount,
+            provisionTransferredAt: shouldProvision ? null : current.provisionTransferredAt,
           }
         : {
             status: orderStatus,
             mercadoPagoPaymentId: String(payment.id),
+            provisionAmount: shouldProvision
+              ? Number((Number(current.provisionAmount) + paidAmount * 0.1).toFixed(2))
+              : current.provisionAmount,
+            provisionTransferredAt: shouldProvision ? null : current.provisionTransferredAt,
           },
       include: { items: true },
     });

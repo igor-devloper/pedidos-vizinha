@@ -94,6 +94,15 @@ export type SimpleOrderAdmin = {
   paymentMethodLabel: string;
   chargedAmount: string | number;
   createdAt: string;
+  fulfillmentType: "PICKUP" | "DELIVERY";
+  deliveryAddress: string | null;
+  deliveryReference: string | null;
+  deliveryNeighborhood: string | null;
+  deliveryMapsUrl: string | null;
+  deliveryFee: number;
+  deliveryFeeAgreed: boolean;
+  provisionAmount: number;
+  provisionTransferredAt: string | null;
   items: {
     id: string;
     productName: string;
@@ -152,6 +161,8 @@ export type PedidoAdmin = {
   notificadoProntoClienteAt?: string | null;
   notificadoToleranciaAt?: string | null;
   impressoAutomaticamenteAt: string | null;
+  provisionAmount: string | number;
+  provisionTransferredAt: string | null;
   itens: { id: string; tipo: string; quantidade: number }[];
 };
 
@@ -162,6 +173,7 @@ export type StoreSettingsData = {
   operationSchedule: BusinessScheduleByWeekday;
   siteTheme: StoreSiteTheme;
   featuredProductId: string | null;
+  motorcycleCourierPhone: string | null;
 };
 
 type RaffleEntryAdmin = {
@@ -442,6 +454,7 @@ export function ManhiaAdminDashboard({
   const [savingProductType, setSavingProductType] = useState(false);
   const [savingCupom, setSavingCupom] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [transferringProvision, setTransferringProvision] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingProductTypeId, setEditingProductTypeId] = useState<
@@ -495,10 +508,6 @@ export function ManhiaAdminDashboard({
     }
   };
 
-  const ativos = useMemo(
-    () => produtos.filter((produto) => produto.ativo).length,
-    [produtos],
-  );
   const totalBaseVendido = useMemo(
     () => {
       const totalPedidos = pedidos
@@ -538,6 +547,28 @@ export function ManhiaAdminDashboard({
     },
     [pedidos, simpleOrders],
   );
+  const totalProvisionPending = useMemo(
+    () => pedidos.filter((item) => !item.provisionTransferredAt).reduce((sum, item) => sum + Number(item.provisionAmount || 0), 0)
+      + simpleOrders.filter((item) => !item.provisionTransferredAt).reduce((sum, item) => sum + Number(item.provisionAmount || 0), 0),
+    [pedidos, simpleOrders],
+  );
+
+  const handleProvisionTransferred = async () => {
+    try {
+      setTransferringProvision(true);
+      const response = await fetch("/api/manhia/provisoes", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível registrar a transferência.");
+      const transferredAt = String(data.transferredAt);
+      setPedidos((current) => current.map((item) => Number(item.provisionAmount) > 0 && !item.provisionTransferredAt ? { ...item, provisionTransferredAt: transferredAt } : item));
+      setSimpleOrders((current) => current.map((item) => item.provisionAmount > 0 && !item.provisionTransferredAt ? { ...item, provisionTransferredAt: transferredAt } : item));
+      toast.success("Transferência da provisão registrada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao registrar transferência.");
+    } finally {
+      setTransferringProvision(false);
+    }
+  };
   const pedidosPorStatus = useMemo(
     () => ({
       PAGO: pedidos
@@ -1395,6 +1426,8 @@ export function ManhiaAdminDashboard({
           nextSettings.siteTheme) as StoreSiteTheme,
         featuredProductId:
           data?.featuredProductId ?? nextSettings.featuredProductId ?? null,
+        motorcycleCourierPhone:
+          data?.motorcycleCourierPhone ?? nextSettings.motorcycleCourierPhone ?? null,
       });
       toast.success("Configurações salvas.");
       router.refresh();
@@ -1601,7 +1634,7 @@ export function ManhiaAdminDashboard({
                   label: "Recebido",
                   value: formatCurrency(totalRecebido),
                 },
-                { label: "Produtos", value: ativos },
+                { label: "Provisão 10%", value: formatCurrency(totalProvisionPending) },
                 {
                   label: "Loja",
                   value: settings.isOpen ? "Aberta" : "Fechada",
@@ -2207,6 +2240,10 @@ export function ManhiaAdminDashboard({
                               {order.customerName || "Cliente não informado"} -{" "}
                               {formatDateTime(getSimpleOrderDate(order))}
                             </p>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">Feito em: {formatDateTime(order.createdAt)}</p>
+                            {order.fulfillmentType === "DELIVERY" ? (
+                              <p className="mt-1 text-xs font-semibold text-blue-700">Entrega: {order.deliveryNeighborhood || order.deliveryAddress}{order.deliveryReference ? ` • Ref.: ${order.deliveryReference}` : ""} • {order.deliveryFeeAgreed ? formatCurrency(order.deliveryFee) : "taxa a combinar"}{order.deliveryMapsUrl ? <> • <a href={order.deliveryMapsUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="underline">abrir mapa</a></> : null}</p>
+                            ) : <p className="mt-1 text-xs font-semibold text-emerald-700">Retirada</p>}
                             <p className="mt-1 truncate text-xs text-slate-500">
                               {getSimpleOrderSalgadosSummary(order)}
                             </p>
@@ -3108,6 +3145,21 @@ export function ManhiaAdminDashboard({
                     >
                       {savingSettings ? "Salvando..." : "Salvar horário"}
                     </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                  <p className="text-sm font-bold text-[#284a2e]">Provisão financeira (10%)</p>
+                  <p className="mt-1 text-sm text-[#48654f]">Valor reservado no controle interno e ainda pendente de transferência: <strong>{formatCurrency(totalProvisionPending)}</strong>.</p>
+                  <Button type="button" disabled={transferringProvision || totalProvisionPending <= 0} onClick={() => void handleProvisionTransferred()} className="mt-3 h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]">{transferringProvision ? "Registrando..." : "Marcar como transferido"}</Button>
+                </div>
+
+                <div className="rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                  <label htmlFor="motorcycle-courier-phone" className="text-sm font-bold text-[#284a2e]">WhatsApp do motoboy</label>
+                  <p className="mt-1 text-sm text-[#48654f]">Contato usado pela equipe nos pedidos para entrega.</p>
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                    <Input id="motorcycle-courier-phone" type="tel" value={settings.motorcycleCourierPhone || ""} onChange={(event) => setSettings((current) => ({ ...current, motorcycleCourierPhone: event.target.value }))} placeholder="(83) 99999-9999" className="h-12 bg-white" />
+                    <Button type="button" disabled={savingSettings} onClick={() => void handleSaveSettings({ motorcycleCourierPhone: settings.motorcycleCourierPhone })} className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]">Salvar motoboy</Button>
                   </div>
                 </div>
 

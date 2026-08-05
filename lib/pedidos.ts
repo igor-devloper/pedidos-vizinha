@@ -235,6 +235,7 @@ type PedidoSummaryShape = Pick<
   | "observacoes"
   | "produtoNomeSnapshot"
   | "status"
+  | "createdAt"
 > & {
   itens: Pick<PedidoItem, "tipo" | "quantidade">[];
   raffleEntry?: { code: string } | null;
@@ -539,6 +540,7 @@ export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
   return [
     `#${centerReceiptLine(BUSINESS_INFO.name)}`,
     `#${centerReceiptLine(`PEDIDO ${pedido.codigo}`)}`,
+    centerReceiptLine(`FEITO EM ${formatDateTime(pedido.createdAt)}`),
     centerReceiptLine(formatDateTime(pedido.dataEntrega)),
     separator,
     "#CLIENTE",

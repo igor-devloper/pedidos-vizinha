@@ -447,6 +447,10 @@ export async function markPedidoPaidManually({
       mpStatus: "manual_paid",
       mpStatusDetail: observacao?.trim() || "Pagamento manual confirmado",
       mpWebhookPayload: manualPayload,
+      provisionAmount: pedidoAtual.status !== PedidoStatus.PAGO
+        ? Number((Number(pedidoAtual.provisionAmount) + Number(typeof valorPago === "number" ? valorPago : pedidoAtual.totalCobrado) * 0.1).toFixed(2))
+        : pedidoAtual.provisionAmount,
+      provisionTransferredAt: pedidoAtual.status !== PedidoStatus.PAGO ? null : pedidoAtual.provisionTransferredAt,
     } as never,
     include: { itens: true, raffleEntry: true },
   } as never);
@@ -493,6 +497,13 @@ export async function handleMercadoPagoPaymentUpdate({
         ? undefined
         : (pedido.mpWebhookPayload as Prisma.InputJsonValue)
       : (payload as Prisma.InputJsonValue);
+  const shouldProvision = status === "approved" &&
+    (isBalancePayment ? !pedido.saldoPagoAt : pedido.status !== PedidoStatus.PAGO);
+  const paidForProvision = typeof transactionAmount === "number"
+    ? transactionAmount
+    : isBalancePayment
+      ? Number(pedido.saldoTotalCobrado || 0)
+      : Number(pedido.totalCobrado);
 
   const updated = await prisma.pedido.update({
     where: { id: pedido.id },
@@ -514,6 +525,10 @@ export async function handleMercadoPagoPaymentUpdate({
       mpStatus: isBalancePayment ? pedido.mpStatus : status,
       mpStatusDetail: isBalancePayment ? pedido.mpStatusDetail : statusDetail || pedido.mpStatusDetail,
       mpWebhookPayload: webhookPayload,
+      provisionAmount: shouldProvision
+        ? Number((Number(pedido.provisionAmount) + paidForProvision * 0.1).toFixed(2))
+        : pedido.provisionAmount,
+      provisionTransferredAt: shouldProvision ? null : pedido.provisionTransferredAt,
     } as never,
     include: { itens: true, raffleEntry: true },
   } as never);

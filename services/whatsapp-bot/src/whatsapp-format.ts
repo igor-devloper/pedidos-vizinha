@@ -32,11 +32,25 @@ export function buildHumanHandoffMessage() {
   ]);
 }
 
-export function buildNoDeliveryMessage() {
+export function buildDeliveryMessage(cardapioUrl: string) {
   return formatWhatsAppMessage([
-    "🚫 *Sobre entrega*",
-    "No momento não fazemos entregas de jeito nenhum. Os pedidos são somente para retirada no local combinado.",
-    "Se quiser, posso te passar o cardápio para montar a encomenda com retirada.",
+    "🛵 *Sim, fazemos entregas!*",
+    [
+      "📍 *Taxas por região:*",
+      "• Ponta de Matos, Vila São João, Centro e Jardim Manguinhos — *R$ 5,00*",
+      "• Camboinha I, II e III — *R$ 8,00*",
+      "• Poço, Recanto e Praia do Poço — *R$ 10,00*",
+      "• Ponta de Campina — *R$ 15,00*",
+      "• Portal do Poço — *R$ 15,00*",
+      "• Intermares — *R$ 15,00*",
+      "• Jacaré — *R$ 15,00*",
+    ],
+    "Para João Pessoa e bairros que não estão na tabela, a taxa fica *a combinar*.",
+    [
+      "Faça o pedido pelo nosso site e escolha *Entrega* no carrinho:",
+      cardapioUrl,
+      "No checkout, informe o endereço completo e um ponto de referência para o entregador.",
+    ],
   ]);
 }
 
