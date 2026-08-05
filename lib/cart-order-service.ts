@@ -199,6 +199,41 @@ function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
   ]);
 }
 
+function buildCourierOrderMessage(order: CartOrderWithItems) {
+  return formatWhatsAppMessage([
+    "🛵 *NOVA ENTREGA AGENDADA*",
+    [
+      `🛍️ *Pedido #${cartOrderCode(order)}*`,
+      `👤 *Cliente:* ${order.customerName || "Não informado"}`,
+      order.customerPhone ? `📞 *Contato:* ${order.customerPhone}` : null,
+      formatScheduledAt(order) ? `🕒 *Horário combinado:* ${formatScheduledAt(order)}` : null,
+    ],
+    [
+      `📍 *Endereço:* ${order.deliveryAddress || "Não informado"}`,
+      order.deliveryReference ? `🏠 *Referência:* ${order.deliveryReference}` : null,
+      order.deliveryMapsUrl ? `🗺️ *Google Maps:* ${order.deliveryMapsUrl}` : null,
+      `💵 *Taxa:* ${order.deliveryFeeAgreed ? formatCurrency(Number(order.deliveryFee)) : "a combinar"}`,
+    ],
+    ["📦 *Resumo:*", ...formatWhatsAppList(formatCartOrderItems(order)).map((item) => `  ${item}`)],
+    "Avisaremos novamente quando o pedido estiver pronto para buscar.",
+  ]);
+}
+
+function buildCourierReadyMessage(order: CartOrderWithItems) {
+  return formatWhatsAppMessage([
+    "✅🛵 *PEDIDO PRONTO PARA ENTREGA*",
+    `O pedido *#${cartOrderCode(order)}* já pode ser buscado na ${BUSINESS_INFO.name}.`,
+    [
+      `👤 *Cliente:* ${order.customerName || "Não informado"}`,
+      order.customerPhone ? `📞 *Contato:* ${order.customerPhone}` : null,
+      formatScheduledAt(order) ? `🕒 *Entrega combinada:* ${formatScheduledAt(order)}` : null,
+      `📍 *Endereço:* ${order.deliveryAddress || "Não informado"}`,
+      order.deliveryReference ? `🏠 *Referência:* ${order.deliveryReference}` : null,
+      order.deliveryMapsUrl ? `🗺️ *Abrir no Google Maps:* ${order.deliveryMapsUrl}` : null,
+    ],
+  ]);
+}
+
 function buildCartOrderReadyMessage(
   order: Pick<
     Order,
@@ -419,6 +454,23 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
       }
     }
   }
+
+  if (order.fulfillmentType === "DELIVERY" && !order.notifiedCourierAt) {
+    const settings = await prisma.storeSettings.findUnique({ where: { id: "singleton" }, select: { motorcycleCourierPhone: true } });
+    if (settings?.motorcycleCourierPhone) {
+      const claimedAt = new Date();
+      const claim = await prisma.order.updateMany({ where: { id: order.id, notifiedCourierAt: null }, data: { notifiedCourierAt: claimedAt } });
+      if (claim.count > 0) {
+        try {
+          const result = await sendWhatsappText(settings.motorcycleCourierPhone, buildCourierOrderMessage(order));
+          if (!result.ok) throw new Error("Envio ao motoboy não confirmado.");
+        } catch (error) {
+          await prisma.order.updateMany({ where: { id: order.id, notifiedCourierAt: claimedAt }, data: { notifiedCourierAt: null } });
+          console.error("Falha ao enviar nova entrega ao motoboy", { orderId: order.id, error });
+        }
+      }
+    }
+  }
 }
 
 async function printAcceptedCartOrder(order: CartOrderWithItems) {
@@ -484,6 +536,7 @@ export async function processPaidCartOrdersSideEffects() {
         { notificadoClienteAt: null },
         { notificadoVizinhaAt: null },
         { raffleNotificadoAt: null },
+        { AND: [{ fulfillmentType: "DELIVERY" }, { notifiedCourierAt: null }] },
       ],
     },
     include: { items: true, raffleEntry: true },
@@ -536,6 +589,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
     !current.saldoPagoAt &&
     (!current.saldoInitPoint || !current.saldoCobrancaEnviadaAt);
   const shouldPrepareReady = enteringReady || missingReadyBalance;
+  const shouldNotifyCourierReady = status === "READY" && current.fulfillmentType === "DELIVERY" && !current.notifiedCourierReadyAt;
   const balanceCharge = shouldPrepareReady
     ? await ensureCartOrderBalanceCharge(current)
     : null;
@@ -552,6 +606,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
       notificadoProntoClienteAt: shouldPrepareReady
         ? null
         : current.notificadoProntoClienteAt,
+      notifiedCourierReadyAt: leavingReady ? null : current.notifiedCourierReadyAt,
       saldoExternalReference:
         balanceCharge?.saldoExternalReference ?? current.saldoExternalReference,
       saldoPreferenceId:
@@ -603,6 +658,24 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
     }
   }
 
+
+  if (shouldNotifyCourierReady) {
+    const settings = await prisma.storeSettings.findUnique({ where: { id: "singleton" }, select: { motorcycleCourierPhone: true } });
+    if (settings?.motorcycleCourierPhone) {
+      const claimedAt = new Date();
+      const claim = await prisma.order.updateMany({ where: { id: order.id, notifiedCourierReadyAt: null }, data: { notifiedCourierReadyAt: claimedAt } });
+      if (claim.count > 0) {
+        try {
+          const result = await sendWhatsappText(settings.motorcycleCourierPhone, buildCourierReadyMessage(order));
+          if (!result.ok) throw new Error("Envio de pedido pronto ao motoboy não confirmado.");
+        } catch (error) {
+          await prisma.order.updateMany({ where: { id: order.id, notifiedCourierReadyAt: claimedAt }, data: { notifiedCourierReadyAt: null } });
+          console.error("Falha ao avisar pedido pronto ao motoboy", { orderId: order.id, error });
+        }
+      }
+    }
+  }
+
   if (status === "PAID" && current.status !== "PAID") {
     return acceptPaidCartOrder(order);
   }
@@ -611,19 +684,17 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
 }
 
 export async function processReadyCartOrderBalanceCharges() {
-  const orders = await prisma.order.findMany({
-    where: {
-      status: "READY",
-      paymentPercentage: 50,
-      saldoPagoAt: null,
-      OR: [
-        { saldoInitPoint: null },
-        { saldoCobrancaEnviadaAt: null },
-      ],
-    },
-    select: { id: true },
-    take: 20,
-  });
+  const [balanceOrders, courierOrders] = await Promise.all([
+    prisma.order.findMany({
+      where: { status: "READY", paymentPercentage: 50, saldoPagoAt: null, OR: [{ saldoInitPoint: null }, { saldoCobrancaEnviadaAt: null }] },
+      select: { id: true }, take: 20,
+    }),
+    prisma.order.findMany({
+      where: { status: "READY", fulfillmentType: "DELIVERY", notifiedCourierReadyAt: null },
+      select: { id: true }, take: 20,
+    }),
+  ]);
+  const orders = Array.from(new Map([...balanceOrders, ...courierOrders].map((order) => [order.id, order])).values());
 
   for (const order of orders) {
     try {

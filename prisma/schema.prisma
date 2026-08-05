@@ -147,6 +147,8 @@ model Order {
   deliveryFeeAgreed         Boolean         @default(true)
   provisionAmount           Decimal         @default(0) @db.Decimal(10, 2)
   provisionTransferredAt    DateTime?
+  notifiedCourierAt         DateTime?
+  notifiedCourierReadyAt    DateTime?
 
   cartId String?
   cart   Cart?       @relation(fields: [cartId], references: [id], onDelete: SetNull)
