@@ -376,6 +376,7 @@ export function FloatingCart({
   const [actionError, setActionError] = useState<string | null>(null);
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
   const [checkoutSession, setCheckoutSession] = useState<CartCheckoutSession | null>(null);
+  const [checkoutStep, setCheckoutStep] = useState<"FORM" | "REVIEW">("FORM");
   const [checkoutPaid, setCheckoutPaid] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -385,6 +386,7 @@ export function FloatingCart({
   const [deliveryReference, setDeliveryReference] = useState("");
   const [deliveryPlace, setDeliveryPlace] = useState({ placeId: "", neighborhood: "", city: "", latitude: 0, longitude: 0 });
   const addressInputRef = useRef<HTMLInputElement>(null);
+  const cartScrollRef = useRef<HTMLDivElement>(null);
   const [paymentPercentage, setPaymentPercentage] = useState<50 | 100>(50);
   const [paymentMethod, setPaymentMethod] = useState<MetodoPagamento>(MetodoPagamento.PIX);
   const minDeliveryDate = useMemo(
@@ -398,6 +400,16 @@ export function FloatingCart({
   const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(minDeliveryDate));
   const cartThemeStyle = getCartThemeStyle(siteTheme);
   const selectedItemsSavePromises = useRef(new Set<Promise<void>>());
+
+  const showReview = () => {
+    if (!canCheckout || cartValidation) {
+      setActionError(checkoutGuidance || cartValidation || "Confira os dados do pedido.");
+      return;
+    }
+    setActionError(null);
+    setCheckoutStep("REVIEW");
+    window.setTimeout(() => cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }), 0);
+  };
 
   useEffect(() => { void preloadGoogleMaps().catch(() => undefined); }, []);
 
@@ -489,13 +501,6 @@ export function FloatingCart({
       setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível remover este item.") });
     } finally {
       setLoadingId(null);
-    }
-  };
-
-  const clearCart = async () => {
-    const response = await fetch("/api/cart", { method: "DELETE" });
-    if (response.ok) {
-      updateCart((await response.json()) as CartData);
     }
   };
 
@@ -734,6 +739,7 @@ export function FloatingCart({
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen);
+          if (!nextOpen && !checkoutSession) setCheckoutStep("FORM");
           if (!nextOpen && checkoutPaid) {
             setCheckoutSession(null);
             setCheckoutPaid(false);
@@ -755,9 +761,9 @@ export function FloatingCart({
           )}>
             <div>
               {isDesktop ? (
-                <DialogTitle className="text-xl font-black text-[var(--cart-dark)] sm:text-2xl">Seu carrinho</DialogTitle>
+                <DialogTitle className="text-xl font-black text-[var(--cart-dark)] sm:text-2xl">{checkoutStep === "REVIEW" && !checkoutSession ? "Revise seu pedido" : "Seu carrinho"}</DialogTitle>
               ) : (
-                <DrawerTitle className="text-xl font-black text-[var(--cart-dark)]">Seu carrinho</DrawerTitle>
+                <DrawerTitle className="text-xl font-black text-[var(--cart-dark)]">{checkoutStep === "REVIEW" && !checkoutSession ? "Revise seu pedido" : "Seu carrinho"}</DrawerTitle>
               )}
               <p className="mt-1 text-sm font-medium text-[var(--cart-muted)]">
                 {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"}
@@ -786,7 +792,7 @@ export function FloatingCart({
             </DrawerClose>}
           </DialogHeader>
 
-          <div className="min-h-0 scroll-pb-32 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
+          <div ref={cartScrollRef} className="min-h-0 scroll-pb-32 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
           {checkoutSession ? (
             <CartTransparentPayment
               session={checkoutSession}
@@ -799,6 +805,46 @@ export function FloatingCart({
           ) : cart.items.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--cart-border)] bg-white p-8 text-center text-base font-medium text-[var(--cart-muted)]">
               Seu carrinho está vazio.
+            </div>
+          ) : checkoutStep === "REVIEW" ? (
+            <div className="mx-auto max-w-2xl space-y-4">
+              <div className="rounded-2xl border border-[var(--cart-border)] bg-white p-5">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--cart-muted)]">Confira antes de pagar</p>
+                <h2 className="mt-1 text-2xl font-black text-[var(--cart-dark)]">Resumo do pedido</h2>
+                <div className="mt-4 space-y-3">
+                  {cart.items.map((item) => (
+                    <div key={item.id} className="border-b border-[var(--cart-border)] pb-3 last:border-0 last:pb-0">
+                      <div className="flex justify-between gap-4 font-bold text-[var(--cart-dark)]">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span>{formatCurrency(item.subtotal)}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-[var(--cart-muted)]">{item.selectedItems.filter((entry) => entry.quantidade > 0).map((entry) => `${entry.tipo}: ${entry.quantidade}`).join(" • ")}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--cart-border)] bg-white p-5 text-sm text-[var(--cart-muted)]">
+                <h3 className="text-lg font-black text-[var(--cart-dark)]">Dados e recebimento</h3>
+                <p className="mt-3"><strong className="text-[var(--cart-dark)]">Cliente:</strong> {customerName}</p>
+                <p><strong className="text-[var(--cart-dark)]">WhatsApp:</strong> {customerPhone}</p>
+                <p><strong className="text-[var(--cart-dark)]">Modalidade:</strong> {fulfillmentType === "DELIVERY" ? "Entrega" : "Retirada"}</p>
+                {fulfillmentType === "DELIVERY" ? <><p><strong className="text-[var(--cart-dark)]">Endereço:</strong> {deliveryAddress}</p><p><strong className="text-[var(--cart-dark)]">Referência:</strong> {deliveryReference}</p></> : null}
+                <p><strong className="text-[var(--cart-dark)]">Data e horário:</strong> {formatDateLabel(deliveryDate)} às {deliveryTime}</p>
+              </div>
+
+              <div className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-5">
+                <h3 className="text-lg font-black text-[var(--cart-dark)]">Valores</h3>
+                <div className="mt-4 space-y-2 text-sm text-[var(--cart-muted)]">
+                  <div className="flex justify-between gap-4"><span>Produtos</span><span>{formatCurrency(cart.totalAmount)}</span></div>
+                  <div className="flex justify-between gap-4"><span>Entrega</span><span>{fulfillmentType === "DELIVERY" ? (deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "A combinar") : "Grátis"}</span></div>
+                  <div className="flex justify-between gap-4 border-t border-[var(--cart-border)] pt-2 font-bold text-[var(--cart-dark)]"><span>Total do pedido</span><span>{formatCurrency(orderTotal)}</span></div>
+                  <div className="flex justify-between gap-4"><span>Pagamento agora ({paymentPercentage}%)</span><span>{formatCurrency(paymentPreview.baseAmount)}</span></div>
+                  {paymentPreview.feeAmount > 0 ? <div className="flex justify-between gap-4"><span>Taxa da forma de pagamento</span><span>{formatCurrency(paymentPreview.feeAmount)}</span></div> : null}
+                  <div className="mt-3 flex justify-between gap-4 rounded-xl bg-[var(--cart-surface)] p-3 text-lg font-black text-[var(--cart-dark)]"><span>Total a pagar agora</span><span>{formatCurrency(paymentPreview.totalToCharge)}</span></div>
+                  {paymentPercentage === 50 ? <p className="pt-1 text-xs">Restante do pedido: {formatCurrency(orderTotal - paymentPreview.baseAmount)}.</p> : null}
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1201,39 +1247,29 @@ export function FloatingCart({
 
           {cart.items.length > 0 && !checkoutSession ? (
             <div className="border-t border-[var(--cart-border)] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(11,61,24,0.10)] sm:px-6">
-              {(actionError || checkoutGuidance) ? (
+              {(actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)) ? (
                 <p role="alert" className="mb-2 text-sm font-bold text-red-700">
-                  {actionError || checkoutGuidance}
+                  {actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)}
                 </p>
               ) : null}
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[var(--cart-muted)]">Total do pedido</p>
-                  <p className="text-2xl font-black leading-tight text-[var(--cart-dark)]">{formatCurrency(orderTotal)}</p>
-                  {fulfillmentType === "DELIVERY" ? <p className="text-xs text-[var(--cart-muted)]">Entrega: {deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "a combinar (não cobrada agora)"}</p> : null}
-                  <p className="text-sm text-[var(--cart-muted)]">Agora: {formatCurrency(paymentPreview.totalToCharge)}</p>
-                  <p className="mt-1 text-xs font-bold text-amber-700">
-                    🎁 Esta compra gera um código para o Sorteio de Dia dos Pais.
-                  </p>
+              {checkoutStep === "REVIEW" ? (
+                <div className="grid grid-cols-[auto_1fr] gap-3">
+                  <Button type="button" variant="outline" disabled={checkingOut} onClick={() => { setCheckoutStep("FORM"); setActionError(null); window.setTimeout(() => cartScrollRef.current?.scrollTo({ top: 0 }), 0); }} className="min-h-12 rounded-full border-[var(--cart-border)] px-5 font-bold text-[var(--cart-dark)]">Voltar</Button>
+                  <Button type="button" disabled={checkingOut} onClick={() => void checkout()} className="min-h-12 rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]">
+                    {checkingOut ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> : null}
+                    {checkingOut ? "Preparando pagamento..." : `Pagar ${formatCurrency(paymentPreview.totalToCharge)}`}
+                  </Button>
                 </div>
+              ) : (
                 <Button
                   type="button"
                   disabled={checkingOut || !canCheckout || Boolean(cartValidation)}
-                  onClick={() => void checkout()}
-                  className="min-h-12 flex-1 rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)] sm:flex-none"
+                  onClick={showReview}
+                  className="min-h-12 w-full rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]"
                 >
-                  {checkingOut ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> : null}
-                  {checkingOut ? "Enviando pedido..." : "Finalizar pedido"}
+                  Finalizar pedido
                 </Button>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => void clearCart()}
-                className="mt-2 min-h-11 w-full text-base font-semibold text-[var(--cart-accent)]"
-              >
-                Limpar carrinho
-              </Button>
+              )}
             </div>
           ) : null}
         </CartContent>
