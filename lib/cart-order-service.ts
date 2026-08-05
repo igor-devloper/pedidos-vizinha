@@ -34,7 +34,6 @@ function formatFulfillment(order: CartOrderWithItems) {
     "Modalidade: ENTREGA",
     `Endereço: ${order.deliveryAddress || "Não informado"}`,
     order.deliveryReference ? `Referência: ${order.deliveryReference}` : null,
-    order.deliveryMapsUrl ? `Google Maps: ${order.deliveryMapsUrl}` : null,
     `Taxa de entrega: ${order.deliveryFeeAgreed ? formatCurrency(Number(order.deliveryFee)) : "A COMBINAR"}`,
   ].filter((line): line is string => Boolean(line));
 }
@@ -245,7 +244,6 @@ function buildCartOrderReadyMessage(
     | "saldoPagoAt"
     | "fulfillmentType"
     | "deliveryAddress"
-    | "deliveryMapsUrl"
     | "scheduledAt"
   >,
 ) {
@@ -261,7 +259,7 @@ function buildCartOrderReadyMessage(
       `Olá, ${order.customerName || "cliente"}! 👋`,
       `Seu pedido *#${cartOrderCode(order)}* da *${BUSINESS_INFO.name}* já está prontinho. 😍`,
       order.fulfillmentType === "DELIVERY"
-        ? `🛵 Vamos enviar para ${order.deliveryAddress || "o endereço combinado"}${formatScheduledAt(order) ? ` no horário combinado de ${formatScheduledAt(order)}` : ""}${order.deliveryMapsUrl ? `. Local: ${order.deliveryMapsUrl}` : "."}`
+        ? `🛵 Vamos enviar para ${order.deliveryAddress || "o endereço combinado"}${formatScheduledAt(order) ? ` no horário combinado de ${formatScheduledAt(order)}` : ""}.`
         : "📍 Já pode vir retirar!",
     ],
     hasPendingBalance
