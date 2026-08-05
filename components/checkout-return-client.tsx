@@ -6,7 +6,7 @@ import { CheckCircle2, Clock3, LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, formatDateTime, getPedidoStatusMeta } from "@/lib/pedidos";
+import { formatCurrency, formatDateTime, getPedidoStatusMeta } from "@/lib/pedidos";//zzz
 
 type PedidoResponse = {
   id: string;
