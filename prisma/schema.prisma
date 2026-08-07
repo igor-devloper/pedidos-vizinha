@@ -361,6 +361,37 @@ model StoreSettings {
   updatedAt                  DateTime @updatedAt
 }
 
+model WhatsappCampaign {
+  id           String   @id @default(cuid())
+  message      String
+  delaySeconds Int      @default(15)
+  status       String   @default("RUNNING")
+  total        Int
+  sent         Int      @default(0)
+  failed       Int      @default(0)
+  lastSentAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  recipients WhatsappCampaignRecipient[]
+}
+
+model WhatsappCampaignRecipient {
+  id         String   @id @default(cuid())
+  phone      String
+  status     String   @default("PENDING")
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaignId String
+  campaign   WhatsappCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, phone])
+  @@index([campaignId, status])
+}
+
 enum StatusEncomenda {
   AGUARDANDO_PAGAMENTO
   AGUARDANDO_VALIDACAO

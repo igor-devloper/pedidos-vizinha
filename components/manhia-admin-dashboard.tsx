@@ -491,10 +491,13 @@ export function ManhiaAdminDashboard({
   const [messageDelaySeconds, setMessageDelaySeconds] = useState("15");
   const [customerCount, setCustomerCount] = useState<number | null>(null);
   const [sendingMessages, setSendingMessages] = useState(false);
+  const [stoppingMessages, setStoppingMessages] = useState(false);
+  const [messageCampaignId, setMessageCampaignId] = useState<string | null>(null);
   const [messageProgress, setMessageProgress] = useState({ processed: 0, sent: 0, failed: 0 });
 
   const openMessageDialog = async () => {
     setMessageDialogOpen(true);
+    setMessageCampaignId(null);
     setMessageProgress({ processed: 0, sent: 0, failed: 0 });
     try {
       const response = await fetch("/api/manhia/mensagens", { cache: "no-store" });
@@ -516,42 +519,65 @@ export function ManhiaAdminDashboard({
 
     setSendingMessages(true);
     setMessageProgress({ processed: 0, sent: 0, failed: 0 });
-    let cursor: number | null = 0;
-    let totalSent = 0;
-    let totalFailed = 0;
-
     try {
-      while (cursor !== null) {
-        const response: Response = await fetch("/api/manhia/mensagens", {
+      const createResponse = await fetch("/api/manhia/mensagens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", message, delaySeconds: Number(messageDelaySeconds) }),
+      });
+      const created: { error?: string; campaignId: string; total: number; previouslySent?: number } = await createResponse.json();
+      if (!createResponse.ok) throw new Error(created.error || "Não foi possível criar a campanha.");
+      setMessageCampaignId(created.campaignId);
+      setCustomerCount(created.total);
+      if (created.previouslySent) {
+        toast.info(`${created.previouslySent} cliente(s) já haviam recebido esta mesma mensagem e foram ignorados.`);
+      }
+
+      let status = "RUNNING";
+      while (status === "RUNNING") {
+        const response = await fetch("/api/manhia/mensagens", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, delaySeconds: Number(messageDelaySeconds), cursor }),
+          body: JSON.stringify({ action: "process", campaignId: created.campaignId }),
         });
         const data: {
           error?: string;
           total: number;
           sent: number;
-          failures?: Array<{ position: number; error: string }>;
-          nextCursor: number | null;
+          failed: number;
+          processed: number;
+          status: string;
         } = await response.json();
         if (!response.ok) throw new Error(data.error || "Não foi possível enviar as mensagens.");
-
-        totalSent += data.sent || 0;
-        totalFailed += data.failures?.length || 0;
-        cursor = data.nextCursor;
+        status = data.status;
         setCustomerCount(data.total);
-        setMessageProgress({
-          processed: (data.nextCursor ?? data.total),
-          sent: totalSent,
-          failed: totalFailed,
-        });
+        setMessageProgress({ processed: data.processed, sent: data.sent, failed: data.failed });
       }
-
-      toast.success(`Envio concluído: ${totalSent} mensagem(ns) enviada(s).`);
+      if (status === "STOPPED") toast.info("Envio interrompido.");
+      else toast.success("Envio concluído.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro durante o envio.");
     } finally {
       setSendingMessages(false);
+    }
+  };
+
+  const stopBulkMessage = async () => {
+    if (!messageCampaignId) return;
+    setStoppingMessages(true);
+    try {
+      const response = await fetch("/api/manhia/mensagens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "stop", campaignId: messageCampaignId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível parar o envio.");
+      toast.info("Parada solicitada. Nenhuma nova mensagem será iniciada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao parar o envio.");
+    } finally {
+      setStoppingMessages(false);
     }
   };
 
@@ -4216,7 +4242,14 @@ export function ManhiaAdminDashboard({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={sendingMessages} onClick={() => setMessageDialogOpen(false)}>Cancelar</Button>
+            {sendingMessages ? (
+              <Button type="button" variant="destructive" disabled={stoppingMessages || !messageCampaignId} onClick={() => void stopBulkMessage()}>
+                {stoppingMessages ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {stoppingMessages ? "Parando..." : "Parar envio"}
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setMessageDialogOpen(false)}>Fechar</Button>
+            )}
             <Button
               type="button"
               disabled={sendingMessages || customerCount === null || customerCount === 0 || !bulkMessage.trim()}
