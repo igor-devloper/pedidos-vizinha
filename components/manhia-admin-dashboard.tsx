@@ -13,6 +13,7 @@ import {
   Heart,
   LoaderCircle,
   LogOut,
+  MessageCircle,
   Pencil,
   Plus,
   Printer,
@@ -32,6 +33,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -477,6 +486,74 @@ export function ManhiaAdminDashboard({
   const [loadingRaffle, setLoadingRaffle] = useState(false);
   const [drawingRaffle, setDrawingRaffle] = useState(false);
   const [printingPedidoId, setPrintingPedidoId] = useState<string | null>(null);
+  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [messageDelaySeconds, setMessageDelaySeconds] = useState("15");
+  const [customerCount, setCustomerCount] = useState<number | null>(null);
+  const [sendingMessages, setSendingMessages] = useState(false);
+  const [messageProgress, setMessageProgress] = useState({ processed: 0, sent: 0, failed: 0 });
+
+  const openMessageDialog = async () => {
+    setMessageDialogOpen(true);
+    setMessageProgress({ processed: 0, sent: 0, failed: 0 });
+    try {
+      const response = await fetch("/api/manhia/mensagens", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível contar os clientes.");
+      setCustomerCount(data.total);
+    } catch (error) {
+      setCustomerCount(null);
+      toast.error(error instanceof Error ? error.message : "Erro ao carregar clientes.");
+    }
+  };
+
+  const sendBulkMessage = async () => {
+    const message = bulkMessage.trim();
+    if (!message) {
+      toast.error("Escreva a mensagem antes de enviar.");
+      return;
+    }
+
+    setSendingMessages(true);
+    setMessageProgress({ processed: 0, sent: 0, failed: 0 });
+    let cursor: number | null = 0;
+    let totalSent = 0;
+    let totalFailed = 0;
+
+    try {
+      while (cursor !== null) {
+        const response: Response = await fetch("/api/manhia/mensagens", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, delaySeconds: Number(messageDelaySeconds), cursor }),
+        });
+        const data: {
+          error?: string;
+          total: number;
+          sent: number;
+          failures?: Array<{ position: number; error: string }>;
+          nextCursor: number | null;
+        } = await response.json();
+        if (!response.ok) throw new Error(data.error || "Não foi possível enviar as mensagens.");
+
+        totalSent += data.sent || 0;
+        totalFailed += data.failures?.length || 0;
+        cursor = data.nextCursor;
+        setCustomerCount(data.total);
+        setMessageProgress({
+          processed: (data.nextCursor ?? data.total),
+          sent: totalSent,
+          failed: totalFailed,
+        });
+      }
+
+      toast.success(`Envio concluído: ${totalSent} mensagem(ns) enviada(s).`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro durante o envio.");
+    } finally {
+      setSendingMessages(false);
+    }
+  };
 
   const loadRaffle = async () => {
     setLoadingRaffle(true);
@@ -1663,6 +1740,15 @@ export function ManhiaAdminDashboard({
             </div>
 
             <div className="flex items-center justify-between gap-3 p-4 lg:flex-col lg:items-stretch lg:justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void openMessageDialog()}
+                className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+              >
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Enviar mensagem
+              </Button>
               <Button
                 type="button"
                 disabled={savingSettings}
@@ -4076,6 +4162,73 @@ export function ManhiaAdminDashboard({
           </section>
         )}
       </div>
+
+      <Dialog
+        open={messageDialogOpen}
+        onOpenChange={(open) => {
+          if (!sendingMessages) setMessageDialogOpen(open);
+        }}
+      >
+        <DialogContent className="border-[#d6e7a2] sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-[#0b3d18]">Mensagem para clientes</DialogTitle>
+            <DialogDescription>
+              Envia uma mensagem individual para cada telefone único de pedidos não cancelados.
+              {customerCount === null ? " Carregando contatos..." : ` ${customerCount} cliente(s) serão incluídos.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="bulk-message" className="text-sm font-semibold text-slate-700">Mensagem</label>
+              <Textarea
+                id="bulk-message"
+                value={bulkMessage}
+                disabled={sendingMessages}
+                maxLength={1500}
+                rows={7}
+                placeholder="Escreva aqui a mensagem..."
+                onChange={(event) => setBulkMessage(event.target.value)}
+              />
+              <p className="text-right text-xs text-slate-500">{bulkMessage.length}/1.500</p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="message-delay" className="text-sm font-semibold text-slate-700">Intervalo entre mensagens (segundos)</label>
+              <Input
+                id="message-delay"
+                type="number"
+                min={10}
+                max={60}
+                value={messageDelaySeconds}
+                disabled={sendingMessages}
+                onChange={(event) => setMessageDelaySeconds(event.target.value)}
+              />
+              <p className="text-xs text-amber-700">O mínimo é 10 segundos. O intervalo reduz rajadas, mas não elimina o risco de bloqueio pelo WhatsApp.</p>
+              <p className="text-xs text-slate-500">Mantenha esta página aberta até o envio terminar.</p>
+            </div>
+
+            {sendingMessages || messageProgress.processed > 0 ? (
+              <div className="rounded-xl bg-[#f7fde7] p-3 text-sm text-[#284a2e]">
+                Processados: {messageProgress.processed}/{customerCount ?? "…"} · Enviados: {messageProgress.sent} · Falhas: {messageProgress.failed}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={sendingMessages} onClick={() => setMessageDialogOpen(false)}>Cancelar</Button>
+            <Button
+              type="button"
+              disabled={sendingMessages || customerCount === null || customerCount === 0 || !bulkMessage.trim()}
+              onClick={() => void sendBulkMessage()}
+              className="bg-[#1b7f31] text-white hover:bg-[#156326]"
+            >
+              {sendingMessages ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
+              {sendingMessages ? "Enviando..." : "Enviar para todos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
