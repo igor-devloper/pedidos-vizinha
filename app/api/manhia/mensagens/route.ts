@@ -38,6 +38,7 @@ function campaignPayload(campaign: {
   id: string; status: string; total: number; sent: number; failed: number;
 }) {
   return {
+    id: campaign.id,
     campaignId: campaign.id,
     status: campaign.status,
     total: campaign.total,
@@ -95,7 +96,13 @@ export async function POST(req: Request) {
     });
   }
 
-  const campaignId = typeof body?.campaignId === "string" ? body.campaignId : "";
+  const bodyWithId = body as (typeof body & { id?: unknown });
+  const campaignId =
+    typeof body?.campaignId === "string"
+      ? body.campaignId.trim()
+      : typeof bodyWithId?.id === "string"
+        ? bodyWithId.id.trim()
+        : "";
   if (!campaignId) {
     return NextResponse.json({ error: "Campanha inválida." }, { status: 400 });
   }

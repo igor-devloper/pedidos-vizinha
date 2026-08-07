@@ -525,9 +525,13 @@ export function ManhiaAdminDashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create", message, delaySeconds: Number(messageDelaySeconds) }),
       });
-      const created: { error?: string; campaignId: string; total: number; previouslySent?: number } = await createResponse.json();
+      const created: { error?: string; id?: string; campaignId?: string; total: number; previouslySent?: number } = await createResponse.json();
       if (!createResponse.ok) throw new Error(created.error || "Não foi possível criar a campanha.");
-      setMessageCampaignId(created.campaignId);
+      const campaignId = created.campaignId || created.id;
+      if (!campaignId) {
+        throw new Error("A campanha foi criada sem identificador. Atualize a página e tente novamente.");
+      }
+      setMessageCampaignId(campaignId);
       setCustomerCount(created.total);
       if (created.previouslySent) {
         toast.info(`${created.previouslySent} cliente(s) já haviam recebido esta mesma mensagem e foram ignorados.`);
@@ -538,7 +542,7 @@ export function ManhiaAdminDashboard({
         const response = await fetch("/api/manhia/mensagens", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "process", campaignId: created.campaignId }),
+          body: JSON.stringify({ action: "process", campaignId }),
         });
         const data: {
           error?: string;
