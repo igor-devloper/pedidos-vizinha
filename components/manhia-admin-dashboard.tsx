@@ -185,22 +185,6 @@ export type StoreSettingsData = {
   motorcycleCourierPhone: string | null;
 };
 
-type RaffleEntryAdmin = {
-  id: string;
-  code: string;
-  customerName: string;
-  customerPhone: string | null;
-  createdAt: string;
-  pedido?: { codigo: string } | null;
-  order?: { code: string | null } | null;
-};
-
-type RaffleDrawAdmin = {
-  id: string;
-  drawnAt: string;
-  entry: RaffleEntryAdmin;
-};
-
 type ProdutoFormState = {
   nome: string;
   descricao: string;
@@ -446,7 +430,7 @@ export function ManhiaAdminDashboard({
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
-    "pedidos" | "salgados" | "produtos" | "tipos" | "cupons" | "sorteio" | "configuracoes"
+    "pedidos" | "salgados" | "produtos" | "tipos" | "cupons" | "configuracoes"
   >("pedidos");
   const [produtos, setProdutos] = useState(initialProdutos);
   const [pedidos, setPedidos] = useState(initialPedidos);
@@ -481,10 +465,6 @@ export function ManhiaAdminDashboard({
     "PAGO" | "PRONTO" | "ENTREGUE" | null
   >(null);
   const [refreshingPedidos, setRefreshingPedidos] = useState(false);
-  const [raffleEntries, setRaffleEntries] = useState<RaffleEntryAdmin[]>([]);
-  const [raffleDraws, setRaffleDraws] = useState<RaffleDrawAdmin[]>([]);
-  const [loadingRaffle, setLoadingRaffle] = useState(false);
-  const [drawingRaffle, setDrawingRaffle] = useState(false);
   const [printingPedidoId, setPrintingPedidoId] = useState<string | null>(null);
   const [messageDialogOpen, setMessageDialogOpen] = useState(false);
   const [bulkMessage, setBulkMessage] = useState("");
@@ -582,36 +562,6 @@ export function ManhiaAdminDashboard({
       toast.error(error instanceof Error ? error.message : "Erro ao parar o envio.");
     } finally {
       setStoppingMessages(false);
-    }
-  };
-
-  const loadRaffle = async () => {
-    setLoadingRaffle(true);
-    try {
-      const response = await fetch("/api/manhia/sorteio", { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Não foi possível carregar o sorteio.");
-      setRaffleEntries(data.entries || []);
-      setRaffleDraws(data.draws || []);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao carregar sorteio.");
-    } finally {
-      setLoadingRaffle(false);
-    }
-  };
-
-  const drawRaffle = async () => {
-    setDrawingRaffle(true);
-    try {
-      const response = await fetch("/api/manhia/sorteio", { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Não foi possível sortear.");
-      setRaffleDraws((current) => [data.draw, ...current]);
-      toast.success(`Código sorteado: ${data.draw.entry.code}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao realizar sorteio.");
-    } finally {
-      setDrawingRaffle(false);
     }
   };
 
@@ -1813,7 +1763,6 @@ export function ManhiaAdminDashboard({
               { id: "produtos" as const, label: "Produtos", icon: CheckCheck },
               { id: "tipos" as const, label: "Tipos", icon: FerrisWheel },
               { id: "cupons" as const, label: "Cupons", icon: TicketPercent },
-              { id: "sorteio" as const, label: "Sorteio", icon: Trophy },
               {
                 id: "configuracoes" as const,
                 label: "Operação",
@@ -1828,7 +1777,6 @@ export function ManhiaAdminDashboard({
                   type="button"
                   onClick={() => {
                     setActiveTab(item.id);
-                    if (item.id === "sorteio") void loadRaffle();
                   }}
                   className={cn(
                     "flex h-14 items-center justify-center gap-1.5 border-b border-r border-[#e4edc9] px-2 text-[11px] font-bold uppercase tracking-wide transition sm:gap-2 sm:border-b-0 sm:text-sm",
@@ -3127,69 +3075,6 @@ export function ManhiaAdminDashboard({
                 </div>
               )}
             </section>
-          </section>
-        ) : activeTab === "sorteio" ? (
-          <section className="space-y-5">
-            <div className="rounded-[2rem] border border-amber-200 bg-[linear-gradient(135deg,#0b3d18,#17652c)] p-6 text-white shadow-lg">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
-                Dia dos Pais
-              </p>
-              <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-3xl font-black">Sorteio de códigos</h2>
-                  <p className="mt-2 text-white/75">
-                    Somente compras com pagamento confirmado entram na lista. Um código já sorteado não é repetido.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => void drawRaffle()}
-                  disabled={drawingRaffle || loadingRaffle || raffleEntries.length === 0}
-                  className="rounded-full bg-amber-300 px-7 font-black text-[#0b3d18] hover:bg-amber-200"
-                >
-                  {drawingRaffle ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Trophy className="mr-2 h-4 w-4" />}
-                  Sortear agora
-                </Button>
-              </div>
-            </div>
-
-            {raffleDraws[0] ? (
-              <Card className="border-amber-300 bg-amber-50 text-center">
-                <CardContent className="p-8">
-                  <p className="text-sm font-black uppercase tracking-widest text-amber-700">Código sorteado</p>
-                  <p className="mt-3 text-4xl font-black tracking-wider text-[#0b3d18]">{raffleDraws[0].entry.code}</p>
-                  <p className="mt-2 text-lg font-bold text-slate-900">{raffleDraws[0].entry.customerName}</p>
-                  <p className="text-slate-600">{raffleDraws[0].entry.customerPhone || "Telefone não informado"}</p>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-              <Card>
-                <CardHeader><CardTitle>Participantes ({raffleEntries.length})</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {loadingRaffle ? <p className="text-sm text-slate-500">Carregando...</p> : raffleEntries.map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between gap-4 rounded-xl border p-3">
-                      <div><p className="font-bold">{entry.customerName}</p><p className="text-xs text-slate-500">{entry.customerPhone}</p></div>
-                      <Badge className="bg-[#0b3d18] font-mono text-white">{entry.code}</Badge>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>Histórico</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {raffleDraws.map((draw) => (
-                    <div key={draw.id} className="rounded-xl border p-3">
-                      <p className="font-mono font-black text-[#0b3d18]">{draw.entry.code}</p>
-                      <p className="text-sm font-semibold">{draw.entry.customerName}</p>
-                      <p className="text-xs text-slate-500">{new Date(draw.drawnAt).toLocaleString("pt-BR")}</p>
-                    </div>
-                  ))}
-                  {!raffleDraws.length ? <p className="text-sm text-slate-500">Nenhum sorteio realizado.</p> : null}
-                </CardContent>
-              </Card>
-            </div>
           </section>
         ) : activeTab === "configuracoes" ? (
           <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">

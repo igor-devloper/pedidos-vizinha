@@ -236,10 +236,7 @@ type PedidoSummaryShape = Pick<
   | "produtoNomeSnapshot"
   | "status"
   | "createdAt"
-> & {
-  itens: Pick<PedidoItem, "tipo" | "quantidade">[];
-  raffleEntry?: { code: string } | null;
-};
+> & { itens: Pick<PedidoItem, "tipo" | "quantidade">[] };
 
 function calculatePedidoPaymentSummary(pedido: PedidoSummaryShape) {
   const subtotal = Number(pedido.subtotal);
@@ -302,13 +299,6 @@ function buildWhatsappMessageForClientLegacy(pedido: PedidoSummaryShape) {
       payment.remaining > 0 ? `   Restante: ${formatCurrency(payment.remaining)}` : "   Restante: R$ 0,00",
     ],
     pedido.observacoes ? `📝 *Observações:* ${pedido.observacoes}` : null,
-    pedido.raffleEntry
-      ? [
-          "🎁 *Sorteio de Dia dos Pais*",
-          "Seu pagamento confirmou sua participação!",
-          `Seu código da sorte: *${pedido.raffleEntry.code}*`,
-        ]
-      : null,
     [
       WHATSAPP_SECTION_DIVIDER,
       `⏰ Tolerância combinada: ${BUSINESS_RULES.toleranceMinutes} minutos.`,
@@ -564,9 +554,6 @@ export function buildPrintableReceipt(pedido: PedidoSummaryShape) {
     ...receiptField("Subtotal", formatCurrency(Number(pedido.subtotal))),
     ...receiptField("Taxa serviço", formatCurrency(Number(pedido.taxaValor))),
     `TOTAL: ${formatCurrency(Number(pedido.totalCobrado))}`,
-    pedido.raffleEntry ? separator : null,
-    pedido.raffleEntry ? "#SORTEIO DIA DOS PAIS" : null,
-    pedido.raffleEntry ? `CODIGO: ${pedido.raffleEntry.code}` : null,
     pedido.observacoes ? separator : null,
     pedido.observacoes ? "#OBS" : null,
     ...(pedido.observacoes ? wrapReceiptText(pedido.observacoes) : []),

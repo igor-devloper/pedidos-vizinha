@@ -11,11 +11,6 @@ import { sendCartOrderToPrintService } from "@/lib/print-service";
 import { BUSINESS_INFO } from "@/lib/site-config";
 import { sendWhatsappText } from "@/lib/whatsapp";
 import {
-  buildRaffleWhatsappMessage,
-  createRaffleCode,
-  RAFFLE_START_AT,
-} from "@/lib/raffle";
-import {
   formatWhatsAppList,
   formatWhatsAppMessage,
   WHATSAPP_SECTION_DIVIDER,
@@ -23,7 +18,6 @@ import {
 
 type CartOrderWithItems = Order & {
   items: OrderItem[];
-  raffleEntry?: { code: string } | null;
   code?: string | null;
   scheduledAt?: Date | string | null;
 };
@@ -128,9 +122,6 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
     `Total pedido: ${formatCurrency(Number(order.totalAmount))}`,
     `Taxa: ${formatCurrency(Number(order.feeAmount))}`,
     `COBRADO: ${formatCurrency(Number(order.chargedAmount || order.totalAmount))}`,
-    order.raffleEntry ? "-".repeat(30) : null,
-    order.raffleEntry ? "#SORTEIO DIA DOS PAIS" : null,
-    order.raffleEntry ? `CODIGO: ${order.raffleEntry.code}` : null,
   ];
 
   return lines.filter(Boolean).join("\n");
@@ -329,30 +320,11 @@ async function ensureCartOrderBalanceCharge(order: CartOrderWithItems) {
 async function loadCartOrder(id: string) {
   return prisma.order.findUnique({
     where: { id },
-    include: { items: true, raffleEntry: true },
+    include: { items: true },
   });
-}
-
-async function ensureCartOrderRaffleEntry(order: CartOrderWithItems) {
-  if (order.raffleEntry) return order;
-
-  const raffleEntry = await prisma.raffleEntry.upsert({
-    where: { orderId: order.id },
-    update: {},
-    create: {
-      orderId: order.id,
-      code: createRaffleCode(),
-      customerName: order.customerName || "Cliente",
-      customerPhone: order.customerPhone,
-    },
-  });
-
-  return { ...order, raffleEntry };
 }
 
 async function notifyPaidCartOrder(order: CartOrderWithItems) {
-  let confirmationDelivered = Boolean(order.notificadoClienteAt);
-
   if (!order.notificadoClienteAt && order.customerPhone) {
     const claimedAt = new Date();
     const claim = await prisma.order.updateMany({
@@ -371,50 +343,12 @@ async function notifyPaidCartOrder(order: CartOrderWithItems) {
             "Envio para cliente nÃ£o confirmado pelo serviÃ§o de WhatsApp.",
           );
         }
-        confirmationDelivered = true;
       } catch (error) {
         await prisma.order.updateMany({
           where: { id: order.id, notificadoClienteAt: claimedAt },
           data: { notificadoClienteAt: null },
         });
         console.error("Falha ao notificar cliente do carrinho via WhatsApp", {
-          orderId: order.id,
-          error,
-        });
-      }
-    }
-  }
-
-  if (
-    confirmationDelivered &&
-    !order.raffleNotificadoAt &&
-    order.customerPhone &&
-    order.raffleEntry
-  ) {
-    const claimedAt = new Date();
-    const claim = await prisma.order.updateMany({
-      where: { id: order.id, raffleNotificadoAt: null },
-      data: { raffleNotificadoAt: claimedAt },
-    });
-
-    if (claim.count > 0) {
-      try {
-        const result = await sendWhatsappText(
-          order.customerPhone,
-          buildRaffleWhatsappMessage({
-            customerName: order.customerName,
-            code: order.raffleEntry.code,
-          }),
-        );
-        if (!result.ok) {
-          throw new Error("Mensagem do sorteio não confirmada pelo WhatsApp.");
-        }
-      } catch (error) {
-        await prisma.order.updateMany({
-          where: { id: order.id, raffleNotificadoAt: claimedAt },
-          data: { raffleNotificadoAt: null },
-        });
-        console.error("Falha ao enviar código do sorteio ao cliente", {
           orderId: order.id,
           error,
         });
@@ -500,7 +434,7 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
 
     const printed = await prisma.order.findUnique({
       where: { id: order.id },
-      include: { items: true, raffleEntry: true },
+      include: { items: true },
     });
 
     return printed || { ...order, impressoAutomaticamenteAt: claimedAt };
@@ -519,25 +453,22 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
 }
 
 export async function acceptPaidCartOrder(order: CartOrderWithItems) {
-  const orderWithRaffle = await ensureCartOrderRaffleEntry(order);
-  await notifyPaidCartOrder(orderWithRaffle);
-  return printAcceptedCartOrder(orderWithRaffle);
+  await notifyPaidCartOrder(order);
+  return printAcceptedCartOrder(order);
 }
 
 export async function processPaidCartOrdersSideEffects() {
   const orders = await prisma.order.findMany({
     where: {
       status: "PAID",
-      createdAt: { gte: RAFFLE_START_AT },
       OR: [
         { impressoAutomaticamenteAt: null },
         { notificadoClienteAt: null },
         { notificadoVizinhaAt: null },
-        { raffleNotificadoAt: null },
         { AND: [{ fulfillmentType: "DELIVERY" }, { notifiedCourierAt: null }] },
       ],
     },
-    include: { items: true, raffleEntry: true },
+    include: { items: true },
     take: 20,
   });
 
@@ -568,7 +499,7 @@ export async function printCartOrderReceipt(id: string) {
   return prisma.order.update({
     where: { id: order.id },
     data: { impressoAutomaticamenteAt: order.impressoAutomaticamenteAt || new Date() },
-    include: { items: true, raffleEntry: true },
+    include: { items: true },
   });
 }
 
@@ -616,7 +547,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
         ? null
         : current.saldoCobrancaEnviadaAt,
     },
-    include: { items: true, raffleEntry: true },
+    include: { items: true },
   });
 
   if (shouldPrepareReady && order.customerPhone) {
@@ -733,7 +664,7 @@ export async function markCartOrderPaidManually({
         : order.provisionAmount,
       provisionTransferredAt: order.status !== "PAID" ? null : order.provisionTransferredAt,
     },
-    include: { items: true, raffleEntry: true },
+    include: { items: true },
   });
 
   if (order.cartId) {

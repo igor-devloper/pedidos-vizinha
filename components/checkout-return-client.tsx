@@ -16,7 +16,6 @@ type PedidoResponse = {
   totalCobrado: string | number;
   status: "PENDENTE_PAGAMENTO" | "PAGO" | "EM_PREPARO" | "PRONTO" | "ENTREGUE" | "CANCELADO";
   produtoNomeSnapshot: string;
-  raffleEntry?: { code: string } | null;
 };
 
 export function CheckoutReturnClient({
@@ -147,19 +146,6 @@ export function CheckoutReturnClient({
                   <p>Total cobrado: {formatCurrency(Number(pedido.totalCobrado))}</p>
                   <p>Status atual: {getPedidoStatusMeta(pedido.status as "PRONTO").label}</p>
                 </div>
-                {pedido.raffleEntry ? (
-                  <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-center">
-                    <p className="font-black text-amber-900">🎁 Sorteio de Dia dos Pais</p>
-                    <p className="mt-1 text-amber-800">
-                      {isConfirmed
-                        ? "Seu pagamento confirmou sua participação!"
-                        : "A participação será validada assim que o pagamento for confirmado."}
-                    </p>
-                    <p className="mt-2 text-2xl font-black tracking-wider text-[#0b3d18]">
-                      {pedido.raffleEntry.code}
-                    </p>
-                  </div>
-                ) : null}
               </div>
             ) : (
               <div className="rounded-[1.6rem] bg-[#fff7fb] p-5 text-sm text-slate-600">

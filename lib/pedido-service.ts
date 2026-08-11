@@ -18,15 +18,9 @@ import {
 import { BUSINESS_INFO, BUSINESS_RULES } from "@/lib/site-config";
 import { sendPedidoToPrintService } from "@/lib/print-service";
 import { sendWhatsappImage, sendWhatsappText } from "@/lib/whatsapp";
-import {
-  buildRaffleWhatsappMessage,
-  createRaffleCode,
-  RAFFLE_START_AT,
-} from "@/lib/raffle";
 
 type PedidoWithItens = Pedido & {
   itens: PedidoItem[];
-  raffleEntry?: { code: string } | null;
 };
 
 type PedidoWithReadyFields = PedidoWithItens & {
@@ -51,7 +45,7 @@ export class PedidoPaymentReferenceNotFoundError extends Error {
 async function loadPedidoById(id: string) {
   return prisma.pedido.findUnique({
     where: { id },
-    include: { itens: true, raffleEntry: true },
+    include: { itens: true },
   });
 }
 
@@ -63,7 +57,7 @@ async function loadPedidoByReference(externalReference: string) {
         { saldoExternalReference: externalReference } as never,
       ],
     },
-    include: { itens: true, raffleEntry: true },
+    include: { itens: true },
   });
 }
 
@@ -75,7 +69,6 @@ export async function getPedidoForView(idOrCode: string) {
     include: {
       itens: true,
       produto: true,
-      raffleEntry: true,
     },
   });
 }
@@ -216,8 +209,6 @@ export async function processReadyPedidoToleranceReminders(now = new Date()) {
 }
 
 async function notifyPaidPedido(pedido: PedidoWithItens) {
-  pedido = await ensurePedidoRaffleEntry(pedido);
-  let confirmationDelivered = Boolean(pedido.notificadoClienteAt);
   const clientMessage = buildWhatsappMessageForClient(pedido);
   const ownerMessage = buildWhatsappMessageForOwner(pedido);
   if (!pedido.notificadoClienteAt) {
@@ -238,7 +229,6 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
         if (!result.ok) {
           throw new Error("Envio para cliente nÃ£o confirmado pelo serviÃ§o de WhatsApp.");
         }
-        confirmationDelivered = true;
       } catch (error) {
         await prisma.pedido.updateMany({
           where: {
@@ -251,43 +241,6 @@ async function notifyPaidPedido(pedido: PedidoWithItens) {
         });
 
         console.error("Falha ao notificar cliente via WhatsApp", {
-          pedidoId: pedido.id,
-          codigo: pedido.codigo,
-          error,
-        });
-      }
-    }
-  }
-
-  if (
-    confirmationDelivered &&
-    !pedido.raffleNotificadoAt &&
-    pedido.raffleEntry
-  ) {
-    const claimedAt = new Date();
-    const claim = await prisma.pedido.updateMany({
-      where: { id: pedido.id, raffleNotificadoAt: null },
-      data: { raffleNotificadoAt: claimedAt },
-    });
-
-    if (claim.count > 0) {
-      try {
-        const result = await sendWhatsappText(
-          pedido.clienteTelefone,
-          buildRaffleWhatsappMessage({
-            customerName: pedido.clienteNome,
-            code: pedido.raffleEntry.code,
-          }),
-        );
-        if (!result.ok) {
-          throw new Error("Mensagem do sorteio não confirmada pelo WhatsApp.");
-        }
-      } catch (error) {
-        await prisma.pedido.updateMany({
-          where: { id: pedido.id, raffleNotificadoAt: claimedAt },
-          data: { raffleNotificadoAt: null },
-        });
-        console.error("Falha ao enviar código do sorteio ao cliente", {
           pedidoId: pedido.id,
           codigo: pedido.codigo,
           error,
@@ -355,7 +308,7 @@ async function printAcceptedPedido(pedido: PedidoWithItens) {
 
     const printed = await prisma.pedido.findUnique({
       where: { id: pedido.id },
-      include: { itens: true, raffleEntry: true },
+      include: { itens: true },
     });
 
     return printed || { ...pedido, impressoAutomaticamenteAt: claimedAt };
@@ -374,43 +327,23 @@ async function printAcceptedPedido(pedido: PedidoWithItens) {
   }
 }
 
-async function ensurePedidoRaffleEntry(pedido: PedidoWithItens) {
-  if (pedido.raffleEntry) return pedido;
-
-  const raffleEntry = await prisma.raffleEntry.upsert({
-    where: { pedidoId: pedido.id },
-    update: {},
-    create: {
-      pedidoId: pedido.id,
-      code: createRaffleCode(),
-      customerName: pedido.clienteNome,
-      customerPhone: pedido.clienteTelefone,
-    },
-  });
-
-  return { ...pedido, raffleEntry };
-}
-
 export async function processPaidPedidosSideEffects() {
   const pedidos = await prisma.pedido.findMany({
     where: {
       status: PedidoStatus.PAGO,
-      createdAt: { gte: RAFFLE_START_AT },
       OR: [
         { impressoAutomaticamenteAt: null },
         { notificadoClienteAt: null },
         { notificadoVizinhaAt: null },
-        { raffleNotificadoAt: null },
       ],
     },
-    include: { itens: true, raffleEntry: true },
+    include: { itens: true },
     take: 20,
   });
 
   for (const pedido of pedidos) {
-    const pedidoWithRaffle = await ensurePedidoRaffleEntry(pedido as PedidoWithItens);
-    await notifyPaidPedido(pedidoWithRaffle);
-    await printAcceptedPedido(pedidoWithRaffle);
+    await notifyPaidPedido(pedido as PedidoWithItens);
+    await printAcceptedPedido(pedido as PedidoWithItens);
   }
 }
 
@@ -452,7 +385,7 @@ export async function markPedidoPaidManually({
         : pedidoAtual.provisionAmount,
       provisionTransferredAt: pedidoAtual.status !== PedidoStatus.PAGO ? null : pedidoAtual.provisionTransferredAt,
     } as never,
-    include: { itens: true, raffleEntry: true },
+    include: { itens: true },
   } as never);
 
   await notifyPaidPedido(pedido as PedidoWithItens);
@@ -530,7 +463,7 @@ export async function handleMercadoPagoPaymentUpdate({
         : pedido.provisionAmount,
       provisionTransferredAt: shouldProvision ? null : pedido.provisionTransferredAt,
     } as never,
-    include: { itens: true, raffleEntry: true },
+    include: { itens: true },
   } as never);
 
   if (!isBalancePayment && status === "approved") {
@@ -658,7 +591,7 @@ export async function markPedidoPrinted(id: string) {
     data: {
       impressoAutomaticamenteAt: new Date(),
     },
-    include: { itens: true, raffleEntry: true },
+    include: { itens: true },
   });
 }
 
@@ -676,7 +609,7 @@ export async function printPedidoReceipt(id: string) {
     data: {
       impressoAutomaticamenteAt: pedido.impressoAutomaticamenteAt || new Date(),
     },
-    include: { itens: true, raffleEntry: true },
+    include: { itens: true },
   });
 }
 

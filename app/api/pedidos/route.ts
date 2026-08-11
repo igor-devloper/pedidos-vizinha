@@ -18,7 +18,6 @@ import {
   validateDeliveryDate,
   validatePedidoAgainstProduto,
 } from "@/lib/pedidos";
-import { createRaffleCode } from "@/lib/raffle";
 
 export async function POST(req: Request) {
   try {
@@ -153,17 +152,9 @@ export async function POST(req: Request) {
               quantidade: item.quantidade,
             })),
           },
-          raffleEntry: {
-            create: {
-              code: createRaffleCode(),
-              customerName: payload.clienteNome.trim(),
-              customerPhone: payload.clienteTelefone.trim(),
-            },
-          },
         },
         include: {
           itens: true,
-          raffleEntry: true,
         },
       });
     } catch (error) {
@@ -205,7 +196,6 @@ export async function POST(req: Request) {
       codigo: pedido.codigo,
       preferenceId: preference.id,
       redirectUrl: preference.init_point,
-      raffleCode: pedido.raffleEntry?.code,
     });
   } catch (error) {
     console.error("POST /api/pedidos error", error);

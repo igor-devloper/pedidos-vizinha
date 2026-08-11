@@ -1004,11 +1004,6 @@ export function PedidoCheckout({
                   <span>Total da etapa</span>
                   <span>{formatCurrency(paymentPreview.totalToCharge)}</span>
                 </div>
-                <div className="mt-4 rounded-xl border border-[#fff2a8]/60 bg-white/10 p-3 text-[#fffbe2]">
-                  🎁 Ao finalizar a compra, você receberá seu código para participar do
-                  Sorteio de Dia dos Pais. A participação será validada após a
-                  confirmação do pagamento.
-                </div>
               </div>
             </div>
 

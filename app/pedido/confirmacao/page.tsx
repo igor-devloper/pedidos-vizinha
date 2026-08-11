@@ -25,7 +25,7 @@ export default async function PedidoConfirmacaoPage({
   const order = ref
     ? await prisma.order.findUnique({
         where: { externalReference: ref },
-        include: { items: true, raffleEntry: true },
+        include: { items: true },
       })
     : null;
   const isPaid = order?.status === "PAID";
@@ -95,19 +95,6 @@ export default async function PedidoConfirmacaoPage({
                       <span>{formatCurrency(Number(order.chargedAmount))}</span>
                     </div>
                   </div>
-                  {order.raffleEntry ? (
-                    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-center">
-                      <p className="font-black text-amber-900">🎁 Sorteio de Dia dos Pais</p>
-                      <p className="mt-1 text-amber-800">
-                        {isPaid
-                          ? "Seu pagamento confirmou sua participação!"
-                          : "Este é o seu código. A participação será validada após a confirmação do pagamento."}
-                      </p>
-                      <p className="mt-2 text-2xl font-black tracking-wider text-[#0b3d18]">
-                        {order.raffleEntry.code}
-                      </p>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             ) : (
