@@ -457,6 +457,7 @@ export function ManhiaAdminDashboard({
   const [transferringProvision, setTransferringProvision] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [editingProductTypeId, setEditingProductTypeId] = useState<
     string | null
   >(null);
@@ -1102,6 +1103,7 @@ export function ManhiaAdminDashboard({
 
       toast.success(editingId ? "Produto atualizado." : "Produto criado.");
       resetForm();
+      setProductDialogOpen(false);
       router.refresh();
     } catch (error) {
       toast.error(
@@ -1140,6 +1142,7 @@ export function ManhiaAdminDashboard({
       descontoPercentual: String(produto.descontoPercentual || ""),
       ativo: produto.ativo,
     });
+    setProductDialogOpen(true);
   };
 
   const handleProductTypeSubmit = async (
@@ -1249,17 +1252,27 @@ export function ManhiaAdminDashboard({
 
       const data = (await response.json().catch(() => null)) as {
         error?: string;
+        mode?: "deleted" | "deactivated";
+        produto?: ProdutoAdmin;
       } | null;
 
       if (!response.ok) {
         throw new Error(data?.error || "Não foi possível excluir o produto.");
       }
 
-      setProdutos((current) => current.filter((item) => item.id !== produtoId));
+      if (data?.mode === "deactivated") {
+        setProdutos((current) => current.map((item) => item.id === produtoId ? { ...item, ativo: false } : item));
+      } else {
+        setProdutos((current) => current.filter((item) => item.id !== produtoId));
+      }
       if (editingId === produtoId) {
         resetForm();
       }
-      toast.success("Produto removido.");
+      if (data?.mode === "deactivated") {
+        toast.info("Produto tem pedidos vinculados e foi desativado em vez de excluído.");
+      } else {
+        toast.success("Produto removido.");
+      }
       router.refresh();
     } catch (error) {
       toast.error(
@@ -3599,8 +3612,15 @@ export function ManhiaAdminDashboard({
             </div>
           </section>
         ) : activeTab === "produtos" ? (
-          <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
-            <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
+          <section className="space-y-5">
+            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-xs font-bold uppercase tracking-wide text-[#618038]">Cardápio</p><h2 className="mt-1 text-2xl font-bold text-[#0b3d18]">Gerenciar produtos</h2></div>
+              <Button type="button" onClick={() => { resetForm(); setProductDialogOpen(true); }} className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"><Plus className="mr-2 h-4 w-4" />Novo produto</Button>
+            </div>
+            <Dialog open={productDialogOpen} onOpenChange={(open) => { setProductDialogOpen(open); if (!open && !saving) resetForm(); }}>
+              <DialogContent className="max-h-[90vh] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl">
+                <DialogHeader><DialogTitle className="text-[#0b3d18]">{editingId ? "Editar produto" : "Novo produto"}</DialogTitle><DialogDescription>Preencha os dados que serão exibidos no cardápio.</DialogDescription></DialogHeader>
+            <Card className="border-0 bg-white shadow-none">
               <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
                 <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
                   Editor
@@ -3997,7 +4017,7 @@ export function ManhiaAdminDashboard({
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={resetForm}
+                        onClick={() => { resetForm(); setProductDialogOpen(false); }}
                         className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
                       >
                         Cancelar edição
@@ -4007,6 +4027,8 @@ export function ManhiaAdminDashboard({
                 </form>
               </CardContent>
             </Card>
+              </DialogContent>
+            </Dialog>
 
             <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
               <div className="flex flex-col gap-2 border-b border-[#e4edc9] bg-[#0b3d18] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
@@ -4112,6 +4134,9 @@ export function ManhiaAdminDashboard({
                             <Pencil className="mr-2 h-4 w-4" />
                             Editar
                           </Button>
+                          {!produto.ativo ? (
+                            <Button type="button" variant="outline" size="sm" onClick={() => { handleEdit(produto); setForm((current) => ({ ...current, ativo: true })); }} className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50">Reativar</Button>
+                          ) : null}
                           <Button
                             asChild
                             type="button"

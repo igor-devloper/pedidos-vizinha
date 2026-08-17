@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 import { isValidManhiaSessionToken, MANHIA_COOKIE_NAME } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
@@ -76,8 +77,17 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, mode: "deleted" });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      try {
+        const { id } = await context.params;
+        const produto = await prisma.produto.update({ where: { id }, data: { ativo: false } });
+        return NextResponse.json({ ok: true, mode: "deactivated", produto });
+      } catch (fallbackError) {
+        console.error("DELETE /api/manhia/produtos/[id] deactivate error", fallbackError);
+      }
+    }
     console.error("DELETE /api/manhia/produtos/[id] error", error);
     return NextResponse.json({ error: "Erro ao excluir produto." }, { status: 500 });
   }
