@@ -31,6 +31,7 @@ export type ProdutoPayloadInput = {
   emPromocao?: boolean;
   descontoPercentual?: number | string;
   ativo?: boolean;
+  antecedenciaMinimaHoras?: number | string | null;
 };
 
 function normalizeCategoria(value: string | undefined): ProductCategory {
@@ -77,6 +78,11 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
   const emPromocao = body.emPromocao ?? false;
   const descontoPercentual = normalizeDiscountPercent(body.descontoPercentual);
   const ativo = body.ativo ?? true;
+  const antecedenciaMinimaHoras = body.antecedenciaMinimaHoras === null || body.antecedenciaMinimaHoras === "" || body.antecedenciaMinimaHoras === undefined ? null : Number(body.antecedenciaMinimaHoras);
+
+  if (antecedenciaMinimaHoras !== null && (!Number.isInteger(antecedenciaMinimaHoras) || antecedenciaMinimaHoras < 0)) {
+    return { error: "Informe uma antecedência mínima válida." };
+  }
 
   if (!nome) {
     return { error: "Informe o nome do produto." };
@@ -126,6 +132,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
         emPromocao,
         descontoPercentual,
         ativo,
+        antecedenciaMinimaHoras,
       },
     };
   }
@@ -157,6 +164,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
       emPromocao,
       descontoPercentual,
       ativo,
+      antecedenciaMinimaHoras,
     },
   };
 }

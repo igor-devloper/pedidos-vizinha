@@ -183,7 +183,11 @@ export async function POST(req: Request) {
       );
     }
 
-    validateDeliveryDate(scheduledAtForRules, new Date(), settings.minimumLeadHours, {
+    const requiredLeadHours = Math.max(
+      settings.minimumLeadHours,
+      ...cart.items.map((item) => item.product.antecedenciaMinimaHoras ?? settings.minimumLeadHours),
+    );
+    validateDeliveryDate(scheduledAtForRules, new Date(), requiredLeadHours, {
       operationSchedule: settings.operationSchedule,
     });
 

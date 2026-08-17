@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       );
     }
 
-    validateDeliveryDate(entrega, new Date(), settings.minimumLeadHours, {
+    validateDeliveryDate(entrega, new Date(), produto.antecedenciaMinimaHoras ?? settings.minimumLeadHours, {
       operationSchedule: settings.operationSchedule,
     });
 

@@ -47,6 +47,7 @@ model Produto {
   emPromocao              Boolean          @default(false)
   descontoPercentual      Decimal          @default(0) @db.Decimal(5, 2)
   ativo                   Boolean          @default(true)
+  antecedenciaMinimaHoras Int?
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
 

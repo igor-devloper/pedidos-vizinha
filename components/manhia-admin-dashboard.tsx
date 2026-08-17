@@ -79,6 +79,7 @@ export type ProdutoAdmin = {
   emPromocao: boolean;
   descontoPercentual: string | number;
   ativo: boolean;
+  antecedenciaMinimaHoras: number | null;
   createdAt: string;
 };
 
@@ -201,6 +202,7 @@ type ProdutoFormState = {
   emPromocao: boolean;
   descontoPercentual: string;
   ativo: boolean;
+  antecedenciaMinimaHoras: string;
 };
 
 type CupomFormState = {
@@ -228,6 +230,7 @@ const EMPTY_FORM: ProdutoFormState = {
   emPromocao: false,
   descontoPercentual: "",
   ativo: true,
+  antecedenciaMinimaHoras: "",
 };
 
 type ProductTypeFormState = {
@@ -1077,6 +1080,7 @@ export function ManhiaAdminDashboard({
             emPromocao: form.emPromocao,
             descontoPercentual: form.emPromocao ? form.descontoPercentual : 0,
             ativo: form.ativo,
+            antecedenciaMinimaHoras: form.antecedenciaMinimaHoras === "" ? null : form.antecedenciaMinimaHoras,
           }),
         },
       );
@@ -1141,6 +1145,7 @@ export function ManhiaAdminDashboard({
       emPromocao: produto.emPromocao,
       descontoPercentual: String(produto.descontoPercentual || ""),
       ativo: produto.ativo,
+      antecedenciaMinimaHoras: produto.antecedenciaMinimaHoras === null ? "" : String(produto.antecedenciaMinimaHoras),
     });
     setProductDialogOpen(true);
   };
@@ -3876,6 +3881,12 @@ export function ManhiaAdminDashboard({
                     ) : null}
 
                     <div className="space-y-2 sm:col-span-2">
+                      <label className="text-sm font-medium text-slate-700">Antecedência mínima (horas)</label>
+                      <Input type="number" min="0" step="1" value={form.antecedenciaMinimaHoras} onChange={(event) => setForm((current) => ({ ...current, antecedenciaMinimaHoras: event.target.value }))} placeholder={`Padrão da loja: ${settings.minimumLeadHours}h`} />
+                      <p className="text-xs text-slate-500">Deixe vazio para usar o padrão global da loja.</p>
+                    </div>
+
+                    <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-medium text-slate-700">
                         Foto do produto
                       </label>
@@ -4099,6 +4110,7 @@ export function ManhiaAdminDashboard({
                               ? "50% ou 100%"
                               : "100%"}
                           </span>
+                          <span>Antecedência: {produto.antecedenciaMinimaHoras ?? settings.minimumLeadHours}h</span>
                         </div>
                       </div>
 

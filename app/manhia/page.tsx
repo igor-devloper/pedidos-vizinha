@@ -54,6 +54,7 @@ async function getProdutos(): Promise<ProdutoAdmin[]> {
       emPromocao: Boolean(produto.emPromocao),
       descontoPercentual: Number(produto.descontoPercentual),
       ativo: produto.ativo,
+      antecedenciaMinimaHoras: produto.antecedenciaMinimaHoras,
       createdAt: produto.createdAt.toISOString(),
     }));
   } catch (error) {
