@@ -3598,7 +3598,7 @@ export function ManhiaAdminDashboard({
               </aside>
             </div>
           </section>
-        ) : (
+        ) : activeTab === "produtos" ? (
           <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
             <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
               <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
@@ -4142,7 +4142,7 @@ export function ManhiaAdminDashboard({
               )}
             </section>
           </section>
-        )}
+        ) : null}
       </div>
 
       <Dialog
