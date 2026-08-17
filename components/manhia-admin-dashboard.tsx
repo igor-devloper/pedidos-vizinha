@@ -8,6 +8,7 @@ import {
   CheckCheck,
   ChefHat,
   Clock,
+  ChartNoAxesCombined,
   Copy,
   FerrisWheel,
   Heart,
@@ -430,7 +431,13 @@ export function ManhiaAdminDashboard({
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
-    "pedidos" | "salgados" | "produtos" | "tipos" | "cupons" | "configuracoes"
+    | "analise"
+    | "pedidos"
+    | "salgados"
+    | "produtos"
+    | "tipos"
+    | "cupons"
+    | "configuracoes"
   >("pedidos");
   const [produtos, setProdutos] = useState(initialProdutos);
   const [pedidos, setPedidos] = useState(initialPedidos);
@@ -1664,7 +1671,7 @@ export function ManhiaAdminDashboard({
     <main className="min-h-screen bg-[linear-gradient(180deg,#f7fde7,#fffaf3_42%,#eef8db)] px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
-          <div className="grid gap-0 lg:grid-cols-[280px_1fr_auto]">
+          <div className="grid gap-0 lg:grid-cols-[280px_1fr]">
             <div className="bg-[#0b3d18] p-5 text-white">
               <Badge className="border-[#f4d330] bg-[#f4d330] text-[#0b3d18]">
                 Painel da vizinha
@@ -1677,49 +1684,7 @@ export function ManhiaAdminDashboard({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 border-y border-[#e4edc9] bg-[#fbfff0] sm:grid-cols-3 lg:border-y-0 xl:grid-cols-6">
-              {[
-                {
-                  label: "Pedidos",
-                  value: pedidos.length + simpleOrders.length,
-                },
-                {
-                  label: "Valor vendido",
-                  value: formatCurrency(totalBaseVendido),
-                },
-                {
-                  label: "Recebido",
-                  value: formatCurrency(totalRecebido),
-                },
-                { label: "Provisão 10%", value: formatCurrency(totalProvisionPending) },
-                {
-                  label: "Loja",
-                  value: settings.isOpen ? "Aberta" : "Fechada",
-                },
-                {
-                  label: "Tema",
-                  value:
-                    settings.siteTheme === "PADRAO"
-                      ? "Padrão"
-                      : settings.siteTheme === "NAMORADOS"
-                      ? "Namorados"
-                      : settings.siteTheme === "SAO_JOAO"
-                        ? "São João"
-                        : "Copa",
-                },
-              ].map((item) => (
-                <div key={item.label} className="border-r border-[#e4edc9] p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#618038]">
-                    {item.label}
-                  </p>
-                  <p className="mt-2 text-lg font-bold text-[#0b3d18]">
-                    {item.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between gap-3 p-4 lg:flex-col lg:items-stretch lg:justify-center">
+            <div className="flex flex-wrap items-center justify-end gap-3 p-4">
               <Button
                 type="button"
                 variant="outline"
@@ -1758,6 +1723,7 @@ export function ManhiaAdminDashboard({
 
           <nav className="grid grid-cols-3 border-t border-[#e4edc9] bg-white sm:grid-cols-7">
             {[
+              { id: "analise" as const, label: "Análise", icon: ChartNoAxesCombined },
               { id: "pedidos" as const, label: "Pedidos", icon: ShoppingBag },
               { id: "salgados" as const, label: "Salgados", icon: ChefHat },
               { id: "produtos" as const, label: "Produtos", icon: CheckCheck },
@@ -1793,7 +1759,33 @@ export function ManhiaAdminDashboard({
           </nav>
         </header>
 
-        {activeTab === "pedidos" ? (
+        {activeTab === "analise" ? (
+          <section className="space-y-4">
+            <div className="rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">Visão geral</p>
+              <h2 className="mt-2 text-3xl font-bold text-[#0b3d18]">Análise da operação</h2>
+              <p className="mt-2 text-sm text-[#48654f]">Indicadores consolidados dos pedidos e da loja.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { label: "Pedidos", value: pedidos.length + simpleOrders.length },
+                { label: "Valor vendido", value: formatCurrency(totalBaseVendido) },
+                { label: "Recebido", value: formatCurrency(totalRecebido) },
+                { label: "Provisão 10%", value: formatCurrency(totalProvisionPending) },
+                { label: "Loja", value: settings.isOpen ? "Aberta" : "Fechada" },
+                {
+                  label: "Tema",
+                  value: settings.siteTheme === "PADRAO" ? "Padrão" : settings.siteTheme === "NAMORADOS" ? "Namorados" : settings.siteTheme === "SAO_JOAO" ? "São João" : "Copa",
+                },
+              ].map((item) => (
+                <Card key={item.label} className="border-[#d6e7a2] bg-[#fbfff0] shadow-sm">
+                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wide text-[#618038]">{item.label}</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-bold text-[#0b3d18]">{item.value}</p></CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        ) : activeTab === "pedidos" ? (
           <section className="space-y-4">
             <div className="flex flex-col gap-3 rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
               <div>
