@@ -481,6 +481,10 @@ export function ManhiaAdminDashboard({
   const [stoppingMessages, setStoppingMessages] = useState(false);
   const [messageCampaignId, setMessageCampaignId] = useState<string | null>(null);
   const [messageProgress, setMessageProgress] = useState({ processed: 0, sent: 0, failed: 0 });
+  const [analyticsStartDate, setAnalyticsStartDate] = useState("");
+  const [analyticsEndDate, setAnalyticsEndDate] = useState("");
+  const [analyticsStatus, setAnalyticsStatus] = useState("TODOS");
+  const [analyticsProduct, setAnalyticsProduct] = useState("TODOS");
 
   const openMessageDialog = async () => {
     setMessageDialogOpen(true);
@@ -616,6 +620,68 @@ export function ManhiaAdminDashboard({
       + simpleOrders.filter((item) => !item.provisionTransferredAt).reduce((sum, item) => sum + Number(item.provisionAmount || 0), 0),
     [pedidos, simpleOrders],
   );
+
+  const analytics = useMemo(() => {
+    const inPeriod = (date: string) => {
+      const timestamp = new Date(date).getTime();
+      const start = analyticsStartDate ? new Date(`${analyticsStartDate}T00:00:00`).getTime() : -Infinity;
+      const end = analyticsEndDate ? new Date(`${analyticsEndDate}T23:59:59.999`).getTime() : Infinity;
+      return timestamp >= start && timestamp <= end;
+    };
+    const statusMatches = (status: string) => {
+      if (analyticsStatus === "TODOS") return true;
+      const normalized: Record<string, string> = {
+        PENDING: "PENDENTE_PAGAMENTO", PAID: "PAGO", READY: "PRONTO",
+        DELIVERED: "ENTREGUE", CANCELLED: "CANCELADO",
+      };
+      return (normalized[status] || status) === analyticsStatus;
+    };
+    const filteredPedidos = pedidos.filter((pedido) =>
+      inPeriod(pedido.dataEntrega || pedido.createdAt) && statusMatches(pedido.status) &&
+      (analyticsProduct === "TODOS" || pedido.produtoNomeSnapshot === analyticsProduct));
+    const filteredOrders = simpleOrders.filter((order) =>
+      inPeriod(getSimpleOrderDate(order)) && statusMatches(order.status) &&
+      (analyticsProduct === "TODOS" || order.items.some((item) => item.productName === analyticsProduct)));
+    const statusCounts: Record<string, number> = {
+      PENDENTE_PAGAMENTO: 0, PAGO: 0, EM_PREPARO: 0, PRONTO: 0, ENTREGUE: 0, CANCELADO: 0,
+    };
+    filteredPedidos.forEach((pedido) => { statusCounts[pedido.status] += 1; });
+    filteredOrders.forEach((order) => {
+      const mapped = { PENDING: "PENDENTE_PAGAMENTO", PAID: "PAGO", READY: "PRONTO", DELIVERED: "ENTREGUE", CANCELLED: "CANCELADO" }[order.status];
+      statusCounts[mapped] += 1;
+    });
+    const productMap = new Map<string, { quantity: number; revenue: number }>();
+    filteredPedidos.filter((pedido) => pedido.status !== "CANCELADO").forEach((pedido) => {
+      const current = productMap.get(pedido.produtoNomeSnapshot) || { quantity: 0, revenue: 0 };
+      current.quantity += pedido.totalUnidades;
+      current.revenue += Number(pedido.subtotal || 0);
+      productMap.set(pedido.produtoNomeSnapshot, current);
+    });
+    filteredOrders.filter((order) => order.status !== "CANCELLED").forEach((order) => order.items.forEach((item) => {
+      const current = productMap.get(item.productName) || { quantity: 0, revenue: 0 };
+      current.quantity += item.quantity;
+      current.revenue += Number(item.subtotal || 0);
+      productMap.set(item.productName, current);
+    }));
+    const products = Array.from(productMap, ([name, values]) => ({ name, ...values }));
+    const validPedidos = filteredPedidos.filter((pedido) => pedido.status !== "CANCELADO");
+    const validOrders = filteredOrders.filter((order) => order.status !== "CANCELLED");
+    const sold = validPedidos.reduce((sum, pedido) => sum + Number(pedido.subtotal || 0), 0) + validOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const received = filteredPedidos.filter((pedido) => !["PENDENTE_PAGAMENTO", "CANCELADO"].includes(pedido.status)).reduce((sum, pedido) => sum + Number(pedido.totalCobrado || 0), 0) + filteredOrders.filter((order) => !["PENDING", "CANCELLED"].includes(order.status)).reduce((sum, order) => sum + Number(order.chargedAmount || order.totalAmount || 0), 0);
+    const paymentMap = new Map<string, { total: number; count: number }>();
+    validPedidos.forEach((pedido) => { const current = paymentMap.get(pedido.metodoPagamentoLabel) || { total: 0, count: 0 }; current.total += Number(pedido.subtotal || 0); current.count += 1; paymentMap.set(pedido.metodoPagamentoLabel, current); });
+    validOrders.forEach((order) => { const current = paymentMap.get(order.paymentMethodLabel) || { total: 0, count: 0 }; current.total += Number(order.totalAmount || 0); current.count += 1; paymentMap.set(order.paymentMethodLabel, current); });
+    const total = filteredPedidos.length + filteredOrders.length;
+    return {
+      total, sold, received, averageTicket: validPedidos.length + validOrders.length ? sold / (validPedidos.length + validOrders.length) : 0,
+      provision: filteredPedidos.filter((item) => !item.provisionTransferredAt).reduce((sum, item) => sum + Number(item.provisionAmount || 0), 0) + filteredOrders.filter((item) => !item.provisionTransferredAt).reduce((sum, item) => sum + Number(item.provisionAmount || 0), 0),
+      cancellationRate: total ? (statusCounts.CANCELADO / total) * 100 : 0,
+      statusCounts,
+      topQuantity: [...products].sort((a, b) => b.quantity - a.quantity).slice(0, 5),
+      topRevenue: [...products].sort((a, b) => b.revenue - a.revenue).slice(0, 5),
+      paymentAverages: Array.from(paymentMap, ([label, value]) => ({ label, average: value.total / value.count })),
+    };
+  }, [analyticsEndDate, analyticsProduct, analyticsStartDate, analyticsStatus, pedidos, simpleOrders]);
 
   const handleProvisionTransferred = async () => {
     try {
@@ -1765,24 +1831,33 @@ export function ManhiaAdminDashboard({
               <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">Visão geral</p>
               <h2 className="mt-2 text-3xl font-bold text-[#0b3d18]">Análise da operação</h2>
               <p className="mt-2 text-sm text-[#48654f]">Indicadores consolidados dos pedidos e da loja.</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div><label className="text-xs font-bold uppercase text-[#618038]">Data inicial</label><Input type="date" value={analyticsStartDate} onChange={(event) => setAnalyticsStartDate(event.target.value)} className="mt-1 border-[#d6e7a2] bg-white" /></div>
+                <div><label className="text-xs font-bold uppercase text-[#618038]">Data final</label><Input type="date" value={analyticsEndDate} onChange={(event) => setAnalyticsEndDate(event.target.value)} className="mt-1 border-[#d6e7a2] bg-white" /></div>
+                <div><label className="text-xs font-bold uppercase text-[#618038]">Status</label><Select value={analyticsStatus} onValueChange={setAnalyticsStatus}><SelectTrigger className="mt-1 w-full border-[#d6e7a2] bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="TODOS">Todos</SelectItem>{PEDIDO_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{getPedidoStatusMeta(status).label}</SelectItem>)}</SelectContent></Select></div>
+                <div><label className="text-xs font-bold uppercase text-[#618038]">Produto</label><Select value={analyticsProduct} onValueChange={setAnalyticsProduct}><SelectTrigger className="mt-1 w-full border-[#d6e7a2] bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="TODOS">Todos</SelectItem>{Array.from(new Set(produtos.map((produto) => produto.nome))).map((nome) => <SelectItem key={nome} value={nome}>{nome}</SelectItem>)}</SelectContent></Select></div>
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                { label: "Pedidos", value: pedidos.length + simpleOrders.length },
-                { label: "Valor vendido", value: formatCurrency(totalBaseVendido) },
-                { label: "Recebido", value: formatCurrency(totalRecebido) },
-                { label: "Provisão 10%", value: formatCurrency(totalProvisionPending) },
-                { label: "Loja", value: settings.isOpen ? "Aberta" : "Fechada" },
-                {
-                  label: "Tema",
-                  value: settings.siteTheme === "PADRAO" ? "Padrão" : settings.siteTheme === "NAMORADOS" ? "Namorados" : settings.siteTheme === "SAO_JOAO" ? "São João" : "Copa",
-                },
+                { label: "Pedidos", value: analytics.total },
+                { label: "Ticket médio", value: formatCurrency(analytics.averageTicket) },
+                { label: "Valor vendido", value: formatCurrency(analytics.sold) },
+                { label: "Recebido", value: formatCurrency(analytics.received) },
+                { label: "Provisão pendente", value: formatCurrency(analytics.provision) },
+                { label: "Taxa de cancelamento", value: `${analytics.cancellationRate.toFixed(1)}%` },
               ].map((item) => (
                 <Card key={item.label} className="border-[#d6e7a2] bg-[#fbfff0] shadow-sm">
                   <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wide text-[#618038]">{item.label}</CardTitle></CardHeader>
                   <CardContent><p className="text-2xl font-bold text-[#0b3d18]">{item.value}</p></CardContent>
                 </Card>
               ))}
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Pedidos por status</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">{PEDIDO_STATUS_OPTIONS.map((status) => <div key={status} className="rounded-xl bg-[#f7fde7] p-3"><p className="text-xs font-bold uppercase text-[#618038]">{getPedidoStatusMeta(status).label}</p><p className="mt-1 text-2xl font-bold text-[#0b3d18]">{analytics.statusCounts[status]}</p></div>)}</CardContent></Card>
+              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Ticket por pagamento</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.paymentAverages.length ? analytics.paymentAverages.map((item) => <div key={item.label} className="flex justify-between rounded-xl bg-[#f7fde7] p-3"><span className="text-[#48654f]">{item.label}</span><strong className="text-[#0b3d18]">{formatCurrency(item.average)}</strong></div>) : <p className="text-sm text-slate-500">Nenhum pedido no período.</p>}</CardContent></Card>
+              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Top 5 por quantidade</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topQuantity.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#e4edc9] pb-2"><span className="text-[#48654f]">{index + 1}. {item.name}</span><strong className="text-[#0b3d18]">{item.quantity} un</strong></div>)}</CardContent></Card>
+              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Top 5 por receita</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topRevenue.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#e4edc9] pb-2"><span className="text-[#48654f]">{index + 1}. {item.name}</span><strong className="text-[#0b3d18]">{formatCurrency(item.revenue)}</strong></div>)}</CardContent></Card>
             </div>
           </section>
         ) : activeTab === "pedidos" ? (
