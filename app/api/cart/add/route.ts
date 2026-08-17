@@ -30,6 +30,7 @@ export async function POST(req: Request) {
         categoria: true,
         comboItens: true,
         saboresSugeridos: true,
+        precisaSelecaoDeTipos: true,
       },
     });
 

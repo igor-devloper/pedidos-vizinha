@@ -80,6 +80,7 @@ export type ProdutoAdmin = {
   descontoPercentual: string | number;
   ativo: boolean;
   antecedenciaMinimaHoras: number | null;
+  precisaSelecaoDeTipos: boolean;
   createdAt: string;
 };
 
@@ -203,6 +204,7 @@ type ProdutoFormState = {
   descontoPercentual: string;
   ativo: boolean;
   antecedenciaMinimaHoras: string;
+  precisaSelecaoDeTipos: boolean;
 };
 
 type CupomFormState = {
@@ -231,6 +233,7 @@ const EMPTY_FORM: ProdutoFormState = {
   descontoPercentual: "",
   ativo: true,
   antecedenciaMinimaHoras: "",
+  precisaSelecaoDeTipos: true,
 };
 
 type ProductTypeFormState = {
@@ -590,32 +593,6 @@ export function ManhiaAdminDashboard({
         .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
 
       return totalPedidos + totalOrders;
-    },
-    [pedidos, simpleOrders],
-  );
-  const totalRecebido = useMemo(
-    () => {
-      const recebidoPedidos = pedidos
-        .filter(
-          (pedido) =>
-            pedido.status !== "PENDENTE_PAGAMENTO" &&
-            pedido.status !== "CANCELADO",
-        )
-        .reduce(
-          (total, pedido) => total + Number(pedido.totalCobrado || 0),
-          0,
-        );
-      const recebidoOrders = simpleOrders
-        .filter(
-          (order) => order.status !== "PENDING" && order.status !== "CANCELLED",
-        )
-        .reduce(
-          (total, order) =>
-            total + Number(order.chargedAmount || order.totalAmount || 0),
-          0,
-        );
-
-      return recebidoPedidos + recebidoOrders;
     },
     [pedidos, simpleOrders],
   );
@@ -1081,6 +1058,7 @@ export function ManhiaAdminDashboard({
             descontoPercentual: form.emPromocao ? form.descontoPercentual : 0,
             ativo: form.ativo,
             antecedenciaMinimaHoras: form.antecedenciaMinimaHoras === "" ? null : form.antecedenciaMinimaHoras,
+            precisaSelecaoDeTipos: form.precisaSelecaoDeTipos,
           }),
         },
       );
@@ -1146,6 +1124,7 @@ export function ManhiaAdminDashboard({
       descontoPercentual: String(produto.descontoPercentual || ""),
       ativo: produto.ativo,
       antecedenciaMinimaHoras: produto.antecedenciaMinimaHoras === null ? "" : String(produto.antecedenciaMinimaHoras),
+      precisaSelecaoDeTipos: produto.precisaSelecaoDeTipos,
     });
     setProductDialogOpen(true);
   };
@@ -3732,6 +3711,11 @@ export function ManhiaAdminDashboard({
                       </Select>
                     </div>
 
+                    <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3 sm:col-span-2">
+                      <Checkbox id="produto-selecao-tipos" checked={form.precisaSelecaoDeTipos} onCheckedChange={(checked) => setForm((current) => ({ ...current, precisaSelecaoDeTipos: Boolean(checked) }))} />
+                      <label htmlFor="produto-selecao-tipos" className="text-sm leading-6 text-slate-600">Este produto exige seleção de tipos/sabores.</label>
+                    </div>
+
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700">
                         Total de unidades
@@ -3741,7 +3725,7 @@ export function ManhiaAdminDashboard({
                         min="1"
                         step="1"
                         value={form.totalUnidades}
-                        disabled={isComboCategory}
+                        disabled={isComboCategory || !form.precisaSelecaoDeTipos}
                         onChange={(event) =>
                           setForm((current) => ({
                             ...current,
@@ -3760,7 +3744,7 @@ export function ManhiaAdminDashboard({
                         min="1"
                         step="1"
                         value={form.maxTiposSalgado}
-                        disabled={isComboCategory}
+                        disabled={isComboCategory || !form.precisaSelecaoDeTipos}
                         onChange={(event) =>
                           setForm((current) => ({
                             ...current,
@@ -3832,7 +3816,7 @@ export function ManhiaAdminDashboard({
                       </div>
                     ) : null}
 
-                    {!isComboCategory ? (
+                    {!isComboCategory && form.precisaSelecaoDeTipos ? (
                       <div className="space-y-2 sm:col-span-2">
                         <label className="text-sm font-medium text-slate-700">
                           Sabores sugeridos

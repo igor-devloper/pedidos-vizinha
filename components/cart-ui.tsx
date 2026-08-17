@@ -49,6 +49,7 @@ type CartItem = {
   saboresSugeridos: string[];
   comboItens: Array<{ nome: string; quantidade: number }>;
   selectedItems: SelectedItem[];
+  precisaSelecaoDeTipos: boolean;
 };
 
 type CartData = {
@@ -546,6 +547,7 @@ export function FloatingCart({
   const selectedPaymentMethod = SUPPORTED_PAYMENT_METHODS.find((method) => method.id === paymentMethod);
   const cartValidation = useMemo(() => {
     for (const item of cart.items) {
+      if (!item.precisaSelecaoDeTipos) continue;
       const totalRequired = item.totalUnidades * item.quantity;
       const maxTypes = item.maxTiposSalgado * item.quantity;
       const selected = item.selectedItems.filter((entry) => entry.tipo.trim() && entry.quantidade > 0);
@@ -917,7 +919,7 @@ export function FloatingCart({
                       {itemError.message}
                     </p>
                   ) : null}
-                  <div className="space-y-3 md:col-span-3">
+                  {item.precisaSelecaoDeTipos ? <div className="space-y-3 md:col-span-3">
                     <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[var(--cart-border)] bg-white p-3 sm:p-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-base font-bold text-[var(--cart-dark)]">Sabores do pedido</p>
@@ -1037,7 +1039,7 @@ export function FloatingCart({
                         </Button>
                       </div>
                     </div>
-                  </div>
+                  </div> : null}
                 </div>
               ))}
 

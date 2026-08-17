@@ -60,7 +60,9 @@ export function buildInitialSelectedItems(product: {
   categoria: unknown;
   comboItens?: unknown;
   saboresSugeridos?: string[];
+  precisaSelecaoDeTipos?: boolean;
 }) {
+  if (product.precisaSelecaoDeTipos === false) return [];
   const comboItens = getProdutoComboItens(product as { comboItens?: unknown });
 
   if (String(product.categoria) === "COMBO" && comboItens.length > 0) {
@@ -148,6 +150,7 @@ export function serializeCart(cart: CartWithItems) {
       permitePagamentoParcial: item.product.permitePagamentoParcial,
       saboresSugeridos: normalizeSaboresList(item.product.saboresSugeridos),
       comboItens,
+      precisaSelecaoDeTipos: item.product.precisaSelecaoDeTipos,
       selectedItems: normalizeCartSelectedItems(item.selectedItems),
     };
   });

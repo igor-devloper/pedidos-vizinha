@@ -32,6 +32,7 @@ export type ProdutoPayloadInput = {
   descontoPercentual?: number | string;
   ativo?: boolean;
   antecedenciaMinimaHoras?: number | string | null;
+  precisaSelecaoDeTipos?: boolean;
 };
 
 function normalizeCategoria(value: string | undefined): ProductCategory {
@@ -79,6 +80,7 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
   const descontoPercentual = normalizeDiscountPercent(body.descontoPercentual);
   const ativo = body.ativo ?? true;
   const antecedenciaMinimaHoras = body.antecedenciaMinimaHoras === null || body.antecedenciaMinimaHoras === "" || body.antecedenciaMinimaHoras === undefined ? null : Number(body.antecedenciaMinimaHoras);
+  const precisaSelecaoDeTipos = body.precisaSelecaoDeTipos ?? true;
 
   if (antecedenciaMinimaHoras !== null && (!Number.isInteger(antecedenciaMinimaHoras) || antecedenciaMinimaHoras < 0)) {
     return { error: "Informe uma antecedência mínima válida." };
@@ -133,12 +135,13 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
         descontoPercentual,
         ativo,
         antecedenciaMinimaHoras,
+        precisaSelecaoDeTipos,
       },
     };
   }
 
-  const totalUnidades = Number(body.totalUnidades);
-  const maxTiposSalgado = Number(body.maxTiposSalgado);
+  const totalUnidades = precisaSelecaoDeTipos ? Number(body.totalUnidades) : 1;
+  const maxTiposSalgado = precisaSelecaoDeTipos ? Number(body.maxTiposSalgado) : 1;
 
   if (!Number.isInteger(totalUnidades) || totalUnidades <= 0) {
     return { error: "Informe o total de unidades do produto." };
@@ -159,12 +162,13 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
       totalUnidades,
       maxTiposSalgado,
       permitePagamentoParcial,
-      saboresSugeridos,
+      saboresSugeridos: precisaSelecaoDeTipos ? saboresSugeridos : [],
       comboItens: [],
       emPromocao,
       descontoPercentual,
       ativo,
       antecedenciaMinimaHoras,
+      precisaSelecaoDeTipos,
     },
   };
 }

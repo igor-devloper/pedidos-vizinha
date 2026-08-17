@@ -181,6 +181,9 @@ export function validatePedidoAgainstProduto(
   items: ReturnType<typeof normalizePedidoItems>,
   productQuantity = 1
 ) {
+  if (produto.precisaSelecaoDeTipos === false) {
+    return { totalUnidades: productQuantity, totalTipos: 0 };
+  }
   if (isComboProduto(produto)) {
     const comboItens = getProdutoComboItens(produto);
 
