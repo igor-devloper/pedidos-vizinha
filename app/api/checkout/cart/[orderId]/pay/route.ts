@@ -14,7 +14,7 @@ import {
   getMercadoPagoPaymentStatusMessage,
   MercadoPagoApiError,
 } from "@/lib/mercado-pago";
-
+  
 const cardPaymentSchema = z.object({
   token: z.string().trim().min(1, "Token do cartão não informado."),
   payment_method_id: z.string().trim().min(1, "Método do cartão não informado."),
