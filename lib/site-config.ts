@@ -65,7 +65,7 @@ export function getScheduleForWeekday(
 export const BUSINESS_RULES = {
   minimumLeadHours: 2,
   scheduleByWeekday: DEFAULT_OPERATION_SCHEDULE,
-  slotMinutes: 15,
+  slotMinutes: 10,
   toleranceMinutes: 15,
 } as const;
 
