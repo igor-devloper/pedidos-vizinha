@@ -149,6 +149,7 @@ export function serializeCart(cart: CartWithItems) {
       requestedUnits,
       usesMinimumQuantity,
       minimumQuantity: item.product.productType?.minQuantity ?? 1,
+      minimumLeadHours: item.product.antecedenciaMinimaHoras,
       unitPrice,
       subtotal,
       image: item.product.imagemBase64,

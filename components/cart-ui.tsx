@@ -43,6 +43,7 @@ type CartItem = {
   requestedUnits: number;
   usesMinimumQuantity: boolean;
   minimumQuantity: number;
+  minimumLeadHours: number | null;
   unitPrice: number;
   subtotal: number;
   image: string;
@@ -386,9 +387,13 @@ export function FloatingCart({
   const cartScrollRef = useRef<HTMLDivElement>(null);
   const [paymentPercentage, setPaymentPercentage] = useState<50 | 100>(50);
   const [paymentMethod, setPaymentMethod] = useState<MetodoPagamento>(MetodoPagamento.PIX);
+  const effectiveMinimumLeadHours = useMemo(
+    () => Math.max(businessStatus.minimumLeadHours, ...cart.items.map((item) => item.minimumLeadHours ?? businessStatus.minimumLeadHours)),
+    [businessStatus.minimumLeadHours, cart.items],
+  );
   const minDeliveryDate = useMemo(
-    () => getMinDeliveryDate(businessStatus.minimumLeadHours),
-    [businessStatus.minimumLeadHours]
+    () => getMinDeliveryDate(effectiveMinimumLeadHours),
+    [effectiveMinimumLeadHours]
   );
   const minDeliveryDateKey = useMemo(() => formatDateInputValue(minDeliveryDate), [minDeliveryDate]);
   const [deliveryDate, setDeliveryDate] = useState(formatDateInputValue(minDeliveryDate));
@@ -519,6 +524,19 @@ export function FloatingCart({
     () => getTimeSlots(deliveryDate, minDeliveryDate, businessStatus.operationSchedule),
     [businessStatus.operationSchedule, deliveryDate, minDeliveryDate]
   );
+  useEffect(() => {
+    const nextDate = formatDateInputValue(minDeliveryDate);
+    const currentSlots = getTimeSlots(deliveryDate, minDeliveryDate, businessStatus.operationSchedule);
+    if (deliveryDate < nextDate || !currentSlots.includes(deliveryTime)) {
+      const nextSlots = getTimeSlots(nextDate, minDeliveryDate, businessStatus.operationSchedule);
+      const nextTime = nextSlots[0] || "";
+      if (deliveryDate !== nextDate) {
+        setDeliveryDate(nextDate);
+        setDisplayMonth(startOfMonth(minDeliveryDate));
+      }
+      if (deliveryTime !== nextTime) setDeliveryTime(nextTime);
+    }
+  }, [businessStatus.operationSchedule, deliveryDate, deliveryTime, minDeliveryDate]);
   const deliveryTimeIsValid = timeSlots.includes(deliveryTime);
   const scheduledAt = buildDeliveryDateTime(deliveryDate, deliveryTime);
   const selectedDateHasNoSchedule = Boolean(deliveryDate) && timeSlots.length === 0;
@@ -1124,7 +1142,7 @@ export function FloatingCart({
                   </div>
                 </div>
                 <div className="mb-4 rounded-xl border border-[#c6d590] bg-white p-3 text-sm text-[#284a2e]">
-                  <p><strong>Antecedência mínima:</strong> {businessStatus.minimumLeadHours} {businessStatus.minimumLeadHours === 1 ? "hora" : "horas"}.</p>
+                  <p><strong>Antecedência mínima:</strong> {effectiveMinimumLeadHours} {effectiveMinimumLeadHours === 1 ? "hora" : "horas"}.</p>
                   <p className="mt-1 capitalize">
                     <strong>Funcionamento em {selectedWeekday}:</strong>{" "}
                     {selectedSchedule ? `das ${selectedSchedule.openHour}h às ${selectedSchedule.closeHour}h` : "fechado"}.
