@@ -298,18 +298,24 @@ export function AddToCartControls({
   minimumQuantity?: number | null;
   usesMinimumQuantity?: boolean;
 }) {
-  const [quantity, setQuantity] = useState(usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1);
+  const [quantity, setQuantity] = useState(String(usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1));
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const addToCart = async () => {
     try {
-      setLoading(true);
       setErrorMessage(null);
+      const parsedQuantity = Math.floor(Number(quantity));
+      const requiredMinimum = usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1;
+      if (!Number.isInteger(parsedQuantity) || parsedQuantity < requiredMinimum) {
+        setErrorMessage(usesMinimumQuantity ? `Informe pelo menos ${requiredMinimum} unidades.` : "Informe uma quantidade válida.");
+        return;
+      }
+      setLoading(true);
       const response = await fetch("/api/cart/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(usesMinimumQuantity ? { productId, requestedUnits: quantity } : { productId, quantity }),
+        body: JSON.stringify(usesMinimumQuantity ? { productId, requestedUnits: parsedQuantity } : { productId, quantity: parsedQuantity }),
       });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
 
@@ -330,7 +336,7 @@ export function AddToCartControls({
     <div style={getCartThemeStyle(siteTheme)} className="mt-auto flex flex-col gap-3">
       <div className="space-y-1">
         <label className="text-sm font-bold text-[var(--cart-dark)]">{usesMinimumQuantity ? "Quantidade de unidades" : "Quantidade"}</label>
-        <Input type="number" inputMode="numeric" min={usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1} step="1" value={quantity} onChange={(event) => setQuantity(Math.max(usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1, Math.floor(Number(event.target.value || 1))))} className="h-14 rounded-full border-[var(--cart-border)] bg-white px-5 text-center text-lg font-black text-[var(--cart-dark)]" />
+        <Input type="number" inputMode="numeric" min="0" step="1" value={quantity} onChange={(event) => { setQuantity(event.target.value); setErrorMessage(null); }} className="h-14 rounded-full border-[var(--cart-border)] bg-white px-5 text-center text-lg font-black text-[var(--cart-dark)]" />
         {usesMinimumQuantity ? <p className="text-xs text-[var(--cart-muted)]">Mínimo de {minimumQuantity} unidades; você pode informar qualquer quantidade inteira maior.</p> : null}
       </div>
 
