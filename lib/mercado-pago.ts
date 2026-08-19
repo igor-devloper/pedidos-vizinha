@@ -44,6 +44,7 @@ type MercadoPagoPaymentSearchResponse = {
 };
 
 type MercadoPagoErrorResponse = {
+  code?: string;
   message?: string;
   error?: string;
   cause?: Array<{
@@ -57,7 +58,8 @@ export class MercadoPagoApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly path: string,
-    public readonly code?: string
+    public readonly code?: string,
+    public readonly requestId?: string
   ) {
     super(message);
     this.name = "MercadoPagoApiError";
@@ -208,12 +210,16 @@ async function mercadoPagoRequest<T>(path: string, init?: RequestInit): Promise<
       data && typeof data === "object"
         ? (data as MercadoPagoErrorResponse)
         : null;
+    const requestId = response.headers.get("x-request-id") || undefined;
+    const responseCode = apiError?.code || apiError?.error || apiError?.cause?.[0]?.code;
 
     // Loga a resposta ORIGINAL do Mercado Pago para não perder
     // cause[].description, códigos internos e demais detalhes.
     console.error("Mercado Pago API error", {
       status: response.status,
       path,
+      requestId,
+      code: responseCode,
       response: data,
     });
 
@@ -222,11 +228,8 @@ async function mercadoPagoRequest<T>(path: string, init?: RequestInit): Promise<
         `Mercado Pago respondeu ${response.status}.`,
       response.status,
       path,
-      String(
-        apiError?.cause?.[0]?.code ||
-          apiError?.error ||
-          ""
-      ) || undefined
+      String(responseCode || "") || undefined,
+      requestId
     );
   }
 
