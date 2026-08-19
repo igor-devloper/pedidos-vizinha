@@ -131,7 +131,11 @@ export async function getCurrentCart() {
 export function serializeCart(cart: CartWithItems) {
   const items = cart.items.map((item) => {
     const unitPrice = getCartProductUnitPrice(item.product);
-    const subtotal = unitPrice * item.quantity;
+    const requestedUnits = item.requestedUnits ?? item.product.totalUnidades * item.quantity;
+    const usesMinimumQuantity = Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+    const subtotal = usesMinimumQuantity
+      ? Number((unitPrice * (requestedUnits / item.product.totalUnidades)).toFixed(2))
+      : unitPrice * item.quantity;
     const comboItens = getProdutoComboItens(item.product as { comboItens?: unknown });
 
     return {
@@ -142,6 +146,8 @@ export function serializeCart(cart: CartWithItems) {
       type: item.product.productType?.name || String(item.product.categoria),
       category: String(item.product.categoria),
       quantity: item.quantity,
+      requestedUnits,
+      usesMinimumQuantity,
       unitPrice,
       subtotal,
       image: item.product.imagemBase64,

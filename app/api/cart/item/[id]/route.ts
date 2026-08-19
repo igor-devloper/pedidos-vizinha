@@ -21,13 +21,26 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const body = (await req.json()) as { quantity?: number; selectedItems?: unknown };
+    const body = (await req.json()) as { quantity?: number; requestedUnits?: number; selectedItems?: unknown };
     const quantity = Math.max(1, Math.floor(Number(body.quantity || 1)));
     const { cart, isNew, sessionId } = await getCurrentCart();
+    const existingItem = await prisma.cartItem.findFirst({
+      where: { id, cartId: cart.id },
+      include: { product: { include: { productType: true } } },
+    });
+    if (!existingItem) return NextResponse.json({ error: "Item não encontrado." }, { status: 404 });
+    const usesMinimumQuantity = Boolean(existingItem.product.productType?.allowsMultiple && existingItem.product.productType.minQuantity);
+    const requestedUnits = usesMinimumQuantity
+      ? Math.floor(Number(body.requestedUnits || existingItem.requestedUnits || existingItem.product.totalUnidades))
+      : null;
+    if (usesMinimumQuantity && requestedUnits! < Number(existingItem.product.productType?.minQuantity)) {
+      return NextResponse.json({ error: `A quantidade mínima é ${existingItem.product.productType?.minQuantity}.` }, { status: 400 });
+    }
     const patch: {
       quantity: number;
+      requestedUnits?: number | null;
       selectedItems?: ReturnType<typeof normalizeCartSelectedItems>;
-    } = { quantity };
+    } = { quantity: usesMinimumQuantity ? 1 : quantity, requestedUnits };
 
     if ("selectedItems" in body) {
       patch.selectedItems = normalizeCartSelectedItems(body.selectedItems);

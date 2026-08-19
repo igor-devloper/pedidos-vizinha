@@ -40,6 +40,8 @@ type CartItem = {
   type: string;
   category: string;
   quantity: number;
+  requestedUnits: number;
+  usesMinimumQuantity: boolean;
   unitPrice: number;
   subtotal: number;
   image: string;
@@ -288,11 +290,15 @@ function getCartThemeStyle(siteTheme: StoreSiteTheme) {
 export function AddToCartControls({
   productId,
   siteTheme,
+  minimumQuantity,
+  usesMinimumQuantity = false,
 }: {
   productId: string;
   siteTheme: StoreSiteTheme;
+  minimumQuantity?: number | null;
+  usesMinimumQuantity?: boolean;
 }) {
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -303,7 +309,7 @@ export function AddToCartControls({
       const response = await fetch("/api/cart/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, quantity }),
+        body: JSON.stringify(usesMinimumQuantity ? { productId, requestedUnits: quantity } : { productId, quantity }),
       });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
 
@@ -322,28 +328,10 @@ export function AddToCartControls({
 
   return (
     <div style={getCartThemeStyle(siteTheme)} className="mt-auto flex flex-col gap-3">
-      <div className="flex min-h-14 items-center justify-between rounded-full border border-[var(--cart-border)] bg-white px-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => setQuantity((current) => Math.max(1, current - 1))}
-          className="h-11 w-11 rounded-full text-[var(--cart-accent)]"
-          aria-label="Diminuir quantidade"
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
-        <span className="min-w-10 text-center text-lg font-black text-[var(--cart-dark)]">{quantity}</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => setQuantity((current) => current + 1)}
-          className="h-11 w-11 rounded-full text-[var(--cart-accent)]"
-          aria-label="Aumentar quantidade"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+      <div className="space-y-1">
+        <label className="text-sm font-bold text-[var(--cart-dark)]">{usesMinimumQuantity ? "Quantidade de unidades" : "Quantidade"}</label>
+        <Input type="number" inputMode="numeric" min={usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1} step="1" value={quantity} onChange={(event) => setQuantity(Math.max(usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1, Math.floor(Number(event.target.value || 1))))} className="h-14 rounded-full border-[var(--cart-border)] bg-white px-5 text-center text-lg font-black text-[var(--cart-dark)]" />
+        {usesMinimumQuantity ? <p className="text-xs text-[var(--cart-muted)]">Mínimo de {minimumQuantity} unidades; você pode informar qualquer quantidade inteira maior.</p> : null}
       </div>
 
       <Button
@@ -478,7 +466,7 @@ export function FloatingCart({
       const response = await fetch(`/api/cart/item/${item.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: nextQuantity, selectedItems }),
+        body: JSON.stringify(item.usesMinimumQuantity ? { requestedUnits: nextQuantity, selectedItems } : { quantity: nextQuantity, selectedItems }),
       });
 
       if (!response.ok) throw new Error("Não foi possível atualizar.");
@@ -548,7 +536,7 @@ export function FloatingCart({
   const cartValidation = useMemo(() => {
     for (const item of cart.items) {
       if (!item.precisaSelecaoDeTipos) continue;
-      const totalRequired = item.totalUnidades * item.quantity;
+      const totalRequired = item.requestedUnits;
       const maxTypes = item.maxTiposSalgado * item.quantity;
       const selected = item.selectedItems.filter((entry) => entry.tipo.trim() && entry.quantidade > 0);
       const totalSelected = selected.reduce((sum, entry) => sum + entry.quantidade, 0);
@@ -823,7 +811,7 @@ export function FloatingCart({
                   {cart.items.map((item) => (
                     <div key={item.id} className="border-b border-[var(--cart-border)] pb-3 last:border-0 last:pb-0">
                       <div className="flex justify-between gap-4 font-bold text-[var(--cart-dark)]">
-                        <span>{item.quantity}x {item.name}</span>
+                        <span>{item.usesMinimumQuantity ? `${item.requestedUnits} un de ${item.name}` : `${item.quantity}x ${item.name}`}</span>
                         <span>{formatCurrency(item.subtotal)}</span>
                       </div>
                       <p className="mt-1 text-sm text-[var(--cart-muted)]">{item.selectedItems.filter((entry) => entry.quantidade > 0).map((entry) => `${entry.tipo}: ${entry.quantidade}`).join(" • ")}</p>
@@ -890,7 +878,7 @@ export function FloatingCart({
                     >
                       <Minus className="h-4 w-4" />
                     </Button>
-                    <span className="w-8 text-center text-lg font-black text-[#17251a]">{item.quantity}</span>
+                    {item.usesMinimumQuantity ? <Input type="number" min={1} step="1" value={item.requestedUnits} onChange={(event) => void setItemQuantity(item, Math.max(1, Math.floor(Number(event.target.value || 1))))} className="h-11 w-24 text-center font-black" /> : <span className="w-8 text-center text-lg font-black text-[#17251a]">{item.quantity}</span>}
                     <Button
                       type="button"
                       variant="outline"
@@ -925,7 +913,7 @@ export function FloatingCart({
                         <p className="text-base font-bold text-[var(--cart-dark)]">Sabores do pedido</p>
                         <p className="text-sm font-semibold text-[var(--cart-muted)]">
                           {item.selectedItems.reduce((sum, entry) => sum + Number(entry.quantidade || 0), 0)}
-                          /{item.totalUnidades * item.quantity} un
+                          /{item.requestedUnits} un
                         </p>
                       </div>
 

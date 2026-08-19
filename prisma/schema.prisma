@@ -86,6 +86,7 @@ model CartItem {
   quantity      Int      @default(1)
   unitPrice     Decimal  @db.Decimal(10, 2)
   selectedItems Json     @default("[]")
+  requestedUnits Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -2745,7 +2745,7 @@ export function ManhiaAdminDashboard({
                       htmlFor="product-type-allows-multiple"
                       className="text-sm leading-6 text-slate-600"
                     >
-                      Cliente pode pedir mais de uma unidade deste tipo.
+                      Usar quantidade mínima: o cliente pode digitar qualquer quantidade inteira a partir do mínimo. Desmarque para manter quantidade fixa.
                     </label>
                   </div>
 

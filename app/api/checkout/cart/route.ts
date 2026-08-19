@@ -158,6 +158,7 @@ export async function POST(req: Request) {
         },
         selectedItems,
         item.quantity,
+        item.requestedUnits ?? undefined,
       );
     }
 
@@ -258,7 +259,11 @@ export async function POST(req: Request) {
         items: {
           create: cart.items.map((item) => {
             const unitPrice = getCartProductUnitPrice(item.product);
-            const subtotal = unitPrice * item.quantity;
+            const requestedUnits = item.requestedUnits ?? item.product.totalUnidades * item.quantity;
+            const usesMinimumQuantity = Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+            const subtotal = usesMinimumQuantity
+              ? Number((unitPrice * (requestedUnits / item.product.totalUnidades)).toFixed(2))
+              : unitPrice * item.quantity;
             const selectedItems = normalizeCartSelectedItems(
               item.selectedItems,
             ).filter((entry) => entry.quantidade > 0);
@@ -269,7 +274,7 @@ export async function POST(req: Request) {
               productType:
                 item.product.productType?.name ||
                 String(item.product.categoria),
-              quantity: item.quantity,
+              quantity: usesMinimumQuantity ? requestedUnits : item.quantity,
               unitPrice,
               subtotal,
               selectedItems,

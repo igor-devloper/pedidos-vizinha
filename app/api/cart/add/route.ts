@@ -12,7 +12,7 @@ import { getProdutoComboItens } from "@/lib/produtos";
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { productId?: string; quantity?: number };
+    const body = (await req.json()) as { productId?: string; quantity?: number; requestedUnits?: number };
     const productId = String(body.productId || "").trim();
     const quantity = Math.max(1, Math.floor(Number(body.quantity || 1)));
 
@@ -31,6 +31,8 @@ export async function POST(req: Request) {
         comboItens: true,
         saboresSugeridos: true,
         precisaSelecaoDeTipos: true,
+        totalUnidades: true,
+        productType: { select: { minQuantity: true, allowsMultiple: true } },
       },
     });
 
@@ -40,6 +42,14 @@ export async function POST(req: Request) {
 
     const { cart, isNew, sessionId } = await getCurrentCart();
     const unitPrice = getCartProductUnitPrice(product);
+    const usesMinimumQuantity = Boolean(product.productType?.allowsMultiple && product.productType.minQuantity);
+    const requestedUnits = usesMinimumQuantity
+      ? Math.floor(Number(body.requestedUnits || product.productType?.minQuantity || product.totalUnidades))
+      : null;
+
+    if (usesMinimumQuantity && requestedUnits! < Number(product.productType?.minQuantity)) {
+      return NextResponse.json({ error: `A quantidade mínima é ${product.productType?.minQuantity}.` }, { status: 400 });
+    }
 
     const cartItem = await prisma.cartItem.upsert({
       where: {
@@ -49,13 +59,15 @@ export async function POST(req: Request) {
         },
       },
       update: {
-        quantity: { increment: quantity },
+        quantity: usesMinimumQuantity ? 1 : { increment: quantity },
+        requestedUnits: usesMinimumQuantity ? requestedUnits : undefined,
         unitPrice,
       },
       create: {
         cartId: cart.id,
         productId: product.id,
-        quantity,
+        quantity: usesMinimumQuantity ? 1 : quantity,
+        requestedUnits,
         unitPrice,
         selectedItems: buildInitialSelectedItems(product),
       },

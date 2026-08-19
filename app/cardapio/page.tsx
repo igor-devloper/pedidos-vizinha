@@ -214,7 +214,7 @@ function ProductCard({
           ) : null}
         </div>
 
-        <AddToCartControls productId={produto.id} siteTheme={siteTheme} />
+        <AddToCartControls productId={produto.id} siteTheme={siteTheme} minimumQuantity={produto.productType?.minQuantity} usesMinimumQuantity={Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
 
         <Link
           href={`/pedido/${produto.slug}`}

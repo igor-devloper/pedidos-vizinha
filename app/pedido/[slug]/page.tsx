@@ -161,7 +161,7 @@ export default async function PedidoPage({
                   <ShoppingCart className="h-4 w-4" />
                   Adicionar ao carrinho
                 </div>
-                <AddToCartControls productId={produto.id} siteTheme={businessStatus.siteTheme} />
+                <AddToCartControls productId={produto.id} siteTheme={businessStatus.siteTheme} minimumQuantity={produto.productType?.minQuantity} usesMinimumQuantity={Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
               </div>
             </CardContent>
           </Card>

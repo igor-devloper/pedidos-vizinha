@@ -179,7 +179,8 @@ export function normalizePedidoItems(items: CreatePedidoInput["itens"]) {
 export function validatePedidoAgainstProduto(
   produto: Produto & { comboItens?: unknown; categoria?: string },
   items: ReturnType<typeof normalizePedidoItems>,
-  productQuantity = 1
+  productQuantity = 1,
+  requiredUnitsOverride?: number,
 ) {
   if (produto.precisaSelecaoDeTipos === false) {
     return { totalUnidades: productQuantity, totalTipos: 0 };
@@ -205,7 +206,7 @@ export function validatePedidoAgainstProduto(
   const totalUnidades = items.reduce((sum, item) => sum + item.quantidade, 0);
   const totalTipos = items.length;
 
-  const requiredUnits = produto.totalUnidades * productQuantity;
+  const requiredUnits = requiredUnitsOverride ?? produto.totalUnidades * productQuantity;
   const maxAllowedTypes = produto.maxTiposSalgado * productQuantity;
 
   if (totalUnidades !== requiredUnits) {
