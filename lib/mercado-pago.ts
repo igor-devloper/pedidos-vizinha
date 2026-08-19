@@ -204,13 +204,29 @@ async function mercadoPagoRequest<T>(path: string, init?: RequestInit): Promise<
   const data = (await response.json().catch(() => null)) as T | MercadoPagoErrorResponse | null;
 
   if (!response.ok) {
-    const apiError = data && typeof data === "object" ? data as MercadoPagoErrorResponse : null;
+    const apiError =
+      data && typeof data === "object"
+        ? (data as MercadoPagoErrorResponse)
+        : null;
+
+    // Loga a resposta ORIGINAL do Mercado Pago para não perder
+    // cause[].description, códigos internos e demais detalhes.
+    console.error("Mercado Pago API error", {
+      status: response.status,
+      path,
+      response: data,
+    });
+
     throw new MercadoPagoApiError(
       apiError?.message ||
         `Mercado Pago respondeu ${response.status}.`,
       response.status,
       path,
-      String(apiError?.cause?.[0]?.code || apiError?.error || "") || undefined
+      String(
+        apiError?.cause?.[0]?.code ||
+          apiError?.error ||
+          ""
+      ) || undefined
     );
   }
 
