@@ -42,6 +42,7 @@ type CartItem = {
   quantity: number;
   requestedUnits: number;
   usesMinimumQuantity: boolean;
+  minimumQuantity: number;
   unitPrice: number;
   subtotal: number;
   image: string;
@@ -370,6 +371,7 @@ export function FloatingCart({
   const [checkingOut, setCheckingOut] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const [checkoutSession, setCheckoutSession] = useState<CartCheckoutSession | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<"FORM" | "REVIEW">("FORM");
   const [checkoutPaid, setCheckoutPaid] = useState(false);
@@ -477,11 +479,24 @@ export function FloatingCart({
 
       if (!response.ok) throw new Error("Não foi possível atualizar.");
       updateCart((await response.json()) as CartData);
+      setQuantityDrafts((current) => { const next = { ...current }; delete next[item.id]; return next; });
     } catch (error) {
       setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível alterar a quantidade.") });
     } finally {
       setLoadingId(null);
     }
+  };
+
+  const commitRequestedUnits = (item: CartItem) => {
+    const rawValue = quantityDrafts[item.id] ?? String(item.requestedUnits);
+    const parsedValue = Math.floor(Number(rawValue));
+    if (!Number.isInteger(parsedValue) || parsedValue < item.minimumQuantity) {
+      setItemError({ id: item.id, message: `${item.name}: informe pelo menos ${item.minimumQuantity} unidades.` });
+      return;
+    }
+    setItemError(null);
+    if (parsedValue !== item.requestedUnits) void setItemQuantity(item, parsedValue);
+    else setQuantityDrafts((current) => { const next = { ...current }; delete next[item.id]; return next; });
   };
 
   const removeItem = async (item: CartItem) => {
@@ -541,6 +556,12 @@ export function FloatingCart({
   const selectedPaymentMethod = SUPPORTED_PAYMENT_METHODS.find((method) => method.id === paymentMethod);
   const cartValidation = useMemo(() => {
     for (const item of cart.items) {
+      if (item.usesMinimumQuantity && item.id in quantityDrafts) {
+        const draft = Math.floor(Number(quantityDrafts[item.id]));
+        if (!Number.isInteger(draft) || draft < item.minimumQuantity) {
+          return `${item.name}: informe pelo menos ${item.minimumQuantity} unidades.`;
+        }
+      }
       if (!item.precisaSelecaoDeTipos) continue;
       const totalRequired = item.requestedUnits;
       const maxTypes = item.maxTiposSalgado * item.quantity;
@@ -570,7 +591,7 @@ export function FloatingCart({
     }
 
     return null;
-  }, [cart.items]);
+  }, [cart.items, quantityDrafts]);
   const checkoutGuidance = cartValidation
     ? getSimpleCartError(new Error(cartValidation), cartValidation)
     : customerName.trim().length < 2
@@ -873,7 +894,7 @@ export function FloatingCart({
                     </p>
                   </div>
                   <div className="flex items-center gap-3 sm:justify-end">
-                    <Button
+                    {!item.usesMinimumQuantity ? <Button
                       type="button"
                       variant="outline"
                       size="icon"
@@ -883,9 +904,9 @@ export function FloatingCart({
                       aria-label={`Diminuir quantidade de ${item.name}`}
                     >
                       <Minus className="h-4 w-4" />
-                    </Button>
-                    {item.usesMinimumQuantity ? <Input type="number" min={1} step="1" value={item.requestedUnits} onChange={(event) => void setItemQuantity(item, Math.max(1, Math.floor(Number(event.target.value || 1))))} className="h-11 w-24 text-center font-black" /> : <span className="w-8 text-center text-lg font-black text-[#17251a]">{item.quantity}</span>}
-                    <Button
+                    </Button> : null}
+                    {item.usesMinimumQuantity ? <Input type="number" inputMode="numeric" min="0" step="1" value={quantityDrafts[item.id] ?? String(item.requestedUnits)} onChange={(event) => { setQuantityDrafts((current) => ({ ...current, [item.id]: event.target.value })); setItemError(null); }} onBlur={() => commitRequestedUnits(item)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className="h-11 w-28 text-center font-black" /> : <span className="w-8 text-center text-lg font-black text-[#17251a]">{item.quantity}</span>}
+                    {!item.usesMinimumQuantity ? <Button
                       type="button"
                       variant="outline"
                       size="icon"
@@ -895,7 +916,7 @@ export function FloatingCart({
                       aria-label={`Aumentar quantidade de ${item.name}`}
                     >
                       <Plus className="h-4 w-4" />
-                    </Button>
+                    </Button> : null}
                     <Button
                       type="button"
                       variant="outline"

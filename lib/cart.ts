@@ -148,6 +148,7 @@ export function serializeCart(cart: CartWithItems) {
       quantity: item.quantity,
       requestedUnits,
       usesMinimumQuantity,
+      minimumQuantity: item.product.productType?.minQuantity ?? 1,
       unitPrice,
       subtotal,
       image: item.product.imagemBase64,
