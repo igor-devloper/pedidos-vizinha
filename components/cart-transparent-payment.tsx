@@ -82,7 +82,7 @@ export function CartTransparentPayment({
 }: {
   session: CartCheckoutSession;
   customerEmail: string;
-  onPaid: () => void;
+  onPaid?: () => void;
 }) {
   const paymentUrl = `/api/checkout/cart/${session.orderId}/pay${session.balance ? "?balance=1" : ""}`;
   const [status, setStatus] = useState<PaymentStatus>("PENDING");
@@ -163,7 +163,7 @@ export function CartTransparentPayment({
   useEffect(() => {
     if (status === "PAID" && !paidNotified.current) {
       paidNotified.current = true;
-      onPaid();
+      onPaid?.();
     }
   }, [onPaid, status]);
 

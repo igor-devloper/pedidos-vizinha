@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { acceptPaidCartOrder } from "@/lib/cart-order-service";
 import { findLatestMercadoPagoPaymentByExternalReference } from "@/lib/mercado-pago";
+import { formatCurrency } from "@/lib/pedidos";
+import { sendWhatsappText } from "@/lib/whatsapp";
 
 type MercadoPagoCartPayment = {
   id: string | number;
@@ -64,6 +66,8 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     current.saldoExternalReference === payment.external_reference;
   const shouldProvision = payment.status === "approved" &&
     (isBalancePayment ? !current.saldoPagoAt : current.status !== "PAID");
+  const shouldThankBalancePayment =
+    isBalancePayment && payment.status === "approved" && !current.saldoPagoAt;
   const paidAmount = isBalancePayment
     ? Number(current.saldoTotalCobrado || 0)
     : Number(current.chargedAmount || 0);
@@ -112,6 +116,13 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     status: order.status,
     paymentId: payment.id,
   });
+
+  if (shouldThankBalancePayment && order.customerPhone) {
+    await sendWhatsappText(
+      order.customerPhone,
+      `✅ *Saldo confirmado!*\nRecebemos o pagamento de *${formatCurrency(paidAmount)}* do seu pedido #${order.code || order.id.slice(0, 10).toUpperCase()}.\n\nMuito obrigada pela preferência! 💛`,
+    ).catch((error) => console.error("Falha ao agradecer pagamento de saldo", { orderId: order.id, error }));
+  }
 
   if (!isBalancePayment && orderStatus === "PAID" && order.cartId) {
     try {

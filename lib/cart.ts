@@ -147,8 +147,13 @@ export function serializeCart(cart: CartWithItems, audience: CartAudience = "VIZ
     const usesMinimumQuantity = audience === "CONFEITEIRA"
       ? Boolean(confectionerMinimum)
       : Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+    // O preco da confeiteira se refere ao lote minimo dela, que pode ser
+    // diferente do total de unidades do cardapio comum.
+    const pricingBaseUnits = audience === "CONFEITEIRA"
+      ? confectionerMinimum ?? item.product.totalUnidades
+      : item.product.totalUnidades;
     const subtotal = usesMinimumQuantity
-      ? Number((unitPrice * (requestedUnits / item.product.totalUnidades)).toFixed(2))
+      ? Number((unitPrice * (requestedUnits / pricingBaseUnits)).toFixed(2))
       : unitPrice * item.quantity;
     const comboItens = getProdutoComboItens(item.product as { comboItens?: unknown });
 

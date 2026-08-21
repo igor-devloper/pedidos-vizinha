@@ -266,8 +266,11 @@ export async function POST(req: Request) {
             const usesMinimumQuantity = audience === "CONFEITEIRA"
               ? Boolean(item.product.quantidadeMinimaConfeiteira)
               : Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+            const pricingBaseUnits = audience === "CONFEITEIRA"
+              ? item.product.quantidadeMinimaConfeiteira ?? item.product.totalUnidades
+              : item.product.totalUnidades;
             const subtotal = usesMinimumQuantity
-              ? Number((unitPrice * (requestedUnits / item.product.totalUnidades)).toFixed(2))
+              ? Number((unitPrice * (requestedUnits / pricingBaseUnits)).toFixed(2))
               : unitPrice * item.quantity;
             const selectedItems = normalizeCartSelectedItems(
               item.selectedItems,

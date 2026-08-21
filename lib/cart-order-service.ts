@@ -103,7 +103,9 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
   const lines = [
     `#${BUSINESS_INFO.name}`,
     `#PEDIDO CARRINHO ${cartOrderCode(order)}`,
-    order.isConfeiteira ? "### CONFEITEIRA ###" : null,
+    // A marca vai no próprio texto do recibo (não apenas nos metadados do job),
+    // garantindo que apareça em qualquer impressora térmica.
+    order.isConfeiteira ? "#*** PEDIDO CONFEITEIRA ***" : null,
     "-".repeat(30),
     "#CLIENTE",
     `FEITO EM: ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(order.createdAt)}`,
@@ -433,6 +435,7 @@ async function printAcceptedCartOrder(order: CartOrderWithItems) {
     await sendCartOrderToPrintService({
       orderId: order.id,
       code: cartOrderCode(order),
+      isConfeiteira: order.isConfeiteira,
       reason: "auto-accepted",
       receipt: buildCartOrderPrintableReceipt(order),
       customerName: order.customerName,
@@ -570,7 +573,10 @@ export async function editCartOrder({
     const unitPrice = current.isConfeiteira && product.precoConfeiteira !== null
       ? Number(product.precoConfeiteira)
       : Number(product.preco);
-    const subtotal = usesUnits ? Number((unitPrice * (requestedUnits / product.totalUnidades)).toFixed(2)) : Number((unitPrice * requestedUnits).toFixed(2));
+    const pricingBaseUnits = current.isConfeiteira
+      ? product.quantidadeMinimaConfeiteira || product.totalUnidades
+      : product.totalUnidades;
+    const subtotal = usesUnits ? Number((unitPrice * (requestedUnits / pricingBaseUnits)).toFixed(2)) : Number((unitPrice * requestedUnits).toFixed(2));
     return {
       productId: product.id,
       productName: product.nome,
@@ -624,8 +630,28 @@ export async function editCartOrder({
   });
 
   if (order.customerPhone) {
-    const deliveryLabel = isDelivery ? `com entrega (${delivery.agreed ? formatCurrency(delivery.fee) : "taxa a combinar"})` : "para retirada";
-    await sendWhatsappText(order.customerPhone, `✏️ *Pedido atualizado*\nSeu pedido #${cartOrderCode(order)} foi atualizado ${deliveryLabel}.\nNovo total: *${formatCurrency(totalAmount)}*.\nQuando ficar pronto, enviaremos o link seguro caso reste algum valor.`).catch((error) => console.error("Falha ao avisar alteração do pedido", { orderId: id, error }));
+    const deliveryLabel = isDelivery
+      ? `Entrega: ${delivery.agreed ? formatCurrency(delivery.fee) : "taxa a combinar"}`
+      : "Modalidade: RETIRADA";
+    const changedItems = formatCartOrderItems(order).join("\n");
+    await sendWhatsappText(
+      order.customerPhone,
+      [
+        "✏️ *PEDIDO ATUALIZADO*",
+        `Seu pedido #${cartOrderCode(order)} foi alterado.`,
+        "",
+        "📦 *Resumo atualizado:*",
+        changedItems,
+        "",
+        `📍 *${deliveryLabel}*`,
+        isDelivery ? `Endereço: ${address}` : null,
+        isDelivery && reference ? `Referência: ${reference}` : null,
+        `💰 *Total anterior:* ${formatCurrency(Number(current.totalAmount))}`,
+        `💰 *Novo total:* ${formatCurrency(totalAmount)}`,
+        "",
+        "Quando o pedido ficar pronto, enviaremos o link seguro caso reste algum valor.",
+      ].filter((line): line is string => Boolean(line)).join("\n"),
+    ).catch((error) => console.error("Falha ao avisar alteração do pedido", { orderId: id, error }));
   }
 
   if (order.status === "PAID" && order.fulfillmentType === "DELIVERY") {
@@ -648,7 +674,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
     status === "READY" &&
     !current.saldoPagoAt &&
     hasOutstandingCartOrderBalance(current) &&
-    (!current.saldoInitPoint || !current.saldoCobrancaEnviadaAt);
+    !current.saldoInitPoint;
   const shouldPrepareReady = enteringReady || missingReadyBalance;
   const shouldNotifyCourierReady = status === "READY" && current.fulfillmentType === "DELIVERY" && !current.notifiedCourierReadyAt;
   const balanceCharge = shouldPrepareReady
@@ -747,7 +773,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
 export async function processReadyCartOrderBalanceCharges() {
   const [balanceOrders, courierOrders] = await Promise.all([
     prisma.order.findMany({
-      where: { status: "READY", saldoPagoAt: null, OR: [{ saldoInitPoint: null }, { saldoCobrancaEnviadaAt: null }] },
+      where: { status: "READY", saldoPagoAt: null, saldoInitPoint: null },
       select: { id: true }, take: 20,
     }),
     prisma.order.findMany({
