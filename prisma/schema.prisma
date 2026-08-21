@@ -36,6 +36,9 @@ model Produto {
   nome                    String
   descricao               String
   preco                   Decimal          @db.Decimal(10, 2)
+  precoConfeiteira        Decimal?         @db.Decimal(10, 2)
+  quantidadeMinimaConfeiteira Int?
+  ativoConfeiteira        Boolean          @default(false)
   imagemBase64            String
   categoria               CategoriaProduto @default(CENTO)
   productTypeId           String?
@@ -150,6 +153,7 @@ model Order {
   deliveryFeeAgreed         Boolean         @default(true)
   provisionAmount           Decimal         @default(0) @db.Decimal(10, 2)
   provisionTransferredAt    DateTime?
+  isConfeiteira             Boolean         @default(false)
   notifiedCourierAt         DateTime?
   notifiedCourierReadyAt    DateTime?
 

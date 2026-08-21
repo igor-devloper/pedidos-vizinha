@@ -9,6 +9,7 @@ import { instanceManager } from "./instance-manager.js";
 import { instanceStore } from "./instance-store.js";
 import { logger } from "./logger.js";
 import { createPrintJob, listPrintJobs } from "./print-job-store.js";
+import { updateLeadByRemoteJid } from "./lead-repository.js";
 import { qrStore } from "./qr-store.js";
 
 const createInstanceSchema = z.object({
@@ -125,6 +126,9 @@ async function bootstrap() {
       payload.number,
       payload.text
     );
+    await updateLeadByRemoteJid(req.params.id, `${payload.number.replace(/\D/g, "")}@s.whatsapp.net`, {
+      lastOutboundText: payload.text,
+    });
 
     res.json({ ok: true, result });
   });

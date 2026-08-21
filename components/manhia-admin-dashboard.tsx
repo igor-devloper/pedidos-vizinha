@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCheck,
@@ -67,6 +67,9 @@ export type ProdutoAdmin = {
   nome: string;
   descricao: string;
   preco: string | number;
+  precoConfeiteira: string | number | null;
+  quantidadeMinimaConfeiteira: number | null;
+  ativoConfeiteira: boolean;
   imagemBase64: string;
   categoria: ProductCategory;
   productTypeId: string | null;
@@ -97,6 +100,7 @@ export type ProductTypeAdmin = {
 export type SimpleOrderAdmin = {
   id: string;
   code?: string | null;
+  isConfeiteira: boolean;
   scheduledAt?: string | null;
   status: "PENDING" | "PAID" | "READY" | "DELIVERED" | "CANCELLED";
   customerName: string | null;
@@ -117,6 +121,7 @@ export type SimpleOrderAdmin = {
   provisionTransferredAt: string | null;
   items: {
     id: string;
+    productId: string;
     productName: string;
     productType: string;
     quantity: number;
@@ -192,6 +197,9 @@ type ProdutoFormState = {
   nome: string;
   descricao: string;
   preco: string;
+  precoConfeiteira: string;
+  quantidadeMinimaConfeiteira: string;
+  ativoConfeiteira: boolean;
   imagemBase64: string;
   categoria: ProductCategory;
   productTypeId: string;
@@ -207,6 +215,35 @@ type ProdutoFormState = {
   precisaSelecaoDeTipos: boolean;
 };
 
+type OrderEditFlavor = { tipo: string; quantidade: string };
+
+function OrderEditFlavorPicker({
+  product,
+  flavors,
+  onChange,
+}: {
+  product: ProdutoAdmin;
+  flavors: OrderEditFlavor[];
+  onChange: (flavors: OrderEditFlavor[]) => void;
+}) {
+  const total = flavors.reduce((sum, item) => sum + Number(item.quantidade || 0), 0);
+  const maxTypes = product.maxTiposSalgado;
+  return (
+    <div className="mt-3 rounded-[1.35rem] border border-[#f4a8eb] bg-white p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-3"><p className="text-base font-bold text-[#641052]">Sabores do pedido</p><p className="text-sm font-bold text-[#72506b]">{total}/{product.totalUnidades} un</p></div>
+      <div className="mt-3 space-y-2">
+        {flavors.map((flavor, index) => <div key={index} className="grid gap-3 rounded-[1.1rem] bg-[#fff0fc] p-3 sm:grid-cols-[minmax(0,1fr)_130px_auto]">
+          <div className="space-y-1"><label className="text-sm font-medium text-[#641052]">Tipo de salgado {index + 1}</label><Select value={flavor.tipo} onValueChange={(tipo) => onChange(flavors.map((item, itemIndex) => itemIndex === index ? { ...item, tipo } : item))}><SelectTrigger className="border-[#f4a8eb] bg-white"><SelectValue placeholder="Selecione o salgado" /></SelectTrigger><SelectContent>{product.saboresSugeridos.map((sabor) => <SelectItem key={sabor} value={sabor}>{sabor}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1"><label className="text-sm font-medium text-[#641052]">Quantidade</label><Input type="number" min="0" value={flavor.quantidade} onChange={(event) => onChange(flavors.map((item, itemIndex) => itemIndex === index ? { ...item, quantidade: event.target.value } : item))} className="border-[#f4a8eb] bg-white text-center font-bold" /></div>
+          <Button type="button" variant="outline" className="self-end border-[#f4a8eb] text-[#e000cf] hover:bg-[#fff0fc]" disabled={flavors.length <= 1} onClick={() => onChange(flavors.filter((_, itemIndex) => itemIndex !== index))}>− Remover</Button>
+        </div>)}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3"><p className="text-sm text-[#72506b]">Máximo de {maxTypes} tipos para este item.</p><Button type="button" variant="outline" disabled={flavors.length >= maxTypes} onClick={() => onChange([...flavors, { tipo: "", quantidade: "0" }])} className="rounded-full border-[#f4a8eb] text-[#e000cf] hover:bg-[#fff0fc]">＋ Tipo</Button></div>
+    </div>
+  );
+}
+
+
 type CupomFormState = {
   codigo: string;
   produtoId: string;
@@ -221,6 +258,9 @@ const EMPTY_FORM: ProdutoFormState = {
   nome: "",
   descricao: "",
   preco: "",
+  precoConfeiteira: "",
+  quantidadeMinimaConfeiteira: "",
+  ativoConfeiteira: false,
   imagemBase64: "",
   categoria: "CENTO",
   productTypeId: "",
@@ -480,6 +520,17 @@ export function ManhiaAdminDashboard({
   >(null);
   const [refreshingPedidos, setRefreshingPedidos] = useState(false);
   const [printingPedidoId, setPrintingPedidoId] = useState<string | null>(null);
+  const [selectedPedido, setSelectedPedido] = useState<PedidoAdmin | null>(null);
+  const [selectedSimpleOrder, setSelectedSimpleOrder] = useState<SimpleOrderAdmin | null>(null);
+  const [editingSimpleOrder, setEditingSimpleOrder] = useState<SimpleOrderAdmin | null>(null);
+  const [savingOrderEdit, setSavingOrderEdit] = useState(false);
+  const [orderEditItems, setOrderEditItems] = useState<Array<{ productId: string; quantity: string; selectedItems: OrderEditFlavor[] }>>([]);
+  const [orderEditFulfillment, setOrderEditFulfillment] = useState<"PICKUP" | "DELIVERY">("PICKUP");
+  const [orderEditAddress, setOrderEditAddress] = useState("");
+  const [orderEditNeighborhood, setOrderEditNeighborhood] = useState("");
+  const [orderEditReference, setOrderEditReference] = useState("");
+  const orderEditAddressRef = useRef<HTMLInputElement>(null);
+  const [orderEditPlace, setOrderEditPlace] = useState({ placeId: "", city: "", latitude: 0, longitude: 0 });
   const [messageDialogOpen, setMessageDialogOpen] = useState(false);
   const [bulkMessage, setBulkMessage] = useState("");
   const [messageDelaySeconds, setMessageDelaySeconds] = useState("15");
@@ -492,6 +543,29 @@ export function ManhiaAdminDashboard({
   const [analyticsEndDate, setAnalyticsEndDate] = useState("");
   const [analyticsStatus, setAnalyticsStatus] = useState("TODOS");
   const [analyticsProduct, setAnalyticsProduct] = useState("TODOS");
+
+  useEffect(() => {
+    if (!editingSimpleOrder || orderEditFulfillment !== "DELIVERY" || !orderEditAddressRef.current) return;
+    const setup = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const google = (window as unknown as { google?: any }).google;
+      if (!google?.maps?.places || !orderEditAddressRef.current) return;
+      const autocomplete = new google.maps.places.Autocomplete(orderEditAddressRef.current, { componentRestrictions: { country: "br" }, fields: ["place_id", "formatted_address", "address_components", "geometry"], types: ["address"] });
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        const component = (type: string) => place.address_components?.find((entry: { types: string[] }) => entry.types.includes(type))?.long_name || "";
+        setOrderEditAddress(place.formatted_address || "");
+        setOrderEditNeighborhood(component("sublocality_level_1") || component("sublocality") || component("neighborhood"));
+        setOrderEditPlace({ placeId: place.place_id || "", city: component("administrative_area_level_2"), latitude: place.geometry?.location?.lat() || 0, longitude: place.geometry?.location?.lng() || 0 });
+      });
+    };
+    const existing = document.querySelector<HTMLScriptElement>('script[data-vizinha-admin-google-maps]');
+    if (existing) { existing.addEventListener("load", setup); setup(); return () => existing.removeEventListener("load", setup); }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "")}&libraries=places&language=pt-BR&region=BR`;
+    script.async = true; script.dataset.vizinhaAdminGoogleMaps = "true"; script.addEventListener("load", setup); document.head.appendChild(script);
+    return () => script.removeEventListener("load", setup);
+  }, [editingSimpleOrder, orderEditFulfillment]);
 
   const openMessageDialog = async () => {
     setMessageDialogOpen(true);
@@ -1043,6 +1117,9 @@ export function ManhiaAdminDashboard({
             nome: form.nome,
             descricao: form.descricao,
             preco: form.preco,
+            precoConfeiteira: form.precoConfeiteira === "" ? null : form.precoConfeiteira,
+            quantidadeMinimaConfeiteira: form.quantidadeMinimaConfeiteira === "" ? null : form.quantidadeMinimaConfeiteira,
+            ativoConfeiteira: form.ativoConfeiteira,
             imagemBase64: form.imagemBase64,
             categoria: form.categoria,
             productTypeId: form.productTypeId || null,
@@ -1103,6 +1180,9 @@ export function ManhiaAdminDashboard({
       nome: produto.nome,
       descricao: produto.descricao,
       preco: Number(produto.preco).toFixed(2),
+      precoConfeiteira: produto.precoConfeiteira === null ? "" : Number(produto.precoConfeiteira).toFixed(2),
+      quantidadeMinimaConfeiteira: produto.quantidadeMinimaConfeiteira === null ? "" : String(produto.quantidadeMinimaConfeiteira),
+      ativoConfeiteira: produto.ativoConfeiteira,
       imagemBase64: produto.imagemBase64,
       categoria: produto.categoria,
       productTypeId: produto.productTypeId || "",
@@ -1680,6 +1760,42 @@ export function ManhiaAdminDashboard({
     }
   };
 
+  const openSimpleOrderEditor = (order: SimpleOrderAdmin) => {
+    setOrderEditItems(order.items.map((item) => ({ productId: item.productId, quantity: String(item.quantity), selectedItems: Array.isArray(item.selectedItems) && item.selectedItems.length ? item.selectedItems.map((entry) => ({ tipo: entry.tipo, quantidade: String(entry.quantidade) })) : [{ tipo: "", quantidade: "0" }] })));
+    setOrderEditFulfillment(order.fulfillmentType);
+    setOrderEditAddress(order.deliveryAddress || "");
+    setOrderEditNeighborhood(order.deliveryNeighborhood || "");
+    setOrderEditReference(order.deliveryReference || "");
+    setOrderEditPlace({ placeId: "", city: "", latitude: 0, longitude: 0 });
+    setEditingSimpleOrder(order);
+  };
+
+  const saveSimpleOrderEdit = async () => {
+    if (!editingSimpleOrder) return;
+    try {
+      setSavingOrderEdit(true);
+      const items = orderEditItems
+        .filter((item) => item.productId)
+        .map((item) => ({ productId: item.productId, quantity: Math.floor(Number(item.quantity)), selectedItems: item.selectedItems.map((entry) => ({ tipo: entry.tipo.trim(), quantidade: Math.floor(Number(entry.quantidade)) })).filter((entry) => entry.tipo && Number.isInteger(entry.quantidade) && entry.quantidade > 0) }));
+      const response = await fetch(`/api/manhia/orders/${editingSimpleOrder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "EDIT", items, fulfillmentType: orderEditFulfillment, deliveryAddress: orderEditAddress, deliveryNeighborhood: orderEditNeighborhood, deliveryReference: orderEditReference, deliveryPlaceId: orderEditPlace.placeId, deliveryCity: orderEditPlace.city, deliveryLatitude: orderEditPlace.latitude, deliveryLongitude: orderEditPlace.longitude }),
+      });
+      const data = (await response.json().catch(() => null)) as (SimpleOrderAdmin & { error?: string }) | null;
+      if (!response.ok) throw new Error(data?.error || "Não foi possível alterar o pedido.");
+      const updated = data as SimpleOrderAdmin;
+      setSimpleOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setSelectedSimpleOrder(updated);
+      setEditingSimpleOrder(null);
+      toast.success("Pedido alterado e cliente avisado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao alterar pedido.");
+    } finally {
+      setSavingOrderEdit(false);
+    }
+  };
+
   const handleConfirmSimpleOrderManualPayment = async (
     order: SimpleOrderAdmin,
   ) => {
@@ -2198,7 +2314,7 @@ export function ManhiaAdminDashboard({
                                       {getSimpleOrderCode(order)}
                                     </h4>
                                     <Badge className="border-[#d6e7a2] bg-[#f7fde7] text-[#1b5e20]">
-                                      Carrinho
+                                      {order.isConfeiteira ? "Confeiteira" : "Carrinho"}
                                     </Badge>
                                   </div>
                                   <p className="mt-1 truncate text-sm text-slate-500">
@@ -2303,7 +2419,7 @@ export function ManhiaAdminDashboard({
                               setDraggedPedidoId(null);
                               setDragOverStatus(null);
                             }}
-                            onClick={() => void handlePrint(pedido.id)}
+                            onClick={() => setSelectedPedido(pedido)}
                             className={cn(
                               "w-full cursor-grab rounded-2xl border border-[#d6e7a2] bg-[#fffaf3] p-3 text-left shadow-sm transition hover:border-[#f4d330] active:cursor-grabbing",
                               draggedPedidoId === `pedido:${pedido.id}` &&
@@ -2335,10 +2451,10 @@ export function ManhiaAdminDashboard({
                             key={`cart:${order.id}`}
                             type="button"
                             style={{ order: index }}
-                            title="Clique para imprimir o pedido do carrinho"
-                            aria-label={`Imprimir pedido do carrinho ${getSimpleOrderCode(order)}`}
+                            title="Clique para ver os detalhes do pedido do carrinho"
+                            aria-label={`Ver detalhes do pedido do carrinho ${getSimpleOrderCode(order)}`}
                             draggable={statusLoadingId !== order.id}
-                            onClick={() => void handlePrintSimpleOrder(order.id)}
+                            onClick={() => setSelectedSimpleOrder(order)}
                             onDragStart={() =>
                               setDraggedPedidoId(`cart:${order.id}`)
                             }
@@ -3711,6 +3827,18 @@ export function ManhiaAdminDashboard({
                       </Select>
                     </div>
 
+                    <div className="space-y-2 rounded-xl border border-pink-200 bg-pink-50 p-3 sm:col-span-2">
+                      <div className="flex items-center gap-2">
+                        <Checkbox id="produto-confeiteira-ativo" checked={form.ativoConfeiteira} onCheckedChange={(checked) => setForm((current) => ({ ...current, ativoConfeiteira: Boolean(checked) }))} />
+                        <label htmlFor="produto-confeiteira-ativo" className="text-sm font-semibold text-pink-900">Disponível para confeiteiras</label>
+                      </div>
+                      <p className="text-xs text-pink-800">Condição exclusiva da área /confeiteira.</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div><label className="text-sm font-medium text-slate-700">Preço para confeiteira</label><Input type="number" min="0" step="0.01" value={form.precoConfeiteira} onChange={(event) => setForm((current) => ({ ...current, precoConfeiteira: event.target.value }))} /></div>
+                        <div><label className="text-sm font-medium text-slate-700">Quantidade mínima</label><Input type="number" min="1" step="1" value={form.quantidadeMinimaConfeiteira} onChange={(event) => setForm((current) => ({ ...current, quantidadeMinimaConfeiteira: event.target.value }))} /></div>
+                      </div>
+                    </div>
+
                     <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3 sm:col-span-2">
                       <Checkbox id="produto-selecao-tipos" checked={form.precisaSelecaoDeTipos} onCheckedChange={(checked) => setForm((current) => ({ ...current, precisaSelecaoDeTipos: Boolean(checked) }))} />
                       <label htmlFor="produto-selecao-tipos" className="text-sm leading-6 text-slate-600">Este produto exige seleção de tipos/sabores.</label>
@@ -4237,6 +4365,150 @@ export function ManhiaAdminDashboard({
               {sendingMessages ? "Enviando..." : "Enviar para todos"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={selectedPedido !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPedido(null);
+        }}
+      >
+        <DialogContent
+          className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl"
+          onInteractOutside={(event) => {
+            if ((event.target as HTMLElement).closest(".pac-container")) event.preventDefault();
+          }}
+        >
+          {selectedPedido ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-[#0b3d18]">
+                  Pedido {selectedPedido.codigo}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedPedido.clienteNome} • {selectedPedido.clienteTelefone}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl bg-[#f7fde7] p-3">
+                  <p className="font-semibold text-[#1b5e20]">Entrega</p>
+                  <p className="mt-1 text-slate-700">{formatDateTime(selectedPedido.dataEntrega)}</p>
+                </div>
+                <div className="rounded-xl bg-[#f7fde7] p-3">
+                  <p className="font-semibold text-[#1b5e20]">Pagamento</p>
+                  <p className="mt-1 text-slate-700">{selectedPedido.metodoPagamentoLabel} • {selectedPedido.percentualPagamento}% agora</p>
+                  <p className="font-bold text-[#0b3d18]">{formatCurrency(Number(selectedPedido.totalCobrado))}</p>
+                </div>
+                <div className="rounded-xl bg-[#f7fde7] p-3 sm:col-span-2">
+                  <p className="font-semibold text-[#1b5e20]">Produto e itens</p>
+                  <p className="mt-1 text-slate-700">{selectedPedido.produtoNomeSnapshot} • {selectedPedido.totalUnidades} unidades • {selectedPedido.totalTipos} tipos</p>
+                  <ul className="mt-2 space-y-1 text-slate-700">
+                    {selectedPedido.itens.map((item) => <li key={item.id}>{item.tipo}: {item.quantidade} un</li>)}
+                  </ul>
+                </div>
+                <div className="rounded-xl bg-[#f7fde7] p-3 sm:col-span-2">
+                  <p className="font-semibold text-[#1b5e20]">Observações</p>
+                  <p className="mt-1 whitespace-pre-wrap text-slate-700">{selectedPedido.observacoes || "Sem observações."}</p>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setSelectedPedido(null)}>Fechar</Button>
+                <Button
+                  type="button"
+                  disabled={printingPedidoId === selectedPedido.id}
+                  onClick={() => void handlePrint(selectedPedido.id)}
+                  className="bg-[#1b7f31] text-white hover:bg-[#156326]"
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  {printingPedidoId === selectedPedido.id ? "Enviando..." : "Imprimir"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={selectedSimpleOrder !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSimpleOrder(null);
+        }}
+      >
+        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl">
+          {selectedSimpleOrder ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-[#0b3d18]">Pedido {getSimpleOrderCode(selectedSimpleOrder)}{selectedSimpleOrder.isConfeiteira ? " • Confeiteira" : ""}</DialogTitle>
+                <DialogDescription>{selectedSimpleOrder.customerName || "Cliente não informado"}{selectedSimpleOrder.customerPhone ? ` • ${selectedSimpleOrder.customerPhone}` : ""}</DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl bg-[#f7fde7] p-3">
+                  <p className="font-semibold text-[#1b5e20]">Entrega/retirada</p>
+                  <p className="mt-1 text-slate-700">{formatDateTime(getSimpleOrderDate(selectedSimpleOrder))}</p>
+                  <p className="mt-1 text-slate-700">{selectedSimpleOrder.fulfillmentType === "DELIVERY" ? selectedSimpleOrder.deliveryAddress || "Entrega" : "Retirada"}</p>
+                  {selectedSimpleOrder.deliveryReference ? <p className="mt-1 text-slate-700">Referência: {selectedSimpleOrder.deliveryReference}</p> : null}
+                </div>
+                <div className="rounded-xl bg-[#f7fde7] p-3">
+                  <p className="font-semibold text-[#1b5e20]">Pagamento</p>
+                  <p className="mt-1 text-slate-700">{selectedSimpleOrder.paymentMethodLabel} • {selectedSimpleOrder.paymentPercentage}% agora</p>
+                  <p className="font-bold text-[#0b3d18]">{formatCurrency(Number(selectedSimpleOrder.chargedAmount || selectedSimpleOrder.totalAmount))}</p>
+                </div>
+                <div className="rounded-xl bg-[#f7fde7] p-3 sm:col-span-2">
+                  <p className="font-semibold text-[#1b5e20]">Itens</p>
+                  <ul className="mt-2 space-y-1 text-slate-700">
+                    {selectedSimpleOrder.items.map((item) => <li key={item.id}>{item.productName} ({item.productType}) — {item.quantity} x {formatCurrency(Number(item.unitPrice))}</li>)}
+                  </ul>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setSelectedSimpleOrder(null)}>Fechar</Button>
+                <Button type="button" variant="outline" onClick={() => openSimpleOrderEditor(selectedSimpleOrder)}>Alterar pedido</Button>
+                <Button type="button" disabled={printingPedidoId === selectedSimpleOrder.id} onClick={() => void handlePrintSimpleOrder(selectedSimpleOrder.id)} className="bg-[#1b7f31] text-white hover:bg-[#156326]">
+                  <Printer className="mr-2 h-4 w-4" />
+                  {printingPedidoId === selectedSimpleOrder.id ? "Enviando..." : "Imprimir"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editingSimpleOrder !== null} onOpenChange={(open) => { if (!open && !savingOrderEdit) setEditingSimpleOrder(null); }}>
+        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl" onInteractOutside={(event) => { if ((event.target as HTMLElement).closest(".pac-container")) event.preventDefault(); }}>
+          <DialogHeader>
+            <DialogTitle className="text-[#0b3d18]">Alterar pedido</DialogTitle>
+            <DialogDescription>O cliente receberá uma confirmação da alteração. O saldo será cobrado pelo checkout seguro quando o pedido estiver pronto.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#618038]">Produtos e quantidades</p><p className="mt-1 text-sm text-slate-500">Ajuste cada produto e a composição dos sabores, como no carrinho.</p></div>
+              {orderEditItems.map((item, index) => (
+                <div key={`${item.productId}-${index}`} className="rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] p-3 shadow-sm">
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_110px_auto]">
+                    <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Produto</label><Select value={item.productId} onValueChange={(value) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, productId: value, selectedItems: [{ tipo: "", quantidade: "0" }] } : entry))}>
+                    <SelectTrigger className="bg-white"><SelectValue placeholder="Produto" /></SelectTrigger>
+                    <SelectContent>{produtos.filter((product) => product.ativo && (!editingSimpleOrder?.isConfeiteira || product.ativoConfeiteira)).map((product) => <SelectItem key={product.id} value={product.id}>{product.nome}</SelectItem>)}</SelectContent>
+                    </Select></div>
+                    <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Quantidade</label><Input className="bg-white text-center font-bold" type="number" min="1" value={item.quantity} onChange={(event) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, quantity: event.target.value } : entry))} /></div>
+                    <Button type="button" variant="outline" className="self-end border-red-200 text-red-700 hover:bg-red-50" disabled={orderEditItems.length === 1} onClick={() => setOrderEditItems((current) => current.filter((_, entryIndex) => entryIndex !== index))}>Remover</Button>
+                  </div>
+                  {(() => { const product = produtos.find((candidate) => candidate.id === item.productId); return product?.precisaSelecaoDeTipos ? <OrderEditFlavorPicker product={product} flavors={item.selectedItems} onChange={(selectedItems) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, selectedItems } : entry))} /> : null; })()}
+                </div>
+              ))}
+              <Button type="button" variant="outline" className="w-full border-dashed border-[#91b34a] text-[#1b5e20] hover:bg-[#f7fde7]" onClick={() => setOrderEditItems((current) => [...current, { productId: produtos.find((product) => product.ativo && (!editingSimpleOrder?.isConfeiteira || product.ativoConfeiteira))?.id || "", quantity: "1", selectedItems: [{ tipo: "", quantidade: "0" }] }])}>+ Adicionar produto</Button>
+            </div>
+            <div className="space-y-2 rounded-xl bg-[#f7fde7] p-3">
+              <p className="text-sm font-semibold text-[#1b5e20]">Entrega</p>
+              <Select value={orderEditFulfillment} onValueChange={(value) => setOrderEditFulfillment(value as "PICKUP" | "DELIVERY")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PICKUP">Retirada</SelectItem><SelectItem value="DELIVERY">Entrega</SelectItem></SelectContent></Select>
+              {orderEditFulfillment === "DELIVERY" ? <div className="grid gap-2 sm:grid-cols-3"><Input ref={orderEditAddressRef} value={orderEditAddress} onChange={(event) => setOrderEditAddress(event.target.value)} placeholder="Endereço (selecione no Google Maps)" /><Input value={orderEditNeighborhood} onChange={(event) => setOrderEditNeighborhood(event.target.value)} placeholder="Bairro" /><Input value={orderEditReference} onChange={(event) => setOrderEditReference(event.target.value)} placeholder="Referência" /></div> : null}
+            </div>
+          </div>
+          <DialogFooter><Button type="button" variant="outline" disabled={savingOrderEdit} onClick={() => setEditingSimpleOrder(null)}>Cancelar</Button><Button type="button" disabled={savingOrderEdit} onClick={() => void saveSimpleOrderEdit()} className="bg-[#1b7f31] text-white hover:bg-[#156326]">{savingOrderEdit ? "Salvando..." : "Salvar alteração"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </main>

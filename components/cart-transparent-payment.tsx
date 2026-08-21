@@ -20,6 +20,7 @@ export type CartCheckoutSession = {
   externalReference: string;
   paymentMethod: MetodoPagamento;
   chargedAmount: number;
+  balance?: boolean;
 };
 
 type PaymentStatus = "PENDING" | "PAID" | "CANCELLED";
@@ -83,6 +84,7 @@ export function CartTransparentPayment({
   customerEmail: string;
   onPaid: () => void;
 }) {
+  const paymentUrl = `/api/checkout/cart/${session.orderId}/pay${session.balance ? "?balance=1" : ""}`;
   const [status, setStatus] = useState<PaymentStatus>("PENDING");
   const [pix, setPix] = useState<PixPaymentData | null>(null);
   const [loadingPix, setLoadingPix] = useState(session.paymentMethod === MetodoPagamento.PIX);
@@ -102,7 +104,7 @@ export function CartTransparentPayment({
     try {
       setLoadingPix(true);
       setMessage(null);
-      const response = await fetch(`/api/checkout/cart/${session.orderId}/pay`, {
+      const response = await fetch(paymentUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -119,7 +121,7 @@ export function CartTransparentPayment({
     } finally {
       setLoadingPix(false);
     }
-  }, [applyResponse, session.orderId]);
+  }, [applyResponse, paymentUrl]);
 
   useEffect(() => {
     if (session.paymentMethod !== MetodoPagamento.PIX || pixStarted.current) return;
@@ -132,7 +134,7 @@ export function CartTransparentPayment({
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/checkout/cart/${session.orderId}/pay`, {
+        const response = await fetch(paymentUrl, {
           cache: "no-store",
         });
         const data = (await response.json().catch(() => null)) as
@@ -156,7 +158,7 @@ export function CartTransparentPayment({
 
     const interval = window.setInterval(() => void poll(), 5000);
     return () => window.clearInterval(interval);
-  }, [session.orderId, status]);
+  }, [paymentUrl, status]);
 
   useEffect(() => {
     if (status === "PAID" && !paidNotified.current) {
@@ -167,7 +169,7 @@ export function CartTransparentPayment({
 
   const payCard = async (formData: CardFormData) => {
     setMessage(null);
-    const response = await fetch(`/api/checkout/cart/${session.orderId}/pay`, {
+    const response = await fetch(paymentUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

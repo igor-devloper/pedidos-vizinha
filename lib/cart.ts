@@ -8,6 +8,11 @@ import { getProdutoComboItens } from "@/lib/produtos";
 import { normalizeSaboresList } from "@/lib/sabores";
 
 export const CART_SESSION_COOKIE = "vizinha_cart_session";
+export type CartAudience = "VIZINHA" | "CONFEITEIRA";
+
+export function normalizeCartAudience(value: unknown): CartAudience {
+  return value === "CONFEITEIRA" ? "CONFEITEIRA" : "VIZINHA";
+}
 
 const cartInclude = {
   items: {
@@ -82,9 +87,13 @@ export function buildInitialSelectedItems(product: {
 
 export function getCartProductUnitPrice(product: {
   preco: Prisma.Decimal | number | string;
+  precoConfeiteira?: Prisma.Decimal | number | string | null;
   emPromocao?: boolean | null;
   descontoPercentual?: Prisma.Decimal | number | string | null;
-}) {
+}, audience: CartAudience = "VIZINHA") {
+  if (audience === "CONFEITEIRA" && product.precoConfeiteira != null) {
+    return Number(Number(product.precoConfeiteira).toFixed(2));
+  }
   const price = Number(product.preco);
 
   if (!product.emPromocao) {
@@ -94,9 +103,10 @@ export function getCartProductUnitPrice(product: {
   return calculateDiscountedSubtotal(price, Number(product.descontoPercentual || 0)).subtotal;
 }
 
-export async function getCartSessionId() {
+export async function getCartSessionId(audience: CartAudience = "VIZINHA") {
   const cookieStore = await cookies();
-  const existing = cookieStore.get(CART_SESSION_COOKIE)?.value;
+  const cookieName = audience === "CONFEITEIRA" ? `${CART_SESSION_COOKIE}_confeiteira` : CART_SESSION_COOKIE;
+  const existing = cookieStore.get(cookieName)?.value;
 
   if (existing) {
     return { sessionId: existing, isNew: false };
@@ -105,10 +115,11 @@ export async function getCartSessionId() {
   return { sessionId: randomUUID(), isNew: true };
 }
 
-export function setCartSessionCookie(response: Response, sessionId: string) {
+export function setCartSessionCookie(response: Response, sessionId: string, audience: CartAudience = "VIZINHA") {
+  const cookieName = audience === "CONFEITEIRA" ? `${CART_SESSION_COOKIE}_confeiteira` : CART_SESSION_COOKIE;
   response.headers.append(
     "Set-Cookie",
-    `${CART_SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`
+    `${cookieName}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`
   );
 }
 
@@ -121,18 +132,21 @@ export async function getOrCreateCart(sessionId: string) {
   });
 }
 
-export async function getCurrentCart() {
-  const { sessionId, isNew } = await getCartSessionId();
+export async function getCurrentCart(audience: CartAudience = "VIZINHA") {
+  const { sessionId, isNew } = await getCartSessionId(audience);
   const cart = await getOrCreateCart(sessionId);
 
   return { sessionId, isNew, cart };
 }
 
-export function serializeCart(cart: CartWithItems) {
+export function serializeCart(cart: CartWithItems, audience: CartAudience = "VIZINHA") {
   const items = cart.items.map((item) => {
-    const unitPrice = getCartProductUnitPrice(item.product);
+    const unitPrice = getCartProductUnitPrice(item.product, audience);
     const requestedUnits = item.requestedUnits ?? item.product.totalUnidades * item.quantity;
-    const usesMinimumQuantity = Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+    const confectionerMinimum = item.product.quantidadeMinimaConfeiteira;
+    const usesMinimumQuantity = audience === "CONFEITEIRA"
+      ? Boolean(confectionerMinimum)
+      : Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
     const subtotal = usesMinimumQuantity
       ? Number((unitPrice * (requestedUnits / item.product.totalUnidades)).toFixed(2))
       : unitPrice * item.quantity;
@@ -148,7 +162,7 @@ export function serializeCart(cart: CartWithItems) {
       quantity: item.quantity,
       requestedUnits,
       usesMinimumQuantity,
-      minimumQuantity: item.product.productType?.minQuantity ?? 1,
+      minimumQuantity: audience === "CONFEITEIRA" ? confectionerMinimum ?? 1 : item.product.productType?.minQuantity ?? 1,
       minimumLeadHours: item.product.antecedenciaMinimaHoras,
       unitPrice,
       subtotal,

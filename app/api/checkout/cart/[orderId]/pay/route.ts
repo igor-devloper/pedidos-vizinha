@@ -30,15 +30,18 @@ const cardPaymentSchema = z.object({
 });
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ orderId: string }> },
 ) {
   const { orderId } = await context.params;
+  const balance = new URL(req.url).searchParams.get("balance") === "1";
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: {
       id: true,
       externalReference: true,
+      saldoExternalReference: true,
+      saldoPagoAt: true,
       status: true,
       paymentMethod: true,
       mercadoPagoStatusDetail: true,
@@ -52,8 +55,8 @@ export async function GET(
 
   return NextResponse.json({
     orderId: order.id,
-    externalReference: order.externalReference,
-    status: order.status,
+    externalReference: balance ? order.saldoExternalReference : order.externalReference,
+    status: balance ? (order.saldoPagoAt ? "PAID" : "PENDING") : order.status,
     paymentMethod: order.paymentMethod,
     statusDetail: order.mercadoPagoStatusDetail,
     pixExpirationDate: order.pixExpirationDate?.toISOString() || null,
@@ -66,6 +69,7 @@ export async function POST(
 ) {
   try {
     const { orderId } = await context.params;
+    const balance = new URL(req.url).searchParams.get("balance") === "1";
     const order = await prisma.order.findUnique({ where: { id: orderId } });
 
     if (!order) {
@@ -75,6 +79,10 @@ export async function POST(
       );
     }
 
+    if (balance && (!order.saldoExternalReference || !order.saldoTotalCobrado || order.saldoPagoAt)) {
+      return NextResponse.json({ error: "Não há saldo pendente para este pedido." }, { status: 409 });
+    }
+
     const expiredPixCanRetry =
       order.paymentMethod === MetodoPagamento.PIX &&
       order.pixExpirationDate !== null &&
@@ -82,11 +90,11 @@ export async function POST(
     const rejectedCardCanRetry =
       (order.paymentMethod === MetodoPagamento.CARTAO_CREDITO ||
         order.paymentMethod === MetodoPagamento.CARTAO_DEBITO) &&
-      order.status === OrderStatus.CANCELLED &&
+      !balance && order.status === OrderStatus.CANCELLED &&
       Boolean(order.mercadoPagoStatusDetail);
 
     if (
-      order.status !== OrderStatus.PENDING &&
+      !balance && order.status !== OrderStatus.PENDING &&
       !expiredPixCanRetry &&
       !rejectedCardCanRetry
     ) {
@@ -101,12 +109,14 @@ export async function POST(
       email: order.customerEmail,
       phone: order.customerPhone,
     };
+    const paymentOrder = balance ? { ...order, externalReference: order.saldoExternalReference!, chargedAmount: order.saldoTotalCobrado! } : order;
+    const amountToCharge = balance ? Number(order.saldoTotalCobrado) : Number(order.chargedAmount);
 
     if (order.paymentMethod === MetodoPagamento.PIX) {
       const payment = await createCartMercadoPagoPixPayment({
-        order,
+        order: paymentOrder,
         payer,
-        chargedAmount: Number(order.chargedAmount),
+        chargedAmount: amountToCharge,
         idempotencySuffix: expiredPixCanRetry
           ? order.mercadoPagoPaymentId || "expired"
           : undefined,
@@ -116,7 +126,7 @@ export async function POST(
       await applyCartOrderPayment({
         id: payment.id,
         status: payment.status,
-        external_reference: order.externalReference,
+        external_reference: paymentOrder.externalReference,
       });
 
       await prisma.order.update({
@@ -135,7 +145,7 @@ export async function POST(
 
       return NextResponse.json({
         orderId: order.id,
-        externalReference: order.externalReference,
+        externalReference: paymentOrder.externalReference,
         status,
         paymentStatus: payment.status,
         statusDetail: payment.statusDetail,
@@ -159,13 +169,13 @@ export async function POST(
 
     const body = cardPaymentSchema.parse(await req.json().catch(() => ({})));
     const payment = await createCartMercadoPagoCardPayment({
-      order,
+      order: paymentOrder,
       payer: {
         ...payer,
         email: body.payer.email,
         identification: body.payer.identification,
       },
-      chargedAmount: Number(order.chargedAmount),
+      chargedAmount: amountToCharge,
       token: body.token,
       paymentMethodId: body.payment_method_id,
       issuerId: body.issuer_id,
@@ -176,7 +186,7 @@ export async function POST(
     await applyCartOrderPayment({
       id: payment.id,
       status: payment.status,
-      external_reference: order.externalReference,
+      external_reference: paymentOrder.externalReference,
     });
 
     await prisma.order.update({
@@ -191,7 +201,7 @@ export async function POST(
 
     return NextResponse.json({
       orderId: order.id,
-      externalReference: order.externalReference,
+      externalReference: paymentOrder.externalReference,
       status,
       paymentStatus: payment.status,
       statusDetail: payment.statusDetail,

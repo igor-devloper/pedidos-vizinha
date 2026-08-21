@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
+import type { CartAudience } from "@/lib/cart";
 
 type CartItem = {
   id: string;
@@ -266,8 +267,8 @@ function getTimeSlots(
   return slots;
 }
 
-async function readCart() {
-  const response = await fetch("/api/cart", { cache: "no-store" });
+async function readCart(audience: CartAudience = "VIZINHA") {
+  const response = await fetch(`/api/cart?audience=${audience}`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Não foi possível carregar o carrinho.");
   }
@@ -294,11 +295,13 @@ export function AddToCartControls({
   siteTheme,
   minimumQuantity,
   usesMinimumQuantity = false,
+  audience = "VIZINHA",
 }: {
   productId: string;
   siteTheme: StoreSiteTheme;
   minimumQuantity?: number | null;
   usesMinimumQuantity?: boolean;
+  audience?: CartAudience;
 }) {
   const [quantity, setQuantity] = useState(String(usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1));
   const [loading, setLoading] = useState(false);
@@ -317,7 +320,7 @@ export function AddToCartControls({
       const response = await fetch("/api/cart/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(usesMinimumQuantity ? { productId, requestedUnits: parsedQuantity } : { productId, quantity: parsedQuantity }),
+        body: JSON.stringify(usesMinimumQuantity ? { productId, requestedUnits: parsedQuantity, audience } : { productId, quantity: parsedQuantity, audience }),
       });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
 
@@ -361,9 +364,11 @@ export function AddToCartControls({
 export function FloatingCart({
   businessStatus,
   siteTheme,
+  audience = "VIZINHA",
 }: {
   businessStatus: CartBusinessStatusData;
   siteTheme: StoreSiteTheme;
+  audience?: CartAudience;
 }) {
   const [cart, setCart] = useState<CartData>(EMPTY_CART);
   const [open, setOpen] = useState(false);
@@ -445,7 +450,7 @@ export function FloatingCart({
 
   const loadCart = async () => {
     try {
-      setCart(await readCart());
+      setCart(await readCart(audience));
     } catch {
       setCart(EMPTY_CART);
     }
@@ -476,10 +481,10 @@ export function FloatingCart({
             }))
           : item.selectedItems;
       setLoadingId(item.id);
-      const response = await fetch(`/api/cart/item/${item.id}`, {
+      const response = await fetch(`/api/cart/item/${item.id}?audience=${audience}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item.usesMinimumQuantity ? { requestedUnits: nextQuantity, selectedItems } : { quantity: nextQuantity, selectedItems }),
+        body: JSON.stringify(item.usesMinimumQuantity ? { requestedUnits: nextQuantity, selectedItems, audience } : { quantity: nextQuantity, selectedItems, audience }),
       });
 
       if (!response.ok) throw new Error("Não foi possível atualizar.");
@@ -508,7 +513,7 @@ export function FloatingCart({
     try {
       setItemError(null);
       setLoadingId(item.id);
-      const response = await fetch(`/api/cart/item/${item.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/cart/item/${item.id}?audience=${audience}`, { method: "DELETE" });
 
       if (!response.ok) throw new Error("Não foi possível remover.");
       updateCart((await response.json()) as CartData);
@@ -662,6 +667,7 @@ export function FloatingCart({
           deliveryPlaceId: deliveryPlace.placeId,
           deliveryLatitude: deliveryPlace.latitude,
           deliveryLongitude: deliveryPlace.longitude,
+          audience,
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -706,10 +712,10 @@ export function FloatingCart({
       ),
     }));
 
-    const savePromise = fetch(`/api/cart/item/${item.id}`, {
+    const savePromise = fetch(`/api/cart/item/${item.id}?audience=${audience}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quantity: item.quantity, selectedItems: normalizedSelectedItems }),
+      body: JSON.stringify({ quantity: item.quantity, selectedItems: normalizedSelectedItems, audience }),
     })
       .then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível atualizar os tipos.");

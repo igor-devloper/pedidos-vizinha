@@ -7,6 +7,7 @@
 import { prisma } from "@/lib/db";
 import { createMercadoPagoPreference } from "@/lib/mercado-pago";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
+import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
 import { sendCartOrderToPrintService } from "@/lib/print-service";
 import { BUSINESS_INFO } from "@/lib/site-config";
 import { sendWhatsappText } from "@/lib/whatsapp";
@@ -102,6 +103,7 @@ export function buildCartOrderPrintableReceipt(order: CartOrderWithItems) {
   const lines = [
     `#${BUSINESS_INFO.name}`,
     `#PEDIDO CARRINHO ${cartOrderCode(order)}`,
+    order.isConfeiteira ? "### CONFEITEIRA ###" : null,
     "-".repeat(30),
     "#CLIENTE",
     `FEITO EM: ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(order.createdAt)}`,
@@ -140,7 +142,8 @@ function buildCartOrderClientMessage(order: CartOrderWithItems) {
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
-      `🛍️ *Pedido #${cartOrderCode(order)}*`,
+    `🛍️ *Pedido #${cartOrderCode(order)}*`,
+      order.isConfeiteira ? "🎂 *Pedido de confeiteira*" : null,
       WHATSAPP_SECTION_DIVIDER,
     ],
     [
@@ -174,7 +177,8 @@ function buildCartOrderOwnerMessage(order: CartOrderWithItems) {
     ],
     [
       WHATSAPP_SECTION_DIVIDER,
-      `🛍️ *Pedido #${cartOrderCode(order)}*`,
+    `🛍️ *Pedido #${cartOrderCode(order)}*`,
+      order.isConfeiteira ? "🎂 *PEDIDO DE CONFEITEIRA*" : null,
       WHATSAPP_SECTION_DIVIDER,
     ],
     [
@@ -239,7 +243,7 @@ function buildCartOrderReadyMessage(
   >,
 ) {
   const hasPendingBalance =
-    order.paymentPercentage === 50 &&
+    !order.saldoPagoAt &&
     !order.saldoPagoAt &&
     order.saldoInitPoint &&
     order.saldoTotalCobrado !== null;
@@ -255,10 +259,10 @@ function buildCartOrderReadyMessage(
     ],
     hasPendingBalance
       ? [
-        "💰 *Falta apenas o pagamento da 2ª parte*",
+        "💰 *Falta um valor para quitar seu pedido*",
         `Valor restante: *${formatCurrency(Number(order.saldoTotalCobrado))}*`,
-        "🔗 Pague por este link:",
-        order.saldoInitPoint!,
+        "🔗 Pague pelo checkout seguro da Vizinha:",
+        `${BUSINESS_INFO.appUrl}/checkout/saldo/${order.id}`,
       ]
       : null,
     "🙏 Agradecemos pela preferência e esperamos você!",
@@ -267,7 +271,7 @@ function buildCartOrderReadyMessage(
 }
 
 async function ensureCartOrderBalanceCharge(order: CartOrderWithItems) {
-  if (order.paymentPercentage !== 50 || order.saldoPagoAt) {
+  if (order.saldoPagoAt) {
     return null;
   }
 
@@ -285,18 +289,17 @@ async function ensureCartOrderBalanceCharge(order: CartOrderWithItems) {
     };
   }
 
-  const charge = calculatePaymentAmounts(
-    Number(order.totalAmount),
-    50,
-    order.paymentMethod,
-  );
+  const totalWithPaymentFee = calculatePaymentAmounts(Number(order.totalAmount), 100, order.paymentMethod).totalToCharge;
+  const alreadyPaid = Number(order.chargedAmount || 0);
+  const remainingAmount = Number((totalWithPaymentFee - alreadyPaid).toFixed(2));
+  if (remainingAmount <= 0) return null;
   const saldoExternalReference = `${order.externalReference}-saldo`;
   const preference = await createMercadoPagoPreference({
     pedido: {
       codigo: `${cartOrderCode(order)}-SALDO`,
       mpExternalReference: saldoExternalReference,
       produtoNomeSnapshot: `Pedido ${cartOrderCode(order)} - saldo final`,
-      totalCobrado: charge.totalToCharge,
+      totalCobrado: remainingAmount,
       clienteNome: order.customerName || "Cliente",
       clienteEmail: order.customerEmail,
       clienteTelefone: order.customerPhone || "",
@@ -313,8 +316,14 @@ async function ensureCartOrderBalanceCharge(order: CartOrderWithItems) {
     saldoExternalReference,
     saldoPreferenceId: preference.id,
     saldoInitPoint: preference.init_point,
-    saldoTotalCobrado: charge.totalToCharge,
+    saldoTotalCobrado: remainingAmount,
   };
+}
+
+function hasOutstandingCartOrderBalance(order: CartOrderWithItems) {
+  if (order.saldoPagoAt) return false;
+  const totalWithPaymentFee = calculatePaymentAmounts(Number(order.totalAmount), 100, order.paymentMethod).totalToCharge;
+  return totalWithPaymentFee - Number(order.chargedAmount || 0) > 0.005;
 }
 
 async function loadCartOrder(id: string) {
@@ -488,6 +497,7 @@ export async function printCartOrderReceipt(id: string) {
   await sendCartOrderToPrintService({
     orderId: order.id,
     code: cartOrderCode(order),
+    isConfeiteira: order.isConfeiteira,
     reason: "manual",
     receipt: buildCartOrderPrintableReceipt(order),
     customerName: order.customerName,
@@ -503,6 +513,128 @@ export async function printCartOrderReceipt(id: string) {
   });
 }
 
+export async function editCartOrder({
+  id,
+  items,
+  fulfillmentType,
+  deliveryAddress,
+  deliveryReference,
+  deliveryNeighborhood,
+  deliveryPlaceId,
+  deliveryCity,
+  deliveryLatitude,
+  deliveryLongitude,
+}: {
+  id: string;
+  items: Array<{ productId: string; quantity: number; selectedItems?: Array<{ tipo: string; quantidade: number }> }>;
+  fulfillmentType: FulfillmentType;
+  deliveryAddress?: string;
+  deliveryReference?: string;
+  deliveryNeighborhood?: string;
+  deliveryPlaceId?: string;
+  deliveryCity?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
+}) {
+  const current = await loadCartOrder(id);
+  if (!current) throw new Error("Pedido do carrinho não encontrado.");
+  if (current.status === "CANCELLED") throw new Error("Pedido cancelado não pode ser alterado.");
+  if (current.saldoPagoAt) throw new Error("Pedido com saldo já pago não pode ser alterado pelo painel.");
+  if (items.length === 0) throw new Error("Mantenha ao menos um produto no pedido.");
+
+  const productIds = [...new Set(items.map((item) => item.productId))];
+  const products = await prisma.produto.findMany({
+    where: { id: { in: productIds }, ativo: true },
+    include: { productType: true },
+  });
+  if (products.length !== productIds.length) throw new Error("Um dos produtos selecionados não está mais disponível.");
+
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const normalizedItems = items.map((item) => {
+    const product = productById.get(item.productId)!;
+    const requestedUnits = Math.max(1, Math.floor(item.quantity));
+    const minimum = current.isConfeiteira
+      ? product.quantidadeMinimaConfeiteira || 1
+      : product.productType?.allowsMultiple && product.productType.minQuantity
+        ? product.productType.minQuantity
+        : 1;
+    if (requestedUnits < minimum) throw new Error(`${product.nome}: mínimo de ${minimum} unidades.`);
+    const usesUnits = current.isConfeiteira || Boolean(product.productType?.allowsMultiple && product.productType.minQuantity);
+    const selectedItems = item.selectedItems || [];
+    const requiredUnits = usesUnits ? requestedUnits : product.totalUnidades * requestedUnits;
+    if (product.precisaSelecaoDeTipos) {
+      const selectedTotal = selectedItems.reduce((sum, entry) => sum + entry.quantidade, 0);
+      if (selectedTotal !== requiredUnits) throw new Error(`${product.nome}: selecione exatamente ${requiredUnits} unidades nos sabores.`);
+      if (selectedItems.length > product.maxTiposSalgado * requestedUnits) throw new Error(`${product.nome}: máximo de ${product.maxTiposSalgado * requestedUnits} tipos.`);
+    }
+    const unitPrice = current.isConfeiteira && product.precoConfeiteira !== null
+      ? Number(product.precoConfeiteira)
+      : Number(product.preco);
+    const subtotal = usesUnits ? Number((unitPrice * (requestedUnits / product.totalUnidades)).toFixed(2)) : Number((unitPrice * requestedUnits).toFixed(2));
+    return {
+      productId: product.id,
+      productName: product.nome,
+      productType: product.productType?.name || String(product.categoria),
+      quantity: usesUnits ? requestedUnits : requestedUnits,
+      unitPrice,
+      subtotal,
+      selectedItems,
+    };
+  });
+
+  const isDelivery = fulfillmentType === "DELIVERY";
+  const address = deliveryAddress?.trim() || "";
+  const neighborhood = deliveryNeighborhood?.trim() || "";
+  const reference = deliveryReference?.trim() || "";
+  if (isDelivery && (!address || !neighborhood || reference.length < 3)) throw new Error("Informe endereço, bairro e referência para a entrega.");
+  const delivery = isDelivery ? getDeliveryFee(neighborhood) : { fee: 0, agreed: true };
+  const totalAmount = Number((normalizedItems.reduce((sum, item) => sum + item.subtotal, 0) + delivery.fee).toFixed(2));
+
+  const order = await prisma.$transaction(async (tx) => {
+    await tx.orderItem.deleteMany({ where: { orderId: id } });
+    return tx.order.update({
+      where: { id },
+      data: {
+        totalAmount,
+        fulfillmentType,
+        deliveryAddress: isDelivery ? address : null,
+        deliveryReference: isDelivery ? reference : null,
+        deliveryNeighborhood: isDelivery ? neighborhood : null,
+        deliveryCity: isDelivery ? deliveryCity || null : null,
+        deliveryPlaceId: isDelivery ? deliveryPlaceId || null : null,
+        deliveryLatitude: isDelivery ? deliveryLatitude || null : null,
+        deliveryLongitude: isDelivery ? deliveryLongitude || null : null,
+        deliveryMapsUrl: isDelivery && deliveryPlaceId ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}&query_place_id=${encodeURIComponent(deliveryPlaceId)}` : null,
+        deliveryFee: delivery.fee,
+        deliveryFeeAgreed: delivery.agreed,
+        saldoExternalReference: null,
+        saldoPreferenceId: null,
+        saldoInitPoint: null,
+        saldoPaymentId: null,
+        saldoTotalCobrado: null,
+        saldoPagoAt: null,
+        saldoCobrancaEnviadaAt: null,
+        notificadoProntoClienteAt: current.status === "READY" ? null : current.notificadoProntoClienteAt,
+        notifiedCourierAt: isDelivery ? null : current.notifiedCourierAt,
+        notifiedCourierReadyAt: isDelivery ? null : current.notifiedCourierReadyAt,
+        items: { create: normalizedItems },
+      },
+      include: { items: true },
+    });
+  });
+
+  if (order.customerPhone) {
+    const deliveryLabel = isDelivery ? `com entrega (${delivery.agreed ? formatCurrency(delivery.fee) : "taxa a combinar"})` : "para retirada";
+    await sendWhatsappText(order.customerPhone, `✏️ *Pedido atualizado*\nSeu pedido #${cartOrderCode(order)} foi atualizado ${deliveryLabel}.\nNovo total: *${formatCurrency(totalAmount)}*.\nQuando ficar pronto, enviaremos o link seguro caso reste algum valor.`).catch((error) => console.error("Falha ao avisar alteração do pedido", { orderId: id, error }));
+  }
+
+  if (order.status === "PAID" && order.fulfillmentType === "DELIVERY") {
+    await acceptPaidCartOrder(order);
+  }
+
+  return order;
+}
+
 export async function updateCartOrderStatus(id: string, status: OrderStatus) {
   const current = await loadCartOrder(id);
 
@@ -514,8 +646,8 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
   const leavingReady = status !== "READY" && current.status === "READY";
   const missingReadyBalance =
     status === "READY" &&
-    current.paymentPercentage === 50 &&
     !current.saldoPagoAt &&
+    hasOutstandingCartOrderBalance(current) &&
     (!current.saldoInitPoint || !current.saldoCobrancaEnviadaAt);
   const shouldPrepareReady = enteringReady || missingReadyBalance;
   const shouldNotifyCourierReady = status === "READY" && current.fulfillmentType === "DELIVERY" && !current.notifiedCourierReadyAt;
@@ -568,7 +700,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
             "Envio de pronto para cliente nÃ£o confirmado pelo serviÃ§o de WhatsApp.",
           );
         }
-        if (order.paymentPercentage === 50 && !order.saldoPagoAt) {
+        if (!order.saldoPagoAt && order.saldoInitPoint) {
           await prisma.order.update({
             where: { id: order.id },
             data: { saldoCobrancaEnviadaAt: claimedAt },
@@ -615,7 +747,7 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
 export async function processReadyCartOrderBalanceCharges() {
   const [balanceOrders, courierOrders] = await Promise.all([
     prisma.order.findMany({
-      where: { status: "READY", paymentPercentage: 50, saldoPagoAt: null, OR: [{ saldoInitPoint: null }, { saldoCobrancaEnviadaAt: null }] },
+      where: { status: "READY", saldoPagoAt: null, OR: [{ saldoInitPoint: null }, { saldoCobrancaEnviadaAt: null }] },
       select: { id: true }, take: 20,
     }),
     prisma.order.findMany({
@@ -682,6 +814,7 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
   return {
     id: order.id,
     status: order.status,
+    isConfeiteira: order.isConfeiteira,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     code: cartOrderCode(order),
@@ -702,6 +835,7 @@ export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
     provisionTransferredAt: order.provisionTransferredAt?.toISOString() || null,
     items: order.items.map((item) => ({
       id: item.id,
+      productId: item.productId,
       productName: item.productName,
       productType: item.productType,
       quantity: item.quantity,

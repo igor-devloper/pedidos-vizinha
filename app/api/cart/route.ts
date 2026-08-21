@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentCart, serializeCart, setCartSessionCookie } from "@/lib/cart";
+import { getCurrentCart, normalizeCartAudience, serializeCart, setCartSessionCookie } from "@/lib/cart";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
-  const { cart, isNew, sessionId } = await getCurrentCart();
-  const response = NextResponse.json(serializeCart(cart));
+export async function GET(req: Request) {
+  const audience = normalizeCartAudience(new URL(req.url).searchParams.get("audience"));
+  const { cart, isNew, sessionId } = await getCurrentCart(audience);
+  const response = NextResponse.json(serializeCart(cart, audience));
 
   if (isNew) {
-    setCartSessionCookie(response, sessionId);
+    setCartSessionCookie(response, sessionId, audience);
   }
 
   return response;
 }
 
-export async function DELETE() {
-  const { cart, isNew, sessionId } = await getCurrentCart();
+export async function DELETE(req: Request) {
+  const audience = normalizeCartAudience(new URL(req.url).searchParams.get("audience"));
+  const { cart, isNew, sessionId } = await getCurrentCart(audience);
 
   await prisma.cartItem.deleteMany({
     where: { cartId: cart.id },
@@ -31,10 +33,10 @@ export async function DELETE() {
     },
   });
 
-  const response = NextResponse.json(serializeCart(updated));
+  const response = NextResponse.json(serializeCart(updated, audience));
 
   if (isNew) {
-    setCartSessionCookie(response, sessionId);
+    setCartSessionCookie(response, sessionId, audience);
   }
 
   return response;

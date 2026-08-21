@@ -20,6 +20,9 @@ export type ProdutoPayloadInput = {
   nome?: string;
   descricao?: string;
   preco?: number | string;
+  precoConfeiteira?: number | string | null;
+  quantidadeMinimaConfeiteira?: number | string | null;
+  ativoConfeiteira?: boolean;
   imagemBase64?: string;
   categoria?: ProductCategory;
   productTypeId?: string | null;
@@ -70,6 +73,9 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
   const nome = body.nome?.trim() || "";
   const descricao = body.descricao?.trim() || "";
   const preco = Number(body.preco);
+  const precoConfeiteira = body.precoConfeiteira === null || body.precoConfeiteira === "" || body.precoConfeiteira === undefined ? null : Number(body.precoConfeiteira);
+  const quantidadeMinimaConfeiteira = body.quantidadeMinimaConfeiteira === null || body.quantidadeMinimaConfeiteira === "" || body.quantidadeMinimaConfeiteira === undefined ? null : Number(body.quantidadeMinimaConfeiteira);
+  const ativoConfeiteira = body.ativoConfeiteira ?? false;
   const imagemBase64 = body.imagemBase64?.trim() || "";
   const categoria = normalizeCategoria(body.categoria);
   const productTypeId = body.productTypeId?.trim() || null;
@@ -97,6 +103,8 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
   if (!Number.isFinite(preco) || preco <= 0) {
     return { error: "Informe um valor válido." };
   }
+  if (ativoConfeiteira && (!Number.isFinite(precoConfeiteira) || precoConfeiteira! <= 0)) return { error: "Informe o preço para confeiteira." };
+  if (quantidadeMinimaConfeiteira !== null && (!Number.isInteger(quantidadeMinimaConfeiteira) || quantidadeMinimaConfeiteira <= 0)) return { error: "Informe uma quantidade mínima válida para confeiteira." };
 
   if (emPromocao && descontoPercentual <= 0) {
     return { error: "Informe o percentual de desconto da promoção." };
@@ -123,6 +131,9 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
         nome,
         descricao,
         preco: Number(preco.toFixed(2)),
+        precoConfeiteira: precoConfeiteira === null ? null : Number(precoConfeiteira.toFixed(2)),
+        quantidadeMinimaConfeiteira,
+        ativoConfeiteira,
         imagemBase64,
         categoria,
         productTypeId,
@@ -156,6 +167,9 @@ export function validateProdutoPayload(body: ProdutoPayloadInput) {
       nome,
       descricao,
       preco: Number(preco.toFixed(2)),
+      precoConfeiteira: precoConfeiteira === null ? null : Number(precoConfeiteira.toFixed(2)),
+      quantidadeMinimaConfeiteira,
+      ativoConfeiteira,
       imagemBase64,
       categoria,
       productTypeId,

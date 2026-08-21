@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/pedidos";
 import { getProdutoComboItens, PRODUCT_CATEGORY_LABEL } from "@/lib/produtos";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
+import type { CartAudience } from "@/lib/cart";
 
 export const dynamic = "force-dynamic";
 
@@ -20,17 +21,17 @@ export const metadata: Metadata = {
   description: "Monte seu pedido e finalize o pagamento online na Vizinha Salgateria.",
 };
 
-async function getProdutos() {
+async function getProdutos(audience: CartAudience = "VIZINHA") {
   try {
     const produtos = await prisma.produto.findMany({
-      where: { ativo: true },
+      where: { ativo: true, ...(audience === "CONFEITEIRA" ? { ativoConfeiteira: true } : {}) },
       orderBy: [{ emPromocao: "desc" }, { createdAt: "desc" }],
       include: { productType: true },
     });
 
     return produtos.map((produto) => ({
       ...produto,
-      preco: Number(produto.preco),
+      preco: audience === "CONFEITEIRA" ? Number(produto.precoConfeiteira) : Number(produto.preco),
       comboItens: getProdutoComboItens(produto as { comboItens?: unknown }),
     }));
   } catch (error) {
@@ -42,9 +43,11 @@ async function getProdutos() {
 function ProductCard({
   produto,
   siteTheme,
+  audience = "VIZINHA",
 }: {
   produto: Awaited<ReturnType<typeof getProdutos>>[number];
   siteTheme: StoreSiteTheme;
+  audience?: CartAudience;
 }) {
   const isCombo = String(produto.categoria) === "COMBO" && produto.comboItens.length > 0;
   const discountPercent = produto.emPromocao ? Number(produto.descontoPercentual || 0) : 0;
@@ -214,7 +217,7 @@ function ProductCard({
           ) : null}
         </div>
 
-        <AddToCartControls productId={produto.id} siteTheme={siteTheme} minimumQuantity={produto.productType?.minQuantity} usesMinimumQuantity={Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
+        <AddToCartControls productId={produto.id} siteTheme={siteTheme} audience={audience} minimumQuantity={audience === "CONFEITEIRA" ? produto.quantidadeMinimaConfeiteira : produto.productType?.minQuantity} usesMinimumQuantity={audience === "CONFEITEIRA" ? Boolean(produto.quantidadeMinimaConfeiteira) : Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
 
         <Link
           href={`/pedido/${produto.slug}`}
@@ -237,8 +240,9 @@ function ProductCard({
   );
 }
 
-export default async function CardapioPage() {
-  const produtos = await getProdutos();
+export default async function CardapioPage({ searchParams }: { searchParams: Promise<{ area?: string }> }) {
+  const audience: CartAudience = (await searchParams).area === "confeiteira" ? "CONFEITEIRA" : "VIZINHA";
+  const produtos = await getProdutos(audience);
   const businessStatus = await getFullStoreStatus();
   const destaque =
     produtos.find((produto) => produto.id === businessStatus.featuredProductId) ||
@@ -319,7 +323,7 @@ export default async function CardapioPage() {
                   </div>
                   <div>
                     <p className={cn("text-sm font-black uppercase tracking-[0.24em]", isDefaultTheme ? "text-[#d9fffa]" : "text-[#fff3a8]")}>
-                      Vizinha Salgateria
+                      {audience === "CONFEITEIRA" ? "Vizinha para Confeiteiras" : "Vizinha Salgateria"}
                     </p>
                     <p className="text-sm text-white/72">
                       {isDefaultTheme
@@ -344,7 +348,9 @@ export default async function CardapioPage() {
                           : "bg-[#fedf00] text-[#0b5d1e]"
                     )}
                   >
-                    {isDefaultTheme
+                    {audience === "CONFEITEIRA"
+                      ? "Preços especiais para confeiteiras"
+                      : isDefaultTheme
                       ? "Feito pela Vizinha"
                       : isValentinesTheme
                         ? "Especial para presentear"
@@ -352,7 +358,9 @@ export default async function CardapioPage() {
                   </Badge>
 
                   <h1 className="max-w-2xl text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
-                    {isDefaultTheme
+                    {audience === "CONFEITEIRA"
+                      ? "Selecione produtos com as condições especiais para confeiteiras e finalize tudo pelo site."
+                      : isDefaultTheme
                       ? "Sabor de vizinha, carinho em cada pedido"
                       : isValentinesTheme
                       ? "Amor na mesa, sabor para dividir"
@@ -362,7 +370,9 @@ export default async function CardapioPage() {
                   </h1>
 
                   <p className="max-w-2xl text-sm leading-7 text-white/78 sm:text-base">
-                    {isDefaultTheme
+                    {audience === "CONFEITEIRA"
+                      ? "Atendimento para confeiteiras"
+                      : isDefaultTheme
                       ? "Escolha seus salgados favoritos, monte a encomenda do seu jeito e finalize tudo pelo site."
                       : isValentinesTheme
                       ? "Escolha os favoritos do casal, monte uma encomenda especial e finalize tudo pelo site."
@@ -474,7 +484,7 @@ export default async function CardapioPage() {
 
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {produtos.map((produto) => (
-                <ProductCard key={produto.id} produto={produto} siteTheme={siteTheme} />
+                <ProductCard key={produto.id} produto={produto} siteTheme={siteTheme} audience={audience} />
               ))}
             </div>
           </section>
@@ -488,6 +498,7 @@ export default async function CardapioPage() {
           minimumLeadHours: businessStatus.minimumLeadHours,
           operationSchedule: businessStatus.operationSchedule,
         }}
+        audience={audience}
       />
     </main>
   );

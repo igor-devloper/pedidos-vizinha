@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentCart, normalizeCartSelectedItems, serializeCart, setCartSessionCookie } from "@/lib/cart";
+import { getCurrentCart, normalizeCartAudience, normalizeCartSelectedItems, serializeCart, setCartSessionCookie } from "@/lib/cart";
 import { prisma } from "@/lib/db";
 
 async function loadUpdatedCart(cartId: string) {
@@ -21,19 +21,21 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const body = (await req.json()) as { quantity?: number; requestedUnits?: number; selectedItems?: unknown };
+    const body = (await req.json()) as { quantity?: number; requestedUnits?: number; selectedItems?: unknown; audience?: string };
+    const audience = normalizeCartAudience(body.audience || new URL(req.url).searchParams.get("audience"));
     const quantity = Math.max(1, Math.floor(Number(body.quantity || 1)));
-    const { cart, isNew, sessionId } = await getCurrentCart();
+    const { cart, isNew, sessionId } = await getCurrentCart(audience);
     const existingItem = await prisma.cartItem.findFirst({
       where: { id, cartId: cart.id },
       include: { product: { include: { productType: true } } },
     });
     if (!existingItem) return NextResponse.json({ error: "Item não encontrado." }, { status: 404 });
-    const usesMinimumQuantity = Boolean(existingItem.product.productType?.allowsMultiple && existingItem.product.productType.minQuantity);
+    const minimumQuantity = audience === "CONFEITEIRA" ? existingItem.product.quantidadeMinimaConfeiteira : existingItem.product.productType?.minQuantity;
+    const usesMinimumQuantity = audience === "CONFEITEIRA" ? Boolean(minimumQuantity) : Boolean(existingItem.product.productType?.allowsMultiple && minimumQuantity);
     const requestedUnits = usesMinimumQuantity
-      ? Math.floor(Number(body.requestedUnits || existingItem.requestedUnits || existingItem.product.totalUnidades))
+      ? Math.floor(Number(body.requestedUnits || existingItem.requestedUnits || minimumQuantity || existingItem.product.totalUnidades))
       : null;
-    if (usesMinimumQuantity && requestedUnits! < Number(existingItem.product.productType?.minQuantity)) {
+    if (usesMinimumQuantity && requestedUnits! < Number(minimumQuantity)) {
       return NextResponse.json({ error: `A quantidade mínima é ${existingItem.product.productType?.minQuantity}.` }, { status: 400 });
     }
     const patch: {
@@ -52,10 +54,10 @@ export async function PATCH(
     });
 
     const updated = await loadUpdatedCart(cart.id);
-    const response = NextResponse.json(serializeCart(updated));
+    const response = NextResponse.json(serializeCart(updated, audience));
 
     if (isNew) {
-      setCartSessionCookie(response, sessionId);
+      setCartSessionCookie(response, sessionId, audience);
     }
 
     return response;
@@ -66,22 +68,23 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
-    const { cart, isNew, sessionId } = await getCurrentCart();
+    const audience = normalizeCartAudience(new URL(req.url).searchParams.get("audience"));
+    const { cart, isNew, sessionId } = await getCurrentCart(audience);
 
     await prisma.cartItem.deleteMany({
       where: { id, cartId: cart.id },
     });
 
     const updated = await loadUpdatedCart(cart.id);
-    const response = NextResponse.json(serializeCart(updated));
+    const response = NextResponse.json(serializeCart(updated, audience));
 
     if (isNew) {
-      setCartSessionCookie(response, sessionId);
+      setCartSessionCookie(response, sessionId, audience);
     }
 
     return response;

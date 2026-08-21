@@ -87,6 +87,7 @@ export async function sendCartOrderToPrintService({
   customerPhone,
   deliveryAt,
   total,
+  isConfeiteira,
 }: {
   orderId: string;
   code: string;
@@ -96,6 +97,7 @@ export async function sendCartOrderToPrintService({
   customerPhone?: string | null;
   deliveryAt?: string | null;
   total: number;
+  isConfeiteira?: boolean;
 }) {
   const baseUrl = getPrintServiceUrl();
   const apiKey = getPrintApiKey();
@@ -131,6 +133,7 @@ export async function sendCartOrderToPrintService({
         customerPhone,
         deliveryAt,
         productName: "Pedido do carrinho",
+        isConfeiteira: Boolean(isConfeiteira),
         total,
       },
     }),

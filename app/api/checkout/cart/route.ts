@@ -5,6 +5,7 @@ import { MetodoPagamento, OrderStatus, PedidoStatus, Prisma } from "@prisma/clie
 import {
   getCartProductUnitPrice,
   getCurrentCart,
+  normalizeCartAudience,
   normalizeCartSelectedItems,
   serializeCart,
   setCartSessionCookie,
@@ -77,9 +78,11 @@ export async function POST(req: Request) {
       deliveryPlaceId?: string;
       deliveryLatitude?: number;
       deliveryLongitude?: number;
+      audience?: string;
     };
-    const { cart, isNew, sessionId } = await getCurrentCart();
-    const snapshot = serializeCart(cart);
+    const audience = normalizeCartAudience(body.audience);
+    const { cart, isNew, sessionId } = await getCurrentCart(audience);
+    const snapshot = serializeCart(cart, audience);
 
     if (snapshot.items.length === 0) {
       return NextResponse.json({ error: "Carrinho vazio." }, { status: 400 });
@@ -258,9 +261,11 @@ export async function POST(req: Request) {
         chargedAmount: payment.totalToCharge,
         items: {
           create: cart.items.map((item) => {
-            const unitPrice = getCartProductUnitPrice(item.product);
+            const unitPrice = getCartProductUnitPrice(item.product, audience);
             const requestedUnits = item.requestedUnits ?? item.product.totalUnidades * item.quantity;
-            const usesMinimumQuantity = Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+            const usesMinimumQuantity = audience === "CONFEITEIRA"
+              ? Boolean(item.product.quantidadeMinimaConfeiteira)
+              : Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
             const subtotal = usesMinimumQuantity
               ? Number((unitPrice * (requestedUnits / item.product.totalUnidades)).toFixed(2))
               : unitPrice * item.quantity;
@@ -289,11 +294,12 @@ export async function POST(req: Request) {
       orderId: order.id,
       externalReference: order.externalReference,
       paymentMethod,
-      chargedAmount: payment.totalToCharge,
+        chargedAmount: payment.totalToCharge,
+        isConfeiteira: audience === "CONFEITEIRA",
     });
 
     if (isNew) {
-      setCartSessionCookie(response, sessionId);
+      setCartSessionCookie(response, sessionId, audience);
     }
 
     return response;

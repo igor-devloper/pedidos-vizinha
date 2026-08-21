@@ -4,6 +4,7 @@ import {
   buildInitialSelectedItems,
   getCartProductUnitPrice,
   getCurrentCart,
+  normalizeCartAudience,
   serializeCart,
   setCartSessionCookie,
 } from "@/lib/cart";
@@ -12,7 +13,8 @@ import { getProdutoComboItens } from "@/lib/produtos";
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { productId?: string; quantity?: number; requestedUnits?: number };
+    const body = (await req.json()) as { productId?: string; quantity?: number; requestedUnits?: number; audience?: string };
+    const audience = normalizeCartAudience(body.audience);
     const productId = String(body.productId || "").trim();
     const quantity = Math.max(1, Math.floor(Number(body.quantity || 1)));
 
@@ -21,10 +23,12 @@ export async function POST(req: Request) {
     }
 
     const product = await prisma.produto.findFirst({
-      where: { id: productId, ativo: true },
+      where: { id: productId, ativo: true, ...(audience === "CONFEITEIRA" ? { ativoConfeiteira: true } : {}) },
       select: {
         id: true,
         preco: true,
+        precoConfeiteira: true,
+        quantidadeMinimaConfeiteira: true,
         emPromocao: true,
         descontoPercentual: true,
         categoria: true,
@@ -40,14 +44,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Produto não encontrado." }, { status: 404 });
     }
 
-    const { cart, isNew, sessionId } = await getCurrentCart();
-    const unitPrice = getCartProductUnitPrice(product);
-    const usesMinimumQuantity = Boolean(product.productType?.allowsMultiple && product.productType.minQuantity);
+    const { cart, isNew, sessionId } = await getCurrentCart(audience);
+    const unitPrice = getCartProductUnitPrice(product, audience);
+    const minimumQuantity = audience === "CONFEITEIRA" ? product.quantidadeMinimaConfeiteira : product.productType?.minQuantity;
+    const usesMinimumQuantity = audience === "CONFEITEIRA" ? Boolean(minimumQuantity) : Boolean(product.productType?.allowsMultiple && minimumQuantity);
     const requestedUnits = usesMinimumQuantity
-      ? Math.floor(Number(body.requestedUnits || product.productType?.minQuantity || product.totalUnidades))
+      ? Math.floor(Number(body.requestedUnits || minimumQuantity || product.totalUnidades))
       : null;
 
-    if (usesMinimumQuantity && requestedUnits! < Number(product.productType?.minQuantity)) {
+    if (usesMinimumQuantity && requestedUnits! < Number(minimumQuantity)) {
       return NextResponse.json({ error: `A quantidade mínima é ${product.productType?.minQuantity}.` }, { status: 400 });
     }
 
@@ -96,10 +101,10 @@ export async function POST(req: Request) {
       },
     });
 
-    const response = NextResponse.json(serializeCart(updated), { status: 201 });
+    const response = NextResponse.json(serializeCart(updated, audience), { status: 201 });
 
     if (isNew) {
-      setCartSessionCookie(response, sessionId);
+      setCartSessionCookie(response, sessionId, audience);
     }
 
     return response;
