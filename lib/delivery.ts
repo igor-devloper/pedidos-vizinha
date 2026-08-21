@@ -1,5 +1,5 @@
 export const DELIVERY_FEES = [
-  { label: "Ponta de Matos a Jardim Manguinhos", neighborhoods: ["Ponta de Matos", "Jardim Manguinhos", "J. Manguinhos", "Vila São João", "Vila Sao Joao", "Centro"], fee: 5 },
+  { label: "Ponta de Matos a Jardim Manguinhos", neighborhoods: ["Ponta de Matos", "Jardim Manguinhos", "J. Manguinhos", "Vila São João", "Vila Sao Joao", "Centro", "Manguinhos", "Camalaú", "Camalau"], fee: 5 },
   { label: "Camboinha I, II e III", neighborhoods: ["Camboinha", "Camboinha I", "Camboinha II", "Camboinha III"], fee: 8 },
   { label: "Poço (Recanto e Praia)", neighborhoods: ["Poço", "Poco", "Recanto do Poço", "Praia do Poço"], fee: 10 },
   { label: "Ponta de Campina", neighborhoods: ["Ponta de Campina"], fee: 15 },
