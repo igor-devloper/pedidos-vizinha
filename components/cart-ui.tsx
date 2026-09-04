@@ -1077,14 +1077,14 @@ export function FloatingCart({
 
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm text-[var(--cart-muted)]">
-                          Mínimo de {item.minimumQuantity} unidades. Máximo de {getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado)} tipos. Regra: 50 unidades = 2 tipos; cada 100 = 4 tipos.
+                          Mínimo de {item.minimumQuantity} unidades. Máximo de {getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado, item.minimumQuantity)} tipos ({item.maxTiposSalgado} por lote de {item.minimumQuantity} unidades).
                         </p>
                         <Button
                           type="button"
                           variant="outline"
                           disabled={
                             item.category === "COMBO" ||
-                            item.selectedItems.length >= getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado)
+                            item.selectedItems.length >= getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado, item.minimumQuantity)
                           }
                           onClick={() =>
                             updateSelectedItems(item, [

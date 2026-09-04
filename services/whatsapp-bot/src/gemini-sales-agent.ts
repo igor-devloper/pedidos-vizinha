@@ -92,9 +92,9 @@ function formatProductsForPrompt(products: Awaited<ReturnType<typeof listActiveP
           `nome: ${product.emPromocao ? "[PROMOÇÃO] " : ""}${product.nome}`,
           `preço: ${formatProductPriceForCustomer(product)}`,
           `descrição: ${product.descricao}`,
-          `quantidade mínima: ${product.precisaSelecaoDeTipos && product.totalUnidades >= 50 && product.allowsMultiple ? 50 : product.minQuantity || product.totalUnidades}`,
+          `quantidade mínima: ${product.minQuantity || product.totalUnidades}`,
           `permite quantidade variável: ${Boolean(product.allowsMultiple)}`,
-          `tipos permitidos pela quantidade: 50 unidades = 2 tipos; cada 100 unidades = 4 tipos`,
+          `limite de tipos: ${product.maxTiposSalgado} por lote de ${product.minQuantity || product.totalUnidades} unidades`,
           `opções EXCLUSIVAS deste produto: ${product.saboresSugeridos.length ? product.saboresSugeridos.join("; ") : "não possui seleção de tipos"}`,
           `combo: ${JSON.stringify(product.comboItens)}`,
           `pagamento parcial: ${product.permitePagamentoParcial ? "sim" : "não"}`,
@@ -148,9 +148,11 @@ Regras importantes:
 - extraia todos os campos informados juntos e pergunte somente o que estiver faltando;
 - nunca invente preço, taxa, promoção, disponibilidade ou status de pagamento: o backend valida esses dados;
 - quando listar sabores/tipos, identifique primeiro o produto e copie SOMENTE as "opções EXCLUSIVAS deste produto"; nunca misture opções de produtos diferentes;
-- para produtos de salgados com seleção, a quantidade mínima é 50: 50 unidades permitem no máximo 2 tipos; 100 permitem 4; 150 permitem 6; 200 permitem 8;
+- respeite a quantidade mínima e o limite de tipos específicos de cada produto; para quantidades maiores, cada lote mínimo completo libera novamente o limite configurado daquele produto;
 - em extracted.items use sempre o ID real do produto fornecido e nomes de tipos escritos exatamente como aparecem nas opções exclusivas;
 - nunca peça nem repita número de cartão, validade, CVV ou token;
+- ofereça somente as formas realmente suportadas: Pix, cartão de crédito ou cartão de débito; não ofereça dinheiro nem pagamento na entrega;
+- quando o cliente escolher a forma de pagamento, registre SET_PAYMENT e continue perguntando apenas o próximo campo ausente; não envie a explicação genérica de "como funciona o pagamento";
 - fazemos entrega; quando o cliente perguntar, informe: Ponta de Matos, Vila São João, Centro e Jardim Manguinhos R$ 5; Camboinha I/II/III R$ 8; Poço, Recanto e Praia do Poço R$ 10; Ponta de Campina, Portal do Poço, Intermares e Jacaré R$ 15;
 - para João Pessoa e bairros não tabelados, diga que a taxa de entrega é a combinar;
 - se o cliente disser que quer entrega, trate isso como SET_FULFILLMENT e extraia também pagamento/endereço enviados na mesma mensagem; não responda com o texto genérico do site;

@@ -3906,7 +3906,7 @@ export function ManhiaAdminDashboard({
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700">
-                        Máximo de tipos
+                        Máximo de tipos por lote mínimo
                       </label>
                       <Input
                         type="number"
@@ -3921,6 +3921,9 @@ export function ManhiaAdminDashboard({
                           }))
                         }
                       />
+                      <p className="text-xs text-slate-500">
+                        Ex.: mínimo 100 e máximo 4 libera 4 tipos em 100 unidades e 8 tipos em 200.
+                      </p>
                     </div>
 
                     {isComboCategory ? (

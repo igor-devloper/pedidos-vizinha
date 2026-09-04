@@ -171,8 +171,8 @@ function ProductCard({
                 : "bg-[#f3f9dc] text-[#35553d]"
           )}
         >
-          <span>{produto.productType?.allowsMultiple && produto.precisaSelecaoDeTipos && produto.totalUnidades >= 50 ? "A partir de 50 unidades" : `${produto.totalUnidades} unidades`}</span>
-          <span>{produto.precisaSelecaoDeTipos && produto.totalUnidades >= 50 ? "50 un = até 2 tipos; cada 100 un = até 4 tipos" : `Até ${produto.maxTiposSalgado} tipos diferentes`}</span>
+          <span>{produto.productType?.allowsMultiple && produto.productType.minQuantity ? `A partir de ${produto.productType.minQuantity} unidades` : `${produto.totalUnidades} unidades`}</span>
+          <span>{produto.productType?.allowsMultiple && produto.productType.minQuantity ? `Até ${produto.maxTiposSalgado} tipos por lote de ${produto.productType.minQuantity} unidades` : `Até ${produto.maxTiposSalgado} tipos diferentes`}</span>
           <span>
             {produto.permitePagamentoParcial ? "Pagamento de 50% ou 100%" : "Pagamento integral"}
           </span>
@@ -217,7 +217,7 @@ function ProductCard({
           ) : null}
         </div>
 
-        <AddToCartControls productId={produto.id} siteTheme={siteTheme} audience={audience} minimumQuantity={audience === "CONFEITEIRA" ? produto.quantidadeMinimaConfeiteira : produto.productType?.allowsMultiple && produto.precisaSelecaoDeTipos && produto.totalUnidades >= 50 ? 50 : produto.productType?.minQuantity} usesMinimumQuantity={audience === "CONFEITEIRA" ? Boolean(produto.quantidadeMinimaConfeiteira) : Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
+        <AddToCartControls productId={produto.id} siteTheme={siteTheme} audience={audience} minimumQuantity={audience === "CONFEITEIRA" ? produto.quantidadeMinimaConfeiteira : produto.productType?.minQuantity} usesMinimumQuantity={audience === "CONFEITEIRA" ? Boolean(produto.quantidadeMinimaConfeiteira) : Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
 
         <Link
           href={`/pedido/${produto.slug}`}

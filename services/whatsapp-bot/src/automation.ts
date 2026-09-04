@@ -133,6 +133,77 @@ function indicatesPayment(text: string) {
   );
 }
 
+function parseDraftPayment(text: string) {
+  const normalized = normalizeText(text);
+  const paymentMethod = normalized.includes("pix")
+    ? "PIX"
+    : normalized.includes("debito")
+      ? "CARTAO_DEBITO"
+      : normalized.includes("credito") || normalized.includes("cartao")
+        ? "CARTAO_CREDITO"
+        : null;
+  const paymentPercentage = /(^|\D)50\s*%|metade/.test(normalized)
+    ? 50
+    : /(^|\D)100\s*%|valor total|tudo/.test(normalized)
+      ? 100
+      : null;
+  return { paymentMethod, paymentPercentage };
+}
+
+function getNextDraftQuestion(draft: WhatsappDraft) {
+  if (!draft.paymentPercentage) return "Você prefere pagar 50% agora ou o valor total?";
+  if (!draft.customerName) return "Qual é o nome de quem vai retirar ou receber o pedido?";
+  if (!draft.customerEmail) return "Qual e-mail devemos usar no pagamento?";
+  if (!draft.scheduledAt) return "Para qual data e horário você quer o pedido?";
+  if (draft.fulfillmentType === "DELIVERY" && !draft.deliveryReference) return "Qual é o ponto de referência da entrega?";
+  return "Já tenho os dados principais. Posso mostrar o resumo completo para você confirmar?";
+}
+
+function normalizeDraftItems(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw) => {
+    if (!raw || typeof raw !== "object") return [];
+    const item = raw as Record<string, unknown>;
+    const productId = String(item.productId || item.id || "").trim();
+    const requestedUnits = Math.floor(Number(item.requestedUnits ?? item.quantity));
+    if (!productId || !Number.isInteger(requestedUnits) || requestedUnits < 1) return [];
+    const rawTypes = Array.isArray(item.selectedItems)
+      ? item.selectedItems
+      : Array.isArray(item.types)
+        ? item.types
+        : [];
+    const selectedItems = rawTypes.flatMap((rawType) => {
+      if (!rawType || typeof rawType !== "object") return [];
+      const type = rawType as Record<string, unknown>;
+      const tipo = String(type.tipo || type.name || "").trim();
+      const quantidade = Math.floor(Number(type.quantidade ?? type.quantity));
+      return tipo && Number.isInteger(quantidade) && quantidade > 0 ? [{ tipo, quantidade }] : [];
+    });
+    return [{ productId, quantity: 1, requestedUnits, selectedItems }];
+  });
+}
+
+async function maybeHandleDeterministicDraftPayment(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft | null) {
+  if (!draft || draft.status !== "ACTIVE" || !Array.isArray(draft.items) || draft.items.length === 0) return false;
+  const parsed = parseDraftPayment(job.text);
+  if (!parsed.paymentMethod && !parsed.paymentPercentage) return false;
+  const updated = await patchDraft(draft.id, {
+    paymentMethod: parsed.paymentMethod || draft.paymentMethod,
+    paymentPercentage: parsed.paymentPercentage || draft.paymentPercentage,
+    stage: "COLLECTING",
+    lastCustomerMessageAt: new Date(),
+  }) || draft;
+  const methodLabel = parsed.paymentMethod === "PIX"
+    ? "Pix"
+    : parsed.paymentMethod === "CARTAO_DEBITO"
+      ? "cartão de débito"
+      : parsed.paymentMethod === "CARTAO_CREDITO"
+        ? "cartão de crédito"
+        : "pagamento";
+  await sendAndTrack(job, lead, `Certo, registrei ${methodLabel} no seu pedido. ${getNextDraftQuestion(updated)}`);
+  return true;
+}
+
 function canUseSalesAgent(lead: BotLead) {
   return !["awaiting_owner_approval", "awaiting_payment_validation", "human_handoff"].includes(lead.stage);
 }
@@ -590,6 +661,7 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
   let currentDraft = draft;
   if (draft) {
     const extracted = agentResult.extracted || {};
+    if (extracted.items !== undefined) extracted.items = normalizeDraftItems(extracted.items);
     const allowed = ["customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
     const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined).map((key) => [key, extracted[key]]));
     patch.lastCustomerMessageAt = new Date();
@@ -631,7 +703,16 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     observacoes: agentResult.observacoes ?? lead.observacoes,
   });
 
-  await sendAndTrack(job, nextLead || lead, agentResult.reply);
+  const activeOrderInProgress = currentDraft?.status === "ACTIVE"
+    && Array.isArray(currentDraft.items) && currentDraft.items.length > 0;
+  const normalizedReply = normalizeText(agentResult.reply);
+  const genericFlowBreaker = agentResult.reply.includes(config.cardapioUrl)
+    || normalizedReply.includes("como funciona o pagamento")
+    || normalizedReply.includes("como fazer sua encomenda");
+  const reply = activeOrderInProgress && genericFlowBreaker
+    ? `Vamos continuar seu pedido por aqui. ${getNextDraftQuestion(currentDraft!)}`
+    : agentResult.reply;
+  await sendAndTrack(job, nextLead || lead, reply);
   return true;
 }
 
@@ -786,6 +867,10 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
+  if (await maybeHandleDeterministicDraftPayment(job, lead, draft)) {
+    return;
+  }
+
   if (await handleExistingOpenOrder(job, lead)) {
     return;
   }
@@ -800,7 +885,8 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
-  const handledByFunnel = await handleLeadFunnel(job, lead);
+  const hasActiveDraftItems = draft?.status === "ACTIVE" && Array.isArray(draft.items) && draft.items.length > 0;
+  const handledByFunnel = hasActiveDraftItems ? false : await handleLeadFunnel(job, lead);
   if (handledByFunnel) {
     return;
   }

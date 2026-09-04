@@ -8,7 +8,7 @@ const fixedProduct = {
   nome: "Cento",
   categoria: "CENTO",
   totalUnidades: 100,
-  maxTiposSalgado: 5,
+  maxTiposSalgado: 4,
   precisaSelecaoDeTipos: true,
   quantidadeMinimaConfeiteira: null,
   productType: { minQuantity: 100, allowsMultiple: false },
@@ -26,11 +26,20 @@ test("25+25+25+25 para 100 e valido", () => {
   assert.equal(result.requestedUnits, 100);
 });
 
-test("50 unidades permitem 2 tipos e cada 100 permitem 4", () => {
-  assert.equal(getAllowedSalgadoTypes(50, 7), 2);
-  assert.equal(getAllowedSalgadoTypes(100, 7), 4);
-  assert.equal(getAllowedSalgadoTypes(150, 7), 6);
-  assert.equal(getAllowedSalgadoTypes(200, 7), 8);
+test("limite de tipos escala conforme lote configurado no admin", () => {
+  assert.equal(getAllowedSalgadoTypes(50, 2, 50), 2);
+  assert.equal(getAllowedSalgadoTypes(100, 2, 50), 4);
+  assert.equal(getAllowedSalgadoTypes(150, 2, 50), 6);
+  assert.equal(getAllowedSalgadoTypes(100, 4, 100), 4);
+  assert.equal(getAllowedSalgadoTypes(200, 4, 100), 8);
+});
+
+test("cento de fritos respeita minimo 100 configurado", () => {
+  assert.throws(() => validateCartItemQuantities({
+    product: { ...fixedProduct, productType: { minQuantity: 100, allowsMultiple: true } },
+    audience: "VIZINHA", quantity: 1, requestedUnits: 50,
+    selectedItems: [{ tipo: "Coxinha", quantidade: 50 }],
+  }), /quantidade mínima é 100/);
 });
 
 test("backend rejeita sabor que nao pertence ao produto", () => {

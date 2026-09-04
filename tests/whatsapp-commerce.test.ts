@@ -58,3 +58,17 @@ test("coleta estruturada processa entrega antes da resposta generica", () => {
   assert.ok(agentPosition > 0);
   assert.ok(deliveryPosition > agentPosition);
 });
+
+test("pagamento em draft ativo nao cai nas mensagens genericas", () => {
+  const source = read("services/whatsapp-bot/src/automation.ts");
+  const deterministic = source.indexOf("maybeHandleDeterministicDraftPayment(job, lead, draft)");
+  const funnel = source.indexOf("const handledByFunnel", deterministic);
+  assert.ok(deterministic > 0 && funnel > deterministic);
+  assert.match(source, /normalized\.includes\("pix"\)/);
+  assert.match(source, /paymentMethod: parsed\.paymentMethod/);
+  assert.match(source, /hasActiveDraftItems \? false/);
+  assert.match(source, /genericFlowBreaker/);
+  assert.match(source, /Vamos continuar seu pedido por aqui/);
+  assert.match(source, /function normalizeDraftItems/);
+  assert.match(source, /return \[\{ productId, quantity: 1, requestedUnits, selectedItems \}\]/);
+});

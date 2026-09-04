@@ -20,9 +20,10 @@ export type CartQuantityProduct = {
   saboresSugeridos?: string[];
 };
 
-export function getAllowedSalgadoTypes(units: number, configuredMaximum: number) {
-  if (Number.isInteger(units) && units >= 50) return Math.max(2, Math.floor(units / 50) * 2);
-  return Math.max(1, configuredMaximum);
+export function getAllowedSalgadoTypes(units: number, configuredMaximum: number, lotSize: number) {
+  const safeMaximum = Math.max(1, Math.floor(configuredMaximum));
+  const safeLotSize = Math.max(1, Math.floor(lotSize));
+  return safeMaximum * Math.max(1, Math.floor(units / safeLotSize));
 }
 
 export class CartQuantityValidationError extends Error {
@@ -97,10 +98,7 @@ export function validateCartItemQuantities({
       ? product.productType.minQuantity
       : null;
   const usesMinimumQuantity = Number.isInteger(Number(configuredMinimum)) && Number(configuredMinimum) > 0;
-  const usesFiftyUnitRule = product.precisaSelecaoDeTipos && product.totalUnidades >= 50;
-  const minimumQuantity = usesMinimumQuantity
-    ? (usesFiftyUnitRule ? 50 : Number(configuredMinimum))
-    : 1;
+  const minimumQuantity = usesMinimumQuantity ? Number(configuredMinimum) : 1;
   const mode = usesMinimumQuantity ? "MINIMUM" as const : "FIXED" as const;
   const effectiveRequestedUnits = usesMinimumQuantity
     ? requirePositiveInteger(requestedUnits ?? minimumQuantity, "A quantidade solicitada")
@@ -116,8 +114,8 @@ export function validateCartItemQuantities({
   const normalizedSelectedItems = normalizeCartSelectedItemsCanonical(selectedItems);
   const selectedUnits = normalizedSelectedItems.reduce((sum, item) => sum + item.quantidade, 0);
   const configuredMaxTypes = requirePositiveInteger(product.maxTiposSalgado, "O máximo de tipos");
-  const maxTypes = usesFiftyUnitRule
-    ? getAllowedSalgadoTypes(effectiveRequestedUnits, configuredMaxTypes)
+  const maxTypes = usesMinimumQuantity
+    ? getAllowedSalgadoTypes(effectiveRequestedUnits, configuredMaxTypes, minimumQuantity)
     : configuredMaxTypes * canonicalQuantity;
 
   if (product.precisaSelecaoDeTipos && requireCompleteSelection) {
