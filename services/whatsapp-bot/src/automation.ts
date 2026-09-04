@@ -161,6 +161,16 @@ function normalizeDraftPaymentMethod(value: unknown) {
 
 const getNextDraftQuestion = getCanonicalNextDraftQuestion;
 
+function draftHasOrderProgress(draft: WhatsappDraft | null | undefined) {
+  if (!draft || ["HANDOFF", "ABANDONED", "COMPLETED"].includes(draft.status)) return false;
+  return (Array.isArray(draft.items) && draft.items.length > 0)
+    || Boolean(
+      draft.fulfillmentType || draft.scheduledAt || draft.deliveryStreet || draft.deliveryNumber
+      || draft.deliveryNeighborhood || draft.deliveryReference || draft.paymentMethod
+      || draft.paymentPercentage || draft.customerName || draft.customerEmail
+    );
+}
+
 async function normalizeDraftItems(value: unknown) {
   if (!Array.isArray(value)) return [];
   const products = await listActiveProducts();
@@ -219,7 +229,7 @@ async function maybeHandleDeterministicDraftPayment(job: InboundMessageJob, lead
 }
 
 async function maybeHandleDeterministicDraftSchedule(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft | null) {
-  if (!draft || draft.status !== "ACTIVE" || getMissingDraftField(draft) !== "scheduledAt") return false;
+  if (!draft || ["HANDOFF", "ABANDONED", "COMPLETED", "AWAITING_PAYMENT"].includes(draft.status) || getMissingDraftField(draft) !== "scheduledAt") return false;
   const scheduledAt = parseBrazilianScheduledAt(job.text);
   if (!scheduledAt) return false;
   const updated = await patchDraft(draft.id, { scheduledAt, stage: "COLLECTING", lastCustomerMessageAt: new Date() }) || draft;
@@ -703,7 +713,11 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     const allowed = ["customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
     const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined).map((key) => [key, extracted[key]]));
     patch.lastCustomerMessageAt = new Date();
-    if (agentResult.action === "SEND_SITE") await markSiteLinkSent(draft.id);
+    const extractedOrderProgress = Object.keys(patch).some((key) => key !== "lastCustomerMessageAt");
+    if (extractedOrderProgress && agentResult.action !== "CANCEL_DRAFT") {
+      Object.assign(patch, { stage: "COLLECTING", status: "ACTIVE", whatsappOfferDueAt: null });
+    }
+    if (agentResult.action === "SEND_SITE" && !draftHasOrderProgress(draft) && !extractedOrderProgress) await markSiteLinkSent(draft.id);
     else if (agentResult.action === "START_WHATSAPP_ORDER") Object.assign(patch, { stage: "COLLECTING", status: "ACTIVE", whatsappOfferDueAt: null });
     else if (agentResult.action === "CANCEL_DRAFT") Object.assign(patch, { stage: "CANCELLED", status: "ABANDONED", whatsappOfferDueAt: null });
     else if (agentResult.action === "SHOW_SUMMARY") patch.stage = "AWAITING_CONFIRMATION";
@@ -754,10 +768,7 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     observacoes: agentResult.observacoes ?? lead.observacoes,
   });
 
-  const activeOrderInProgress = currentDraft?.status === "ACTIVE" && (
-    (Array.isArray(currentDraft.items) && currentDraft.items.length > 0)
-    || Boolean(currentDraft.fulfillmentType || currentDraft.paymentMethod || currentDraft.customerName)
-  );
+  const activeOrderInProgress = draftHasOrderProgress(currentDraft);
   const normalizedReply = normalizeText(agentResult.reply);
   const genericFlowBreaker = agentResult.reply.includes(config.cardapioUrl)
     || normalizedReply.includes("como funciona o pagamento")
@@ -947,8 +958,8 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
-  const hasActiveDraftItems = draft?.status === "ACTIVE" && Array.isArray(draft.items) && draft.items.length > 0;
-  const handledByFunnel = hasActiveDraftItems ? false : await handleLeadFunnel(job, lead);
+  const hasActiveDraftProgress = draftHasOrderProgress(draft);
+  const handledByFunnel = hasActiveDraftProgress ? false : await handleLeadFunnel(job, lead);
   if (handledByFunnel) {
     return;
   }

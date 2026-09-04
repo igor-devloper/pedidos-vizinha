@@ -76,9 +76,17 @@ test("pagamento em draft ativo nao cai nas mensagens genericas", () => {
   assert.ok(deterministic > 0 && funnel > deterministic);
   assert.match(source, /normalized\.includes\("pix"\)/);
   assert.match(source, /paymentMethod: parsed\.paymentMethod/);
-  assert.match(source, /hasActiveDraftItems \? false/);
+  assert.match(source, /hasActiveDraftProgress \? false/);
   assert.match(source, /genericFlowBreaker/);
   assert.match(source, /Vamos continuar seu pedido por aqui/);
   assert.match(source, /function normalizeDraftItems/);
   assert.match(source, /return \[\{ productId, quantity: 1, requestedUnits, selectedItems \}\]/);
+});
+
+test("data ou endereço mantêm o pedido no WhatsApp mesmo sem itens persistidos", () => {
+  const source = read("services/whatsapp-bot/src/automation.ts");
+  assert.match(source, /draftHasOrderProgress/);
+  assert.match(source, /draft\.scheduledAt \|\| draft\.deliveryStreet/);
+  assert.match(source, /hasActiveDraftProgress \? false : await handleLeadFunnel/);
+  assert.match(source, /agentResult\.action === "SEND_SITE" && !draftHasOrderProgress\(draft\)/);
 });
