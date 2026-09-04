@@ -790,11 +790,13 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
-  if (await maybeHandleDeliveryRequest(job, lead)) {
+  // Durante uma conversa de venda, o agente estruturado precisa extrair junto
+  // modalidade, endereco e pagamento. A resposta generica de entrega e apenas fallback.
+  if (await maybeHandleSalesAgent(job, lead, draft)) {
     return;
   }
 
-  if (await maybeHandleSalesAgent(job, lead, draft)) {
+  if (await maybeHandleDeliveryRequest(job, lead)) {
     return;
   }
 

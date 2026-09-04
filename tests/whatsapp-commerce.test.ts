@@ -50,3 +50,11 @@ test("checkout de cartao usa Order e pagina invalida e controlada", () => {
   assert.match(page, /Pagamento indisponível/);
   assert.doesNotMatch(page, /notFound/);
 });
+
+test("coleta estruturada processa entrega antes da resposta generica", () => {
+  const source = read("services/whatsapp-bot/src/automation.ts");
+  const agentPosition = source.lastIndexOf("if (await maybeHandleSalesAgent(job, lead, draft))");
+  const deliveryPosition = source.lastIndexOf("if (await maybeHandleDeliveryRequest(job, lead))");
+  assert.ok(agentPosition > 0);
+  assert.ok(deliveryPosition > agentPosition);
+});
