@@ -54,7 +54,12 @@ export async function markSiteLinkSent(draftId: string, now = new Date()) {
     `UPDATE "WhatsappOrderDraft"
      SET "siteLinkSentAt"=COALESCE("siteLinkSentAt", $2),
          "whatsappOfferDueAt"=COALESCE("whatsappOfferDueAt", $3),
-         status='AWAITING_SITE_ORDER', "updatedAt"=NOW()
+         status=CASE
+           WHEN status='ACTIVE' AND items='[]'::jsonb AND "fulfillmentType" IS NULL
+             THEN 'AWAITING_SITE_ORDER'
+           ELSE status
+         END,
+         "updatedAt"=NOW()
      WHERE id=$1 AND "orderId" IS NULL AND "whatsappOfferSentAt" IS NULL
        AND status NOT IN ('HANDOFF','ABANDONED','COMPLETED')
      RETURNING *`,

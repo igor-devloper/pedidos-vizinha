@@ -150,6 +150,14 @@ function parseDraftPayment(text: string) {
   return { paymentMethod, paymentPercentage };
 }
 
+function normalizeDraftPaymentMethod(value: unknown) {
+  const normalized = normalizeText(String(value || ""));
+  if (normalized.includes("pix")) return "PIX";
+  if (normalized.includes("debito")) return "CARTAO_DEBITO";
+  if (normalized.includes("credito") || normalized.includes("cartao")) return "CARTAO_CREDITO";
+  return undefined;
+}
+
 function getNextDraftQuestion(draft: WhatsappDraft) {
   if (!draft.paymentPercentage) return "Você prefere pagar 50% agora ou o valor total?";
   if (!draft.customerName) return "Qual é o nome de quem vai retirar ou receber o pedido?";
@@ -184,7 +192,7 @@ function normalizeDraftItems(value: unknown) {
 }
 
 async function maybeHandleDeterministicDraftPayment(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft | null) {
-  if (!draft || draft.status !== "ACTIVE" || !Array.isArray(draft.items) || draft.items.length === 0) return false;
+  if (!draft || ["HANDOFF", "ABANDONED", "COMPLETED", "AWAITING_PAYMENT"].includes(draft.status)) return false;
   const parsed = parseDraftPayment(job.text);
   if (!parsed.paymentMethod && !parsed.paymentPercentage) return false;
   const updated = await patchDraft(draft.id, {
@@ -193,6 +201,11 @@ async function maybeHandleDeterministicDraftPayment(job: InboundMessageJob, lead
     stage: "COLLECTING",
     lastCustomerMessageAt: new Date(),
   }) || draft;
+  logger.info({
+    draftId: draft.id,
+    paymentMethod: updated.paymentMethod,
+    paymentPercentage: updated.paymentPercentage,
+  }, "Draft payment captured deterministically");
   const methodLabel = parsed.paymentMethod === "PIX"
     ? "Pix"
     : parsed.paymentMethod === "CARTAO_DEBITO"
@@ -662,6 +675,9 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
   if (draft) {
     const extracted = agentResult.extracted || {};
     if (extracted.items !== undefined) extracted.items = normalizeDraftItems(extracted.items);
+    if (extracted.paymentMethod !== undefined) {
+      extracted.paymentMethod = normalizeDraftPaymentMethod(extracted.paymentMethod);
+    }
     const allowed = ["customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
     const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined).map((key) => [key, extracted[key]]));
     patch.lastCustomerMessageAt = new Date();
@@ -670,6 +686,13 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     else if (agentResult.action === "CANCEL_DRAFT") Object.assign(patch, { stage: "CANCELLED", status: "ABANDONED", whatsappOfferDueAt: null });
     else if (agentResult.action === "SHOW_SUMMARY") patch.stage = "AWAITING_CONFIRMATION";
     currentDraft = await patchDraft(draft.id, patch) || draft;
+    logger.info({
+      draftId: draft.id,
+      action: agentResult.action,
+      extractedFields: Object.keys(patch),
+      itemCount: Array.isArray(currentDraft.items) ? currentDraft.items.length : 0,
+      paymentMethod: currentDraft.paymentMethod,
+    }, "Structured sales action persisted");
     if (agentResult.action === "CONFIRM_ORDER") {
       const response = await fetch(`${config.appUrl}/api/internal/whatsapp-orders`, {
         method: "POST",
