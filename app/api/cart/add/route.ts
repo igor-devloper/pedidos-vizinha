@@ -10,13 +10,14 @@ import {
 } from "@/lib/cart";
 import { prisma } from "@/lib/db";
 import { getProdutoComboItens } from "@/lib/produtos";
+import { CartQuantityValidationError, validateCartItemQuantities } from "@/lib/cart-quantity";
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { productId?: string; quantity?: number; requestedUnits?: number; audience?: string };
     const audience = normalizeCartAudience(body.audience);
     const productId = String(body.productId || "").trim();
-    const quantity = Math.max(1, Math.floor(Number(body.quantity || 1)));
+    const quantity = body.quantity ?? 1;
 
     if (!productId) {
       return NextResponse.json({ error: "Produto inválido." }, { status: 400 });
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
         saboresSugeridos: true,
         precisaSelecaoDeTipos: true,
         totalUnidades: true,
+        maxTiposSalgado: true,
         productType: { select: { minQuantity: true, allowsMultiple: true } },
       },
     });
@@ -46,15 +48,14 @@ export async function POST(req: Request) {
 
     const { cart, isNew, sessionId } = await getCurrentCart(audience);
     const unitPrice = getCartProductUnitPrice(product, audience);
-    const minimumQuantity = audience === "CONFEITEIRA" ? product.quantidadeMinimaConfeiteira : product.productType?.minQuantity;
-    const usesMinimumQuantity = audience === "CONFEITEIRA" ? Boolean(minimumQuantity) : Boolean(product.productType?.allowsMultiple && minimumQuantity);
-    const requestedUnits = usesMinimumQuantity
-      ? Math.floor(Number(body.requestedUnits || minimumQuantity || product.totalUnidades))
-      : null;
-
-    if (usesMinimumQuantity && requestedUnits! < Number(minimumQuantity)) {
-      return NextResponse.json({ error: `A quantidade mínima é ${product.productType?.minQuantity}.` }, { status: 400 });
-    }
+    const quantities = validateCartItemQuantities({
+      product,
+      audience,
+      quantity,
+      requestedUnits: body.requestedUnits,
+      selectedItems: buildInitialSelectedItems(product),
+      requireCompleteSelection: false,
+    });
 
     const cartItem = await prisma.cartItem.upsert({
       where: {
@@ -64,15 +65,15 @@ export async function POST(req: Request) {
         },
       },
       update: {
-        quantity: usesMinimumQuantity ? 1 : { increment: quantity },
-        requestedUnits: usesMinimumQuantity ? requestedUnits : undefined,
+        quantity: quantities.usesMinimumQuantity ? 1 : { increment: quantities.quantity },
+        requestedUnits: quantities.usesMinimumQuantity ? quantities.requestedUnits : undefined,
         unitPrice,
       },
       create: {
         cartId: cart.id,
         productId: product.id,
-        quantity: usesMinimumQuantity ? 1 : quantity,
-        requestedUnits,
+        quantity: quantities.quantity,
+        requestedUnits: quantities.usesMinimumQuantity ? quantities.requestedUnits : null,
         unitPrice,
         selectedItems: buildInitialSelectedItems(product),
       },
@@ -110,6 +111,9 @@ export async function POST(req: Request) {
     return response;
   } catch (error) {
     console.error("POST /api/cart/add error", error);
+    if (error instanceof CartQuantityValidationError) {
+      return NextResponse.json({ error: error.message, details: error.details }, { status: 400 });
+    }
     return NextResponse.json({ error: "Erro ao adicionar ao carrinho." }, { status: 500 });
   }
 }

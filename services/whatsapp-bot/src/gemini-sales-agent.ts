@@ -3,11 +3,13 @@ import { GoogleGenAI } from "@google/genai";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import type { BotLead } from "./lead-repository.js";
-import { formatProductPriceForCustomer, listActiveProducts } from "./product-repository.js";
+import { formatProductPriceForCustomer, getStoreSettings, listActiveProducts } from "./product-repository.js";
 import type { ProductRecord } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
 
-type AgentResult = {
+export type AgentResult = {
+  action?: "ANSWER_QUESTION" | "SEND_SITE" | "START_WHATSAPP_ORDER" | "SET_PRODUCT" | "SET_QUANTITY" | "SET_FLAVORS" | "SET_NAME" | "SET_EMAIL" | "SET_DATETIME" | "SET_FULFILLMENT" | "SET_ADDRESS" | "SET_PAYMENT" | "SHOW_SUMMARY" | "CONFIRM_ORDER" | "CANCEL_DRAFT" | "HANDOFF";
+  extracted?: Record<string, unknown>;
   reply: string;
   stage?: string;
   status?: string;
@@ -43,6 +45,8 @@ function sanitizeAgentResult(raw: AgentResult) {
     : undefined;
 
   return {
+    action: raw.action,
+    extracted: raw.extracted && typeof raw.extracted === "object" ? raw.extracted : undefined,
     shouldRespond: raw.shouldRespond !== false,
     reply: normalizeOptionalText(raw.reply) || "",
     stage: normalizeOptionalText(raw.stage),
@@ -108,7 +112,7 @@ function buildLeadSnapshot(lead: BotLead | null) {
   ].join("\n");
 }
 
-function buildPrompt(job: InboundMessageJob, lead: BotLead | null, products: ProductRecord[]) {
+function buildPrompt(job: InboundMessageJob, lead: BotLead | null, products: ProductRecord[], settings: unknown, draft: unknown) {
   return `
 Você é a atendente virtual da ${config.businessName}.
 
@@ -117,7 +121,7 @@ Seu papel:
 - falar de forma humana, simpática e natural no WhatsApp;
 - tirar dúvidas com flexibilidade;
 - ajudar o cliente a entender produtos, preços, promoções e horários;
-- orientar o cliente a fazer o pedido exclusivamente no site ${config.cardapioUrl};
+- oferecer o site ${config.cardapioUrl}, mas também montar o pedido completo pelo WhatsApp quando o cliente quiser;
 - usar somente os produtos e preços fornecidos;
 - nunca inventar itens fora do cardápio.
 
@@ -129,8 +133,9 @@ Regras importantes:
 - se o cliente pedir o cardápio, mande primeiro o link oficial do cardápio: ${config.cardapioUrl};
 - junto com o link, você pode destacar poucas promoções em texto com preço, sem despejar o cardápio inteiro no WhatsApp;
 - quando informar valores, use o preço final com desconto dos produtos em promoção; não ofereça o preço cheio como se fosse o valor atual;
-- se o cliente quiser encomendar, deixe claro que o pedido deve ser feito no site;
-- nunca monte o pedido por mensagem, nunca colete o pedido completo por WhatsApp e nunca diga que vai fechar a encomenda por aqui;
+- extraia todos os campos informados juntos e pergunte somente o que estiver faltando;
+- nunca invente preço, taxa, promoção, disponibilidade ou status de pagamento: o backend valida esses dados;
+- nunca peça nem repita número de cartão, validade, CVV ou token;
 - fazemos entrega; quando o cliente perguntar, informe: Ponta de Matos, Vila São João, Centro e Jardim Manguinhos R$ 5; Camboinha I/II/III R$ 8; Poço, Recanto e Praia do Poço R$ 10; Ponta de Campina, Portal do Poço, Intermares e Jacaré R$ 15;
 - para João Pessoa e bairros não tabelados, diga que a taxa de entrega é a combinar;
 - oriente o cliente a escolher Entrega no carrinho do site e informar endereço completo e ponto de referência; não invente taxa para bairro não listado;
@@ -151,12 +156,22 @@ ${formatProductsForPrompt(products)}
 Contexto atual do lead:
 ${buildLeadSnapshot(lead)}
 
+Configuração atual da loja (fonte de verdade do backend):
+${JSON.stringify(settings)}
+
+Draft persistido atual:
+${JSON.stringify(draft)}
+
+Data/hora atual em America/Sao_Paulo: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+
 Mensagem recebida agora:
 ${job.text}
 
 Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
 {
   "shouldRespond": true,
+  "action": "ANSWER_QUESTION|SEND_SITE|START_WHATSAPP_ORDER|SET_PRODUCT|SET_QUANTITY|SET_FLAVORS|SET_NAME|SET_EMAIL|SET_DATETIME|SET_FULFILLMENT|SET_ADDRESS|SET_PAYMENT|SHOW_SUMMARY|CONFIRM_ORDER|CANCEL_DRAFT|HANDOFF",
+  "extracted": {},
   "reply": "texto da resposta para o cliente",
   "stage": "awaiting_intent|site_order_guided|outro-stage-atual",
   "status": "open|qualified|closed|handoff",
@@ -171,13 +186,14 @@ Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
 `;
 }
 
-export async function runSalesAgent(job: InboundMessageJob, lead: BotLead | null) {
+export async function runSalesAgent(job: InboundMessageJob, lead: BotLead | null, draft?: unknown) {
   if (!ai) {
     return null;
   }
 
   const products = await listActiveProducts();
-  const prompt = buildPrompt(job, lead, products);
+  const settings = await getStoreSettings();
+  const prompt = buildPrompt(job, lead, products, settings, draft);
 
   try {
     const response = await ai.models.generateContent({

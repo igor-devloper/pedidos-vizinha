@@ -6,6 +6,10 @@ import { prisma } from "@/lib/db";
 import { calculateDiscountedSubtotal } from "@/lib/descontos";
 import { getProdutoComboItens } from "@/lib/produtos";
 import { normalizeSaboresList } from "@/lib/sabores";
+import {
+  normalizeCartSelectedItemsCanonical,
+  validateCartItemQuantities,
+} from "@/lib/cart-quantity";
 
 export const CART_SESSION_COOKIE = "vizinha_cart_session";
 export type CartAudience = "VIZINHA" | "CONFEITEIRA";
@@ -35,30 +39,7 @@ export type CartSelectedItem = {
 };
 
 export function normalizeCartSelectedItems(value: Prisma.JsonValue | unknown): CartSelectedItem[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-
-      const entry = item as { tipo?: unknown; quantidade?: unknown };
-      const tipo = typeof entry.tipo === "string" ? entry.tipo.trim() : "";
-      const quantidade = Number(entry.quantidade);
-
-      if (!tipo || !Number.isFinite(quantidade) || quantidade < 0) {
-        return null;
-      }
-
-      return {
-        tipo,
-        quantidade: Math.floor(quantidade),
-      };
-    })
-    .filter((item): item is CartSelectedItem => Boolean(item));
+  return normalizeCartSelectedItemsCanonical(value);
 }
 
 export function buildInitialSelectedItems(product: {
@@ -141,12 +122,18 @@ export async function getCurrentCart(audience: CartAudience = "VIZINHA") {
 
 export function serializeCart(cart: CartWithItems, audience: CartAudience = "VIZINHA") {
   const items = cart.items.map((item) => {
+    const quantities = validateCartItemQuantities({
+      product: item.product,
+      audience,
+      quantity: item.quantity,
+      requestedUnits: item.requestedUnits ?? undefined,
+      selectedItems: item.selectedItems,
+      requireCompleteSelection: false,
+    });
     const unitPrice = getCartProductUnitPrice(item.product, audience);
-    const requestedUnits = item.requestedUnits ?? item.product.totalUnidades * item.quantity;
+    const requestedUnits = quantities.requestedUnits;
     const confectionerMinimum = item.product.quantidadeMinimaConfeiteira;
-    const usesMinimumQuantity = audience === "CONFEITEIRA"
-      ? Boolean(confectionerMinimum)
-      : Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+    const usesMinimumQuantity = quantities.usesMinimumQuantity;
     // O preco da confeiteira se refere ao lote minimo dela, que pode ser
     // diferente do total de unidades do cardapio comum.
     const pricingBaseUnits = audience === "CONFEITEIRA"
@@ -167,7 +154,7 @@ export function serializeCart(cart: CartWithItems, audience: CartAudience = "VIZ
       quantity: item.quantity,
       requestedUnits,
       usesMinimumQuantity,
-      minimumQuantity: audience === "CONFEITEIRA" ? confectionerMinimum ?? 1 : item.product.productType?.minQuantity ?? 1,
+      minimumQuantity: quantities.minimumQuantity,
       minimumLeadHours: item.product.antecedenciaMinimaHoras,
       unitPrice,
       subtotal,
@@ -178,7 +165,7 @@ export function serializeCart(cart: CartWithItems, audience: CartAudience = "VIZ
       saboresSugeridos: normalizeSaboresList(item.product.saboresSugeridos),
       comboItens,
       precisaSelecaoDeTipos: item.product.precisaSelecaoDeTipos,
-      selectedItems: normalizeCartSelectedItems(item.selectedItems),
+      selectedItems: quantities.selectedItems,
     };
   });
 

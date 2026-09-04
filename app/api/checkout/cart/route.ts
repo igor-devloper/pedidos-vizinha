@@ -6,19 +6,18 @@ import {
   getCartProductUnitPrice,
   getCurrentCart,
   normalizeCartAudience,
-  normalizeCartSelectedItems,
   serializeCart,
   setCartSessionCookie,
 } from "@/lib/cart";
 import { getFullStoreStatus, isSameBusinessDate } from "@/lib/business-hours";
 import { prisma } from "@/lib/db";
+import { recordOrderEvent } from "@/lib/order-audit";
 import {
   calculatePaymentAmounts,
   validateDeliveryDate,
-  validatePedidoAgainstProduto,
 } from "@/lib/pedidos";
-import { getProdutoComboItens } from "@/lib/produtos";
 import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
+import { CartQuantityValidationError, validateCartItemQuantities } from "@/lib/cart-quantity";
 
 function parseLocalScheduledAt(value?: string) {
   if (!value) return null;
@@ -79,9 +78,50 @@ export async function POST(req: Request) {
       deliveryLatitude?: number;
       deliveryLongitude?: number;
       audience?: string;
+      items?: Array<{
+        id: string;
+        quantity: number;
+        requestedUnits: number;
+        selectedItems: Array<{ tipo: string; quantidade: number }>;
+      }>;
     };
     const audience = normalizeCartAudience(body.audience);
-    const { cart, isNew, sessionId } = await getCurrentCart(audience);
+    const { cart: persistedCart, isNew, sessionId } = await getCurrentCart(audience);
+    let cart = persistedCart;
+
+    if (body.items) {
+      const persistedIds = new Set(persistedCart.items.map((item) => item.id));
+      const snapshotIds = new Set(body.items.map((item) => item.id));
+      if (
+        persistedIds.size !== snapshotIds.size ||
+        [...persistedIds].some((id) => !snapshotIds.has(id))
+      ) {
+        return NextResponse.json(
+          { error: "O carrinho mudou durante a finalização. Revise os itens e tente novamente." },
+          { status: 409 },
+        );
+      }
+
+      cart = {
+        ...persistedCart,
+        items: persistedCart.items.map((item) => {
+          const snapshotItem = body.items!.find((candidate) => candidate.id === item.id)!;
+          const quantities = validateCartItemQuantities({
+            product: item.product,
+            audience,
+            quantity: snapshotItem.quantity,
+            requestedUnits: snapshotItem.requestedUnits,
+            selectedItems: snapshotItem.selectedItems,
+          });
+          return {
+            ...item,
+            quantity: quantities.quantity,
+            requestedUnits: quantities.usesMinimumQuantity ? quantities.requestedUnits : null,
+            selectedItems: quantities.selectedItems,
+          };
+        }),
+      };
+    }
     const snapshot = serializeCart(cart, audience);
 
     if (snapshot.items.length === 0) {
@@ -148,21 +188,13 @@ export async function POST(req: Request) {
     }
 
     for (const item of cart.items) {
-      const selectedItems = normalizeCartSelectedItems(
-        item.selectedItems,
-      ).filter((entry) => entry.quantidade > 0);
-
-      validatePedidoAgainstProduto(
-        {
-          ...item.product,
-          comboItens: getProdutoComboItens(
-            item.product as { comboItens?: unknown },
-          ),
-        },
-        selectedItems,
-        item.quantity,
-        item.requestedUnits ?? undefined,
-      );
+      validateCartItemQuantities({
+        product: item.product,
+        audience,
+        quantity: item.quantity,
+        requestedUnits: item.requestedUnits ?? undefined,
+        selectedItems: item.selectedItems,
+      });
     }
 
     const scheduledAt = parseLocalScheduledAt(body.scheduledAt);
@@ -232,8 +264,27 @@ export async function POST(req: Request) {
     const orderCode = `C${Date.now().toString(36).toUpperCase()}${randomUUID().slice(0, 4).toUpperCase()}`;
     const externalReference = `cart-${orderCode}`;
 
-    const order = await prisma.order.create({
-      data: {
+    const order = await prisma.$transaction(async (tx) => {
+      for (const item of cart.items) {
+        const quantities = validateCartItemQuantities({
+          product: item.product,
+          audience,
+          quantity: item.quantity,
+          requestedUnits: item.requestedUnits ?? undefined,
+          selectedItems: item.selectedItems,
+        });
+        await tx.cartItem.update({
+          where: { id: item.id },
+          data: {
+            quantity: quantities.quantity,
+            requestedUnits: quantities.usesMinimumQuantity ? quantities.requestedUnits : null,
+            selectedItems: quantities.selectedItems,
+          },
+        });
+      }
+
+      const createdOrder = await tx.order.create({
+        data: {
         cartId: cart.id,
         externalReference,
         code: orderCode,
@@ -261,20 +312,23 @@ export async function POST(req: Request) {
         chargedAmount: payment.totalToCharge,
         items: {
           create: cart.items.map((item) => {
+            const quantities = validateCartItemQuantities({
+              product: item.product,
+              audience,
+              quantity: item.quantity,
+              requestedUnits: item.requestedUnits ?? undefined,
+              selectedItems: item.selectedItems,
+            });
             const unitPrice = getCartProductUnitPrice(item.product, audience);
-            const requestedUnits = item.requestedUnits ?? item.product.totalUnidades * item.quantity;
-            const usesMinimumQuantity = audience === "CONFEITEIRA"
-              ? Boolean(item.product.quantidadeMinimaConfeiteira)
-              : Boolean(item.product.productType?.allowsMultiple && item.product.productType.minQuantity);
+            const requestedUnits = quantities.requestedUnits;
+            const usesMinimumQuantity = quantities.usesMinimumQuantity;
             const pricingBaseUnits = audience === "CONFEITEIRA"
               ? item.product.quantidadeMinimaConfeiteira ?? item.product.totalUnidades
               : item.product.totalUnidades;
             const subtotal = usesMinimumQuantity
               ? Number((unitPrice * (requestedUnits / pricingBaseUnits)).toFixed(2))
               : unitPrice * item.quantity;
-            const selectedItems = normalizeCartSelectedItems(
-              item.selectedItems,
-            ).filter((entry) => entry.quantidade > 0);
+            const selectedItems = quantities.selectedItems;
 
             return {
               productId: item.productId,
@@ -289,8 +343,31 @@ export async function POST(req: Request) {
             };
           }),
         },
-      } as Prisma.OrderUncheckedCreateInput,
-      include: { items: true },
+        } as Prisma.OrderUncheckedCreateInput,
+        include: { items: true },
+      });
+
+      await recordOrderEvent({
+        orderId: createdOrder.id,
+        event: "ORDER_CREATED",
+        source: "SITE",
+        newStatus: createdOrder.status,
+        metadata: {
+          entityType: "Order",
+          code: createdOrder.code,
+          externalReference: createdOrder.externalReference,
+          itemCount: createdOrder.items.length,
+        },
+      }, tx);
+
+      return createdOrder;
+    });
+
+    console.info("[checkout] order created", {
+      orderId: order.id,
+      code: order.code,
+      status: order.status,
+      itemCount: order.items.length,
     });
 
     const response = NextResponse.json({
@@ -308,6 +385,12 @@ export async function POST(req: Request) {
     return response;
   } catch (error) {
     console.error("POST /api/checkout/cart error", error);
+    if (error instanceof CartQuantityValidationError) {
+      return NextResponse.json(
+        { error: error.message, details: error.details },
+        { status: 400 },
+      );
+    }
     const message =
       error instanceof Error ? error.message : "Erro ao finalizar carrinho.";
 

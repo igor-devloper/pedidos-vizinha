@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { isManhiaRequestAuthenticated } from "@/lib/admin-auth";
+import { MANHIA_ORDER_HISTORY_QUERY, MANHIA_PEDIDO_HISTORY_QUERY } from "@/lib/order-history";
 import {
   processPaidPedidosSideEffects,
   processReadyPedidoToleranceReminders,
@@ -18,23 +19,30 @@ export async function GET(req: Request) {
   }
 
   try {
-    await processReadyPedidoToleranceReminders();
-    await processPaidPedidosSideEffects();
-    await processPaidCartOrdersSideEffects();
-    await processReadyCartOrderBalanceCharges();
-
-    const pedidos = await prisma.pedido.findMany({
-      orderBy: [{ createdAt: "desc" }],
-      include: {
-        itens: true,
-        produto: true,
-      },
+    const sideEffects = await Promise.allSettled([
+      processReadyPedidoToleranceReminders(),
+      processPaidPedidosSideEffects(),
+      processPaidCartOrdersSideEffects(),
+      processReadyCartOrderBalanceCharges(),
+    ]);
+    sideEffects.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error("Manhia refresh side effect failed", {
+          operation: ["ready-tolerance", "paid-pedidos", "paid-cart-orders", "ready-balance-charges"][index],
+          error: result.reason,
+        });
+      }
     });
 
-    const orders = await prisma.order.findMany({
-      orderBy: [{ createdAt: "desc" }],
-      include: { items: true },
-      take: 50,
+    const pedidos = await prisma.pedido.findMany(MANHIA_PEDIDO_HISTORY_QUERY);
+
+    const orders = await prisma.order.findMany(MANHIA_ORDER_HISTORY_QUERY);
+
+    console.info("[manhia] order history loaded", {
+      pedidoCount: pedidos.length,
+      orderCount: orders.length,
+      cancelledPedidoCount: pedidos.filter((pedido) => pedido.status === "CANCELADO").length,
+      cancelledOrderCount: orders.filter((order) => order.status === "CANCELLED").length,
     });
 
     return NextResponse.json({

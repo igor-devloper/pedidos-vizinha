@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
 import type { CartAudience } from "@/lib/cart";
+import { validateCartItemQuantities } from "@/lib/cart-quantity";
 
 type CartItem = {
   id: string;
@@ -406,7 +407,25 @@ export function FloatingCart({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(minDeliveryDate));
   const cartThemeStyle = getCartThemeStyle(siteTheme);
-  const selectedItemsSavePromises = useRef(new Set<Promise<void>>());
+  const cartSaveChain = useRef<Promise<void>>(Promise.resolve());
+  const latestCartSaveError = useRef<Error | null>(null);
+
+  const enqueueCartSave = (operation: () => Promise<void>) => {
+    const next = cartSaveChain.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await operation();
+          latestCartSaveError.current = null;
+        } catch (error) {
+          const normalizedError = error instanceof Error ? error : new Error("Não foi possível salvar o carrinho.");
+          latestCartSaveError.current = normalizedError;
+          throw normalizedError;
+        }
+      });
+    cartSaveChain.current = next;
+    return next;
+  };
 
   const showReview = () => {
     if (!canCheckout || cartValidation) {
@@ -481,14 +500,16 @@ export function FloatingCart({
             }))
           : item.selectedItems;
       setLoadingId(item.id);
-      const response = await fetch(`/api/cart/item/${item.id}?audience=${audience}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item.usesMinimumQuantity ? { requestedUnits: nextQuantity, selectedItems, audience } : { quantity: nextQuantity, selectedItems, audience }),
+      await enqueueCartSave(async () => {
+        const response = await fetch(`/api/cart/item/${item.id}?audience=${audience}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item.usesMinimumQuantity ? { requestedUnits: nextQuantity, selectedItems, audience } : { quantity: nextQuantity, selectedItems, audience }),
+        });
+        const data = (await response.json().catch(() => null)) as (CartData & { error?: string }) | null;
+        if (!response.ok || !data) throw new Error(data?.error || "Não foi possível atualizar.");
+        updateCart(data);
       });
-
-      if (!response.ok) throw new Error("Não foi possível atualizar.");
-      updateCart((await response.json()) as CartData);
       setQuantityDrafts((current) => { const next = { ...current }; delete next[item.id]; return next; });
     } catch (error) {
       setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível alterar a quantidade.") });
@@ -585,36 +606,32 @@ export function FloatingCart({
           return `${item.name}: informe pelo menos ${item.minimumQuantity} unidades.`;
         }
       }
-      if (!item.precisaSelecaoDeTipos) continue;
-      const totalRequired = item.requestedUnits;
-      const maxTypes = item.maxTiposSalgado * item.quantity;
-      const selected = item.selectedItems.filter((entry) => entry.tipo.trim() && entry.quantidade > 0);
-      const totalSelected = selected.reduce((sum, entry) => sum + entry.quantidade, 0);
-
-      if (totalSelected !== totalRequired) {
-        return `${item.name}: selecione exatamente ${totalRequired} unidades nos tipos.`;
-      }
-
-      if (selected.length > maxTypes) {
-        return `${item.name}: escolha no máximo ${maxTypes} tipos.`;
-      }
-
-      if (item.category === "COMBO" && item.comboItens.length > 0) {
-        for (const comboItem of item.comboItens) {
-          const selectedItem = selected.find(
-            (entry) => entry.tipo.trim().toLowerCase() === comboItem.nome.trim().toLowerCase()
-          );
-          const requiredQuantity = comboItem.quantidade * item.quantity;
-
-          if (!selectedItem || selectedItem.quantidade !== requiredQuantity) {
-            return `${item.name}: esse combo possui composição fixa.`;
-          }
-        }
+      try {
+        validateCartItemQuantities({
+          product: {
+            nome: item.name,
+            categoria: item.category,
+            totalUnidades: item.totalUnidades,
+            maxTiposSalgado: item.maxTiposSalgado,
+            precisaSelecaoDeTipos: item.precisaSelecaoDeTipos,
+            quantidadeMinimaConfeiteira: audience === "CONFEITEIRA" && item.usesMinimumQuantity ? item.minimumQuantity : null,
+            productType: audience === "VIZINHA"
+              ? { allowsMultiple: item.usesMinimumQuantity, minQuantity: item.minimumQuantity }
+              : null,
+            comboItens: item.comboItens,
+          },
+          audience,
+          quantity: item.quantity,
+          requestedUnits: item.id in quantityDrafts ? Number(quantityDrafts[item.id]) : item.requestedUnits,
+          selectedItems: item.selectedItems,
+        });
+      } catch (error) {
+        return `${item.name}: ${error instanceof Error ? error.message : "Confira as quantidades selecionadas."}`;
       }
     }
 
     return null;
-  }, [cart.items, quantityDrafts]);
+  }, [audience, cart.items, quantityDrafts]);
   const checkoutGuidance = cartValidation
     ? getSimpleCartError(new Error(cartValidation), cartValidation)
     : customerName.trim().length < 2
@@ -648,7 +665,8 @@ export function FloatingCart({
     try {
       setCheckingOut(true);
       setActionError(null);
-      await Promise.allSettled(Array.from(selectedItemsSavePromises.current));
+      await cartSaveChain.current.catch(() => undefined);
+      if (latestCartSaveError.current) throw latestCartSaveError.current;
       const response = await fetch("/api/checkout/cart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -668,6 +686,14 @@ export function FloatingCart({
           deliveryLatitude: deliveryPlace.latitude,
           deliveryLongitude: deliveryPlace.longitude,
           audience,
+          items: cart.items.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            requestedUnits: item.id in quantityDrafts
+              ? Number(quantityDrafts[item.id])
+              : item.requestedUnits,
+            selectedItems: item.selectedItems,
+          })),
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -712,23 +738,18 @@ export function FloatingCart({
       ),
     }));
 
-    const savePromise = fetch(`/api/cart/item/${item.id}?audience=${audience}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quantity: item.quantity, selectedItems: normalizedSelectedItems, audience }),
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Não foi possível atualizar os tipos.");
-      })
-      .catch((error) => {
-        setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível salvar os sabores.") });
-        void loadCart();
-      })
-      .finally(() => {
-        selectedItemsSavePromises.current.delete(savePromise);
+    const savePromise = enqueueCartSave(async () => {
+      const response = await fetch(`/api/cart/item/${item.id}?audience=${audience}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: item.quantity, selectedItems: normalizedSelectedItems, audience }),
       });
-
-    selectedItemsSavePromises.current.add(savePromise);
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(data?.error || "Não foi possível atualizar os tipos.");
+    });
+    void savePromise.catch((error) => {
+      setItemError({ id: item.id, message: getSimpleCartError(error, "Não foi possível salvar os sabores.") });
+    });
   };
 
   const patchSelectedItem = (item: CartItem, index: number, patch: Partial<SelectedItem>) => {

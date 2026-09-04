@@ -16,6 +16,11 @@ import {
   calculatePaymentAmounts,
 } from "@/lib/pedidos";
 import { BUSINESS_INFO, BUSINESS_RULES } from "@/lib/site-config";
+import {
+  getPaymentAuditEvent,
+  getStatusAuditEvent,
+  recordOrderEvent,
+} from "@/lib/order-audit";
 import { sendPedidoToPrintService } from "@/lib/print-service";
 import { sendWhatsappImage, sendWhatsappText } from "@/lib/whatsapp";
 
@@ -388,6 +393,29 @@ export async function markPedidoPaidManually({
     include: { itens: true },
   } as never);
 
+  await recordOrderEvent({
+    orderId: pedido.id,
+    event: "PAYMENT_APPROVED",
+    source: "ADMIN",
+    previousStatus: pedidoAtual.status,
+    newStatus: pedido.status,
+    metadata: {
+      entityType: "Pedido",
+      paymentKind: "MANUAL",
+      hasObservation: Boolean(observacao?.trim()),
+    },
+  });
+  if (pedido.status !== pedidoAtual.status) {
+    await recordOrderEvent({
+      orderId: pedido.id,
+      event: getStatusAuditEvent(String(pedido.status)),
+      source: "ADMIN",
+      previousStatus: pedidoAtual.status,
+      newStatus: pedido.status,
+      metadata: { entityType: "Pedido", trigger: "MANUAL_PAYMENT" },
+    });
+  }
+
   await notifyPaidPedido(pedido as PedidoWithItens);
   return printAcceptedPedido(pedido as PedidoWithItens);
 }
@@ -416,12 +444,24 @@ export async function handleMercadoPagoPaymentUpdate({
   }
 
   const isBalancePayment = pedido.saldoExternalReference === externalReference;
+  const expectedAmount = isBalancePayment
+    ? Number(pedido.saldoTotalCobrado || 0)
+    : Number(pedido.totalCobrado);
+  if (status === "approved") {
+    if (typeof transactionAmount !== "number" || Math.abs(transactionAmount - expectedAmount) > 0.01) {
+      throw new Error(`Valor aprovado diverge do pedido ${pedido.codigo}.`);
+    }
+    const alreadyApplied = isBalancePayment
+      ? Boolean(pedido.saldoPagoAt)
+      : pedido.status === PedidoStatus.PAGO && pedido.mpPaymentId === paymentId;
+    if (alreadyApplied) return pedido;
+  }
   const nextStatus =
     isBalancePayment
       ? pedido.status
       : status === "approved"
         ? PedidoStatus.PAGO
-        : ["cancelled", "rejected", "refunded", "charged_back"].includes(status)
+        : ["cancelled", "refunded", "charged_back"].includes(status)
           ? PedidoStatus.CANCELADO
           : pedido.status;
   const webhookPayload =
@@ -465,6 +505,34 @@ export async function handleMercadoPagoPaymentUpdate({
     } as never,
     include: { itens: true },
   } as never);
+
+  const paymentEvent = getPaymentAuditEvent(status);
+  if (paymentEvent) {
+    await recordOrderEvent({
+      orderId: updated.id,
+      event: paymentEvent,
+      source: "MERCADO_PAGO",
+      previousStatus: pedido.status,
+      newStatus: updated.status,
+      metadata: {
+        entityType: "Pedido",
+        paymentId,
+        externalReference,
+        paymentStatus: status,
+        balance: isBalancePayment,
+      },
+    });
+  }
+  if (!isBalancePayment && updated.status !== pedido.status) {
+    await recordOrderEvent({
+      orderId: updated.id,
+      event: getStatusAuditEvent(String(updated.status)),
+      source: "MERCADO_PAGO",
+      previousStatus: pedido.status,
+      newStatus: updated.status,
+      metadata: { entityType: "Pedido", paymentId, trigger: "PAYMENT_STATUS" },
+    });
+  }
 
   if (!isBalancePayment && status === "approved") {
     await notifyPaidPedido(updated as PedidoWithItens);
@@ -545,6 +613,33 @@ export async function updatePedidoStatus(id: string, status: PedidoStatus) {
       produto: true,
     },
   } as never);
+
+  if (pedido.status !== pedidoAtual.status) {
+    await recordOrderEvent({
+      orderId: pedido.id,
+      event: getStatusAuditEvent(String(pedido.status)),
+      source: "ADMIN",
+      previousStatus: pedidoAtual.status,
+      newStatus: pedido.status,
+      metadata: { entityType: "Pedido" },
+    });
+  }
+
+  if (balanceCharge) {
+    await recordOrderEvent({
+      orderId: pedido.id,
+      event: "PAYMENT_CREATED",
+      source: "SYSTEM",
+      previousStatus: pedidoAtual.status,
+      newStatus: pedido.status,
+      metadata: {
+        entityType: "Pedido",
+        paymentKind: "BALANCE_PREFERENCE",
+        preferenceId: balanceCharge.saldoPreferenceId,
+        externalReference: balanceCharge.saldoExternalReference,
+      },
+    });
+  }
 
   if (enteringReady) {
     const notifiedAt = await notifyPedidoReady(pedido as PedidoWithReadyFields);

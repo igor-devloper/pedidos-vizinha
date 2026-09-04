@@ -7,6 +7,7 @@ import {
   getOrderStatusFromMercadoPagoStatus,
 } from "@/lib/cart-order-payment";
 import { prisma } from "@/lib/db";
+import { recordOrderEvent } from "@/lib/order-audit";
 import {
   createCartMercadoPagoCardPayment,
   createCartMercadoPagoPixPayment,
@@ -123,10 +124,26 @@ export async function POST(
       });
       const status = getOrderStatusFromMercadoPagoStatus(payment.status);
 
+      await recordOrderEvent({
+        orderId: order.id,
+        event: "PAYMENT_CREATED",
+        source: "SITE",
+        previousStatus: order.status,
+        newStatus: order.status,
+        metadata: {
+          entityType: "Order",
+          paymentId: String(payment.id),
+          externalReference: paymentOrder.externalReference,
+          paymentMethod: "PIX",
+          balance,
+        },
+      });
+
       await applyCartOrderPayment({
         id: payment.id,
         status: payment.status,
         external_reference: paymentOrder.externalReference,
+        transaction_amount: payment.transactionAmount,
       });
 
       await prisma.order.update({
@@ -183,10 +200,26 @@ export async function POST(
     });
     const status = getOrderStatusFromMercadoPagoStatus(payment.status);
 
+    await recordOrderEvent({
+      orderId: order.id,
+      event: "PAYMENT_CREATED",
+      source: "SITE",
+      previousStatus: order.status,
+      newStatus: order.status,
+      metadata: {
+        entityType: "Order",
+        paymentId: String(payment.id),
+        externalReference: paymentOrder.externalReference,
+        paymentMethod: order.paymentMethod,
+        balance,
+      },
+    });
+
     await applyCartOrderPayment({
       id: payment.id,
       status: payment.status,
       external_reference: paymentOrder.externalReference,
+      transaction_amount: payment.transactionAmount,
     });
 
     await prisma.order.update({

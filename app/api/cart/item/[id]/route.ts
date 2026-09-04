@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentCart, normalizeCartAudience, normalizeCartSelectedItems, serializeCart, setCartSessionCookie } from "@/lib/cart";
+import { getCurrentCart, normalizeCartAudience, serializeCart, setCartSessionCookie } from "@/lib/cart";
 import { prisma } from "@/lib/db";
+import { CartQuantityValidationError, validateCartItemQuantities } from "@/lib/cart-quantity";
 
 async function loadUpdatedCart(cartId: string) {
   return prisma.cart.findUniqueOrThrow({
@@ -23,29 +24,31 @@ export async function PATCH(
     const { id } = await context.params;
     const body = (await req.json()) as { quantity?: number; requestedUnits?: number; selectedItems?: unknown; audience?: string };
     const audience = normalizeCartAudience(body.audience || new URL(req.url).searchParams.get("audience"));
-    const quantity = Math.max(1, Math.floor(Number(body.quantity || 1)));
     const { cart, isNew, sessionId } = await getCurrentCart(audience);
     const existingItem = await prisma.cartItem.findFirst({
       where: { id, cartId: cart.id },
       include: { product: { include: { productType: true } } },
     });
     if (!existingItem) return NextResponse.json({ error: "Item não encontrado." }, { status: 404 });
-    const minimumQuantity = audience === "CONFEITEIRA" ? existingItem.product.quantidadeMinimaConfeiteira : existingItem.product.productType?.minQuantity;
-    const usesMinimumQuantity = audience === "CONFEITEIRA" ? Boolean(minimumQuantity) : Boolean(existingItem.product.productType?.allowsMultiple && minimumQuantity);
-    const requestedUnits = usesMinimumQuantity
-      ? Math.floor(Number(body.requestedUnits || existingItem.requestedUnits || minimumQuantity || existingItem.product.totalUnidades))
-      : null;
-    if (usesMinimumQuantity && requestedUnits! < Number(minimumQuantity)) {
-      return NextResponse.json({ error: `A quantidade mínima é ${existingItem.product.productType?.minQuantity}.` }, { status: 400 });
-    }
+    const quantities = validateCartItemQuantities({
+      product: existingItem.product,
+      audience,
+      quantity: body.quantity ?? existingItem.quantity,
+      requestedUnits: body.requestedUnits ?? existingItem.requestedUnits ?? undefined,
+      selectedItems: "selectedItems" in body ? body.selectedItems : existingItem.selectedItems,
+      requireCompleteSelection: false,
+    });
     const patch: {
       quantity: number;
       requestedUnits?: number | null;
-      selectedItems?: ReturnType<typeof normalizeCartSelectedItems>;
-    } = { quantity: usesMinimumQuantity ? 1 : quantity, requestedUnits };
+      selectedItems?: ReturnType<typeof validateCartItemQuantities>["selectedItems"];
+    } = {
+      quantity: quantities.quantity,
+      requestedUnits: quantities.usesMinimumQuantity ? quantities.requestedUnits : null,
+    };
 
     if ("selectedItems" in body) {
-      patch.selectedItems = normalizeCartSelectedItems(body.selectedItems);
+      patch.selectedItems = quantities.selectedItems;
     }
 
     await prisma.cartItem.updateMany({
@@ -63,6 +66,9 @@ export async function PATCH(
     return response;
   } catch (error) {
     console.error("PATCH /api/cart/item/[id] error", error);
+    if (error instanceof CartQuantityValidationError) {
+      return NextResponse.json({ error: error.message, details: error.details }, { status: 400 });
+    }
     return NextResponse.json({ error: "Erro ao atualizar item." }, { status: 500 });
   }
 }

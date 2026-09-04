@@ -9,6 +9,7 @@ import {
   normalizeDiscountPercent,
 } from "@/lib/descontos";
 import { createMercadoPagoPreference } from "@/lib/mercado-pago";
+import { recordOrderEvent } from "@/lib/order-audit";
 import {
   calculatePaymentAmounts,
   createPedidoCode,
@@ -157,6 +158,22 @@ export async function POST(req: Request) {
           itens: true,
         },
       });
+      await recordOrderEvent({
+        orderId: pedido.id,
+        event: "ORDER_CREATED",
+        source: "SITE",
+        newStatus: pedido.status,
+        metadata: {
+          entityType: "Pedido",
+          code: pedido.codigo,
+          externalReference: pedido.mpExternalReference,
+        },
+      });
+      console.info("[checkout] legacy pedido created", {
+        pedidoId: pedido.id,
+        code: pedido.codigo,
+        status: pedido.status,
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -180,6 +197,20 @@ export async function POST(req: Request) {
         name: pedido.clienteNome,
         email: pedido.clienteEmail,
         phone: pedido.clienteTelefone,
+      },
+    });
+
+    await recordOrderEvent({
+      orderId: pedido.id,
+      event: "PAYMENT_CREATED",
+      source: "SITE",
+      previousStatus: pedido.status,
+      newStatus: pedido.status,
+      metadata: {
+        entityType: "Pedido",
+        paymentKind: "PREFERENCE",
+        preferenceId: preference.id,
+        externalReference: pedido.mpExternalReference,
       },
     });
 

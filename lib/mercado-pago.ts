@@ -3,6 +3,7 @@ import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { Prisma, type Pedido } from "@prisma/client";
 
 import { BUSINESS_INFO, SUPPORTED_PAYMENT_METHODS } from "@/lib/site-config";
+import { getMercadoPagoWebhookUrl, getOrderReturnUrl } from "@/lib/order-urls";
 
 type MercadoPagoPaymentMethodApi = {
   id: string;
@@ -159,9 +160,7 @@ function getCartPaymentBase(order: CartMercadoPagoOrder, payer: CartMercadoPagoP
     transaction_amount: Number(chargedAmount),
     external_reference: order.externalReference,
     description: `Pedido ${order.code || order.id.slice(0, 8).toUpperCase()}`,
-    notification_url:
-      process.env.MP_WEBHOOK_URL?.trim() ||
-      `${BUSINESS_INFO.appUrl}/api/mercadopago/webhook`,
+    notification_url: getMercadoPagoWebhookUrl(),
     payer: buildCartPaymentPayer(order, payer),
     metadata: {
       cartOrderId: order.id,
@@ -397,13 +396,11 @@ export async function createCartMercadoPagoPreference({
       },
     ],
     external_reference: order.externalReference,
-    notification_url:
-      process.env.MP_WEBHOOK_URL?.trim() ||
-      `${BUSINESS_INFO.appUrl}/api/mercadopago/webhook`,
+    notification_url: getMercadoPagoWebhookUrl(),
     back_urls: {
-      success: `${BUSINESS_INFO.appUrl}/pedido/confirmacao?ref=${encodeURIComponent(order.externalReference)}`,
-      pending: `${BUSINESS_INFO.appUrl}/pedido/confirmacao?ref=${encodeURIComponent(order.externalReference)}`,
-      failure: `${BUSINESS_INFO.appUrl}/pedido/confirmacao?ref=${encodeURIComponent(order.externalReference)}`,
+      success: getOrderReturnUrl(order.externalReference),
+      pending: getOrderReturnUrl(order.externalReference),
+      failure: getOrderReturnUrl(order.externalReference),
     },
     auto_return: "approved",
     statement_descriptor: BUSINESS_INFO.name.slice(0, 13),
@@ -470,6 +467,7 @@ export async function createCartMercadoPagoPixPayment({
   return {
     id: payment.id,
     status: payment.status,
+    transactionAmount: payment.transaction_amount,
     statusDetail: payment.status_detail || null,
     qrCode: payment.point_of_interaction?.transaction_data?.qr_code || null,
     qrCodeBase64:
@@ -523,6 +521,7 @@ export async function createCartMercadoPagoCardPayment({
   return {
     id: payment.id,
     status: payment.status,
+    transactionAmount: payment.transaction_amount,
     statusDetail: payment.status_detail || null,
   };
 }
@@ -546,7 +545,7 @@ export async function findLatestMercadoPagoPaymentByExternalReference(externalRe
   return data.results?.[0] || null;
 }
 
-export function verifyMercadoPagoWebhookSignature(request: Request) {
+export function verifyMercadoPagoWebhookSignature(request: Request, dataIdOverride?: string) {
   const secret = getWebhookSecret();
 
   if (!secret) {
@@ -556,7 +555,7 @@ export function verifyMercadoPagoWebhookSignature(request: Request) {
   const signature = request.headers.get("x-signature") || "";
   const requestId = request.headers.get("x-request-id") || "";
   const url = new URL(request.url);
-  const dataId = url.searchParams.get("data.id") || url.searchParams.get("id") || "";
+  const dataId = dataIdOverride || url.searchParams.get("data.id") || url.searchParams.get("id") || "";
 
   if (!signature || !requestId || !dataId) {
     return false;

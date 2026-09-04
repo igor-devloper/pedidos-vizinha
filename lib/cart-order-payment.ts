@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { acceptPaidCartOrder } from "@/lib/cart-order-service";
 import { findLatestMercadoPagoPaymentByExternalReference } from "@/lib/mercado-pago";
+import { getPaymentAuditEvent, getStatusAuditEvent, recordOrderEvent } from "@/lib/order-audit";
 import { formatCurrency } from "@/lib/pedidos";
 import { sendWhatsappText } from "@/lib/whatsapp";
 
@@ -9,6 +10,7 @@ type MercadoPagoCartPayment = {
   status: string;
   status_detail?: string;
   external_reference?: string;
+  transaction_amount?: number;
 };
 
 export class CartOrderPaymentApplyError extends Error {
@@ -27,7 +29,7 @@ export function getOrderStatusFromMercadoPagoStatus(status: string) {
     return "PAID" as const;
   }
 
-  if (["cancelled", "rejected", "refunded", "charged_back"].includes(status)) {
+  if (["cancelled", "refunded", "charged_back"].includes(status)) {
     return "CANCELLED" as const;
   }
 
@@ -64,16 +66,73 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
   const orderStatus = getOrderStatusFromMercadoPagoStatus(payment.status);
   const isBalancePayment =
     current.saldoExternalReference === payment.external_reference;
+  const expectedAmount = isBalancePayment
+    ? Number(current.saldoTotalCobrado || 0)
+    : Number(current.chargedAmount || 0);
+  if (payment.status === "approved") {
+    if (typeof payment.transaction_amount !== "number") {
+      throw new CartOrderPaymentApplyError("Pagamento aprovado sem valor confirmado pelo Mercado Pago.", {
+        orderId: current.id,
+        paymentId: payment.id,
+        externalReference: payment.external_reference,
+      });
+    }
+    if (Math.abs(payment.transaction_amount - expectedAmount) > 0.01) {
+      throw new CartOrderPaymentApplyError("Valor aprovado diverge do valor esperado do pedido.", {
+        orderId: current.id,
+        paymentId: payment.id,
+        externalReference: payment.external_reference,
+        expectedAmount,
+        receivedAmount: payment.transaction_amount,
+      });
+    }
+  }
+  const alreadyApplied = isBalancePayment
+    ? Boolean(current.saldoPagoAt && current.saldoPaymentId === String(payment.id))
+    : current.status === "PAID" && current.mercadoPagoPaymentId === String(payment.id);
+  if (alreadyApplied) {
+    console.info("[MP webhook] Pagamento duplicado ignorado", {
+      orderId: current.id,
+      paymentId: String(payment.id),
+      balance: isBalancePayment,
+    });
+    return prisma.order.findUnique({ where: { id: current.id }, include: { items: true } });
+  }
   const shouldProvision = payment.status === "approved" &&
     (isBalancePayment ? !current.saldoPagoAt : current.status !== "PAID");
   const shouldThankBalancePayment =
     isBalancePayment && payment.status === "approved" && !current.saldoPagoAt;
-  const paidAmount = isBalancePayment
-    ? Number(current.saldoTotalCobrado || 0)
-    : Number(current.chargedAmount || 0);
+  const paidAmount = expectedAmount;
   let order;
 
   try {
+    if (payment.status === "approved") {
+      const claimed = await prisma.order.updateMany({
+        where: isBalancePayment
+          ? { id: current.id, saldoPagoAt: null }
+          : { id: current.id, status: { not: "PAID" } },
+        data: isBalancePayment
+          ? {
+              saldoPaymentId: String(payment.id),
+              saldoPagoAt: new Date(),
+              provisionAmount: { increment: Number((paidAmount * 0.1).toFixed(2)) },
+              provisionTransferredAt: null,
+            }
+          : {
+              status: "PAID",
+              mercadoPagoPaymentId: String(payment.id),
+              provisionAmount: { increment: Number((paidAmount * 0.1).toFixed(2)) },
+              provisionTransferredAt: null,
+            },
+      });
+      if (claimed.count === 0) {
+        console.info("[MP webhook] Pagamento concorrente/duplicado ignorado", {
+          orderId: current.id, paymentId: String(payment.id), balance: isBalancePayment,
+        });
+        return prisma.order.findUnique({ where: { id: current.id }, include: { items: true } });
+      }
+      order = await prisma.order.findUniqueOrThrow({ where: { id: current.id }, include: { items: true } });
+    } else {
     order = await prisma.order.update({
       where: { id: current.id },
       data: isBalancePayment
@@ -96,6 +155,7 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
           },
       include: { items: true },
     });
+    }
   } catch (error) {
     throw new CartOrderPaymentApplyError(
       "Falha ao atualizar status do order do carrinho.",
@@ -117,6 +177,38 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     paymentId: payment.id,
   });
 
+  const paymentEvent = getPaymentAuditEvent(payment.status);
+  if (paymentEvent) {
+    await recordOrderEvent({
+      orderId: order.id,
+      event: paymentEvent,
+      source: "MERCADO_PAGO",
+      previousStatus: isBalancePayment ? current.status : current.status,
+      newStatus: order.status,
+      metadata: {
+        entityType: "Order",
+        paymentId: String(payment.id),
+        externalReference: payment.external_reference,
+        paymentStatus: payment.status,
+        balance: isBalancePayment,
+      },
+    });
+  }
+  if (!isBalancePayment && order.status !== current.status) {
+    await recordOrderEvent({
+      orderId: order.id,
+      event: getStatusAuditEvent(order.status),
+      source: "MERCADO_PAGO",
+      previousStatus: current.status,
+      newStatus: order.status,
+      metadata: {
+        entityType: "Order",
+        paymentId: String(payment.id),
+        trigger: "PAYMENT_STATUS",
+      },
+    });
+  }
+
   if (shouldThankBalancePayment && order.customerPhone) {
     await sendWhatsappText(
       order.customerPhone,
@@ -126,8 +218,14 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
 
   if (!isBalancePayment && orderStatus === "PAID" && order.cartId) {
     try {
-      await prisma.cartItem.deleteMany({
+      const cleanup = await prisma.cartItem.deleteMany({
         where: { cartId: order.cartId },
+      });
+      console.info("[cart-cleanup] paid cart items removed; order retained", {
+        orderId: order.id,
+        cartId: order.cartId,
+        removedCartItemCount: cleanup.count,
+        retainedOrderItemCount: order.items.length,
       });
     } catch (error) {
       throw new CartOrderPaymentApplyError(

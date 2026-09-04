@@ -3,12 +3,29 @@ import { logger } from "./logger.js";
 
 export type ProductRecord = {
   id: string;
+  slug: string;
   nome: string;
   descricao: string;
   preco: string;
   descontoPercentual: string;
   categoria: "CENTO" | "LANCHONETE" | "COMBO";
   emPromocao: boolean;
+  totalUnidades: number;
+  maxTiposSalgado: number;
+  permitePagamentoParcial: boolean;
+  saboresSugeridos: string[];
+  comboItens: unknown;
+  antecedenciaMinimaHoras: number | null;
+  precisaSelecaoDeTipos: boolean;
+  minQuantity: number | null;
+  allowsMultiple: boolean | null;
+};
+
+export type StoreSettingsRecord = {
+  isOpen: boolean;
+  minimumLeadHours: number;
+  allowMultipleOrdersPerSlot: boolean;
+  operationSchedule: unknown;
 };
 
 export function formatCurrencyBR(value: number) {
@@ -54,16 +71,21 @@ export async function listActiveProducts() {
     const result = await db.query<ProductRecord>(
       `
         SELECT
-          id,
-          nome,
-          descricao,
-          preco::text AS preco,
-          "descontoPercentual"::text AS "descontoPercentual",
-          categoria,
-          "emPromocao"
-        FROM "Produto"
-        WHERE ativo = true
-        ORDER BY "emPromocao" DESC, categoria ASC, "createdAt" DESC
+          p.id,
+          p.slug,
+          p.nome,
+          p.descricao,
+          p.preco::text AS preco,
+          p."descontoPercentual"::text AS "descontoPercentual",
+          p.categoria,
+          p."emPromocao", p."totalUnidades", p."maxTiposSalgado",
+          p."permitePagamentoParcial", p."saboresSugeridos", p."comboItens",
+          p."antecedenciaMinimaHoras", p."precisaSelecaoDeTipos",
+          pt."minQuantity", pt."allowsMultiple"
+        FROM "Produto" p
+        LEFT JOIN "ProductType" pt ON pt.id = p."productTypeId"
+        WHERE p.ativo = true
+        ORDER BY p."emPromocao" DESC, p.categoria ASC, p."createdAt" DESC
       `
     );
 
@@ -72,4 +94,13 @@ export async function listActiveProducts() {
     logger.error({ error }, "Failed to load products for sales agent");
     return [] as ProductRecord[];
   }
+}
+
+export async function getStoreSettings() {
+  if (!db) return null;
+  const result = await db.query<StoreSettingsRecord>(
+    `SELECT "isOpen", "minimumLeadHours", "allowMultipleOrdersPerSlot", "operationSchedule"
+     FROM "StoreSettings" WHERE id = 'singleton' LIMIT 1`,
+  );
+  return result.rows[0] || null;
 }

@@ -21,6 +21,7 @@ import {
 } from "@/lib/cart-order-service";
 import { normalizeOperationSchedule } from "@/lib/site-config";
 import { normalizeStoreSiteTheme } from "@/lib/site-theme";
+import { MANHIA_ORDER_HISTORY_QUERY } from "@/lib/order-history";
 
 type ProdutoWithPromocao = Awaited<
   ReturnType<typeof prisma.produto.findMany>
@@ -90,15 +91,23 @@ async function getProductTypes(): Promise<ProductTypeAdmin[]> {
 }
 
 async function getSimpleOrders(): Promise<SimpleOrderAdmin[]> {
-  try {
-    await processPaidCartOrdersSideEffects();
-    await processReadyCartOrderBalanceCharges();
-    await processPaidPedidosSideEffects();
-    const orders = await prisma.order.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { items: true },
-      take: 50,
+  await Promise.allSettled([
+    processPaidCartOrdersSideEffects(),
+    processReadyCartOrderBalanceCharges(),
+    processPaidPedidosSideEffects(),
+  ]).then((results) => {
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error("Manhia background side effect failed", {
+          operation: ["paid-cart-orders", "ready-balance-charges", "paid-pedidos"][index],
+          error: result.reason,
+        });
+      }
     });
+  });
+
+  try {
+    const orders = await prisma.order.findMany(MANHIA_ORDER_HISTORY_QUERY);
 
     return orders.map(serializeCartOrderForAdmin);
   } catch (error) {

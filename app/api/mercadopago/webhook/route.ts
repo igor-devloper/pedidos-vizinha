@@ -78,10 +78,14 @@ export async function POST(req: Request) {
     );
 
     try {
-      const signatureOk = verifyMercadoPagoWebhookSignature(req);
+      const signatureOk = verifyMercadoPagoWebhookSignature(req, paymentId);
 
       if (!signatureOk) {
         console.error("[MP webhook] assinatura inválida ou ausente");
+        return NextResponse.json(
+          { ok: false, reason: "invalid-signature" },
+          { status: 401 },
+        );
       }
     } catch (sigErr) {
       console.error("[MP webhook] erro ao validar assinatura:", sigErr);

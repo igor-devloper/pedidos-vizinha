@@ -18,6 +18,8 @@ const updateOrderSchema = z.union([
     deliveryCity: z.string().optional(),
     deliveryLatitude: z.number().optional(),
     deliveryLongitude: z.number().optional(),
+    scheduledAt: z.string().min(16),
+    paidAmount: z.coerce.number().min(0),
   }),
 ]);
 

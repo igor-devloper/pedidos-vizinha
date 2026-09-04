@@ -99,6 +99,7 @@ export type ProductTypeAdmin = {
 
 export type SimpleOrderAdmin = {
   id: string;
+  source: "SITE" | "WHATSAPP" | "ADMIN";
   code?: string | null;
   isConfeiteira: boolean;
   scheduledAt?: string | null;
@@ -529,6 +530,8 @@ export function ManhiaAdminDashboard({
   const [orderEditAddress, setOrderEditAddress] = useState("");
   const [orderEditNeighborhood, setOrderEditNeighborhood] = useState("");
   const [orderEditReference, setOrderEditReference] = useState("");
+  const [orderEditScheduledAt, setOrderEditScheduledAt] = useState("");
+  const [orderEditPaidAmount, setOrderEditPaidAmount] = useState("");
   const orderEditAddressRef = useRef<HTMLInputElement>(null);
   const [orderEditPlace, setOrderEditPlace] = useState({ placeId: "", city: "", latitude: 0, longitude: 0 });
   const [messageDialogOpen, setMessageDialogOpen] = useState(false);
@@ -786,6 +789,14 @@ export function ManhiaAdminDashboard({
 
   const simpleOrdersPendentes = useMemo(
     () => simpleOrders.filter((order) => order.status === "PENDING"),
+    [simpleOrders],
+  );
+  const pedidosCancelados = useMemo(
+    () => pedidos.filter((pedido) => pedido.status === "CANCELADO"),
+    [pedidos],
+  );
+  const simpleOrdersCancelados = useMemo(
+    () => simpleOrders.filter((order) => order.status === "CANCELLED"),
     [simpleOrders],
   );
 
@@ -1766,6 +1777,8 @@ export function ManhiaAdminDashboard({
     setOrderEditAddress(order.deliveryAddress || "");
     setOrderEditNeighborhood(order.deliveryNeighborhood || "");
     setOrderEditReference(order.deliveryReference || "");
+    setOrderEditScheduledAt((order.scheduledAt || "").slice(0, 16));
+    setOrderEditPaidAmount(String(Number(order.chargedAmount || 0).toFixed(2)));
     setOrderEditPlace({ placeId: "", city: "", latitude: 0, longitude: 0 });
     setEditingSimpleOrder(order);
   };
@@ -1780,7 +1793,7 @@ export function ManhiaAdminDashboard({
       const response = await fetch(`/api/manhia/orders/${editingSimpleOrder.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "EDIT", items, fulfillmentType: orderEditFulfillment, deliveryAddress: orderEditAddress, deliveryNeighborhood: orderEditNeighborhood, deliveryReference: orderEditReference, deliveryPlaceId: orderEditPlace.placeId, deliveryCity: orderEditPlace.city, deliveryLatitude: orderEditPlace.latitude, deliveryLongitude: orderEditPlace.longitude }),
+        body: JSON.stringify({ action: "EDIT", items, fulfillmentType: orderEditFulfillment, deliveryAddress: orderEditAddress, deliveryNeighborhood: orderEditNeighborhood, deliveryReference: orderEditReference, deliveryPlaceId: orderEditPlace.placeId, deliveryCity: orderEditPlace.city, deliveryLatitude: orderEditPlace.latitude, deliveryLongitude: orderEditPlace.longitude, scheduledAt: orderEditScheduledAt, paidAmount: Number(orderEditPaidAmount) }),
       });
       const data = (await response.json().catch(() => null)) as (SimpleOrderAdmin & { error?: string }) | null;
       if (!response.ok) throw new Error(data?.error || "Não foi possível alterar o pedido.");
@@ -2040,6 +2053,9 @@ export function ManhiaAdminDashboard({
                             <Badge className="border border-[#d6e7a2] bg-white text-[#0b3d18]">
                               {order.status}
                             </Badge>
+                            <Badge className="border border-[#d6e7a2] bg-[#eef8d2] text-[#0b3d18]">
+                              {order.source}
+                            </Badge>
                           </div>
                           <p className="mt-1 text-sm text-slate-500">
                             {order.customerName || "Cliente não informado"} -{" "}
@@ -2207,6 +2223,31 @@ export function ManhiaAdminDashboard({
                       ))}
                     </div>
                   </section>
+                ) : null}
+
+                {(pedidosCancelados.length > 0 || simpleOrdersCancelados.length > 0) ? (
+                  <details className="rounded-[1.6rem] border border-slate-300 bg-slate-50/95 p-4 shadow-sm">
+                    <summary className="cursor-pointer font-semibold text-slate-900">
+                      Histórico de cancelados ({pedidosCancelados.length + simpleOrdersCancelados.length})
+                    </summary>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Pedidos cancelados permanecem armazenados e podem ser consultados aqui.
+                    </p>
+                    <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                      {pedidosCancelados.map((pedido) => (
+                        <button key={`cancelled:pedido:${pedido.id}`} type="button" onClick={() => setSelectedPedido(pedido)} className="rounded-xl border border-slate-200 bg-white p-3 text-left">
+                          <strong>{pedido.codigo}</strong> · {pedido.clienteNome}
+                          <span className="block text-xs text-slate-500">Pedido legado · {formatDateTime(pedido.dataEntrega)}</span>
+                        </button>
+                      ))}
+                      {simpleOrdersCancelados.map((order) => (
+                        <button key={`cancelled:order:${order.id}`} type="button" onClick={() => setSelectedSimpleOrder(order)} className="rounded-xl border border-slate-200 bg-white p-3 text-left">
+                          <strong>{getSimpleOrderCode(order)}</strong> · {order.customerName || "Cliente não informado"}
+                          <span className="block text-xs text-slate-500">Carrinho · {formatDateTime(getSimpleOrderDate(order))}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </details>
                 ) : null}
 
                 <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-3 lg:hidden">
@@ -4485,6 +4526,10 @@ export function ManhiaAdminDashboard({
             <DialogDescription>O cliente receberá uma confirmação da alteração. O saldo será cobrado pelo checkout seguro quando o pedido estiver pronto.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid gap-3 rounded-xl bg-[#f7fde7] p-3 sm:grid-cols-2">
+              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Data e hora da retirada/entrega</label><Input type="datetime-local" value={orderEditScheduledAt} onChange={(event) => setOrderEditScheduledAt(event.target.value)} /></div>
+              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Valor já pago (R$)</label><Input type="number" min="0" step="0.01" value={orderEditPaidAmount} onChange={(event) => setOrderEditPaidAmount(event.target.value)} /><p className="text-xs text-slate-500">Informe o valor efetivamente recebido. O saldo será recalculado.</p></div>
+            </div>
             <div className="space-y-3">
               <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#618038]">Produtos e quantidades</p><p className="mt-1 text-sm text-slate-500">Ajuste cada produto e a composição dos sabores, como no carrinho.</p></div>
               {orderEditItems.map((item, index) => (

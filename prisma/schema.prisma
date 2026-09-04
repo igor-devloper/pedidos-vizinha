@@ -31,29 +31,29 @@ model Encomenda {
 }
 
 model Produto {
-  id                      String           @id @default(cuid())
-  slug                    String           @unique
-  nome                    String
-  descricao               String
-  preco                   Decimal          @db.Decimal(10, 2)
-  precoConfeiteira        Decimal?         @db.Decimal(10, 2)
+  id                          String           @id @default(cuid())
+  slug                        String           @unique
+  nome                        String
+  descricao                   String
+  preco                       Decimal          @db.Decimal(10, 2)
+  precoConfeiteira            Decimal?         @db.Decimal(10, 2)
   quantidadeMinimaConfeiteira Int?
-  ativoConfeiteira        Boolean          @default(false)
-  imagemBase64            String
-  categoria               CategoriaProduto @default(CENTO)
-  productTypeId           String?
-  totalUnidades           Int              @default(100)
-  maxTiposSalgado         Int              @default(5)
-  permitePagamentoParcial Boolean          @default(true)
-  saboresSugeridos        String[]         @default([])
-  comboItens              Json             @default("[]")
-  emPromocao              Boolean          @default(false)
-  descontoPercentual      Decimal          @default(0) @db.Decimal(5, 2)
-  ativo                   Boolean          @default(true)
-  antecedenciaMinimaHoras Int?
-  precisaSelecaoDeTipos   Boolean          @default(true)
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
+  ativoConfeiteira            Boolean          @default(false)
+  imagemBase64                String
+  categoria                   CategoriaProduto @default(CENTO)
+  productTypeId               String?
+  totalUnidades               Int              @default(100)
+  maxTiposSalgado             Int              @default(5)
+  permitePagamentoParcial     Boolean          @default(true)
+  saboresSugeridos            String[]         @default([])
+  comboItens                  Json             @default("[]")
+  emPromocao                  Boolean          @default(false)
+  descontoPercentual          Decimal          @default(0) @db.Decimal(5, 2)
+  ativo                       Boolean          @default(true)
+  antecedenciaMinimaHoras     Int?
+  precisaSelecaoDeTipos       Boolean          @default(true)
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
 
   productType ProductType?    @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
   pedidos     Pedido[]
@@ -85,13 +85,13 @@ model Cart {
 }
 
 model CartItem {
-  id            String   @id @default(cuid())
-  quantity      Int      @default(1)
-  unitPrice     Decimal  @db.Decimal(10, 2)
-  selectedItems Json     @default("[]")
+  id             String   @id @default(cuid())
+  quantity       Int      @default(1)
+  unitPrice      Decimal  @db.Decimal(10, 2)
+  selectedItems  Json     @default("[]")
   requestedUnits Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   cartId    String
   cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
@@ -156,11 +156,48 @@ model Order {
   isConfeiteira             Boolean         @default(false)
   notifiedCourierAt         DateTime?
   notifiedCourierReadyAt    DateTime?
+  source                    OrderSource     @default(SITE)
 
-  cartId String?
-  cart   Cart?       @relation(fields: [cartId], references: [id], onDelete: SetNull)
-  items  OrderItem[]
+  cartId      String?
+  cart        Cart?        @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  items       OrderItem[]
   raffleEntry RaffleEntry?
+  whatsappDraft WhatsappOrderDraft?
+}
+
+model WhatsappOrderDraft {
+  id                    String    @id @default(cuid())
+  instanceId            String
+  remoteJid             String
+  phone                 String
+  customerName          String?
+  customerEmail         String?
+  stage                 String    @default("COLLECTING")
+  status                String    @default("ACTIVE")
+  fulfillmentType       String?
+  scheduledAt           DateTime?
+  deliveryStreet        String?
+  deliveryNumber        String?
+  deliveryNeighborhood  String?
+  deliveryReference     String?
+  paymentMethod         MetodoPagamento?
+  paymentPercentage     Int?
+  items                 Json      @default("[]")
+  siteLinkSentAt        DateTime?
+  whatsappOfferDueAt    DateTime?
+  whatsappOfferSentAt   DateTime?
+  siteOrderDetectedAt   DateTime?
+  orderId               String?   @unique
+  lastCustomerMessageAt DateTime?
+  lastBotMessageAt      DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([instanceId, remoteJid])
+  @@index([status, whatsappOfferDueAt])
+  @@index([phone, createdAt])
 }
 
 model OrderItem {
@@ -176,6 +213,23 @@ model OrderItem {
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String
   product   Produto @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+/// Historico imutavel dos eventos relevantes de pedidos.
+/// orderId e intencionalmente generico para auditar Order, Pedido e BotOrder
+/// sem criar cascatas capazes de remover o historico.
+model OrderEvent {
+  id             String           @id @default(cuid())
+  orderId        String
+  event          OrderEventType
+  previousStatus String?
+  newStatus      String?
+  source         OrderEventSource
+  metadata       Json             @default("{}")
+  createdAt      DateTime         @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([event, createdAt])
 }
 
 model CupomDesconto {
@@ -310,33 +364,33 @@ model Pedido {
   provisionAmount           Decimal         @default(0) @db.Decimal(10, 2)
   provisionTransferredAt    DateTime?
 
-  produtoId String
-  produto   Produto        @relation(fields: [produtoId], references: [id], onDelete: Restrict)
-  cupomId   String?
-  cupom     CupomDesconto? @relation(fields: [cupomId], references: [id], onDelete: SetNull)
-  itens     PedidoItem[]
+  produtoId   String
+  produto     Produto        @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  cupomId     String?
+  cupom       CupomDesconto? @relation(fields: [cupomId], references: [id], onDelete: SetNull)
+  itens       PedidoItem[]
   raffleEntry RaffleEntry?
 }
 
 model RaffleEntry {
-  id           String   @id @default(cuid())
-  code         String   @unique
-  customerName String
+  id            String   @id @default(cuid())
+  code          String   @unique
+  customerName  String
   customerPhone String?
-  createdAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
 
-  orderId String? @unique
-  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  pedidoId String? @unique
-  pedido   Pedido? @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  draws   RaffleDraw[]
+  orderId  String?      @unique
+  order    Order?       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pedidoId String?      @unique
+  pedido   Pedido?      @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  draws    RaffleDraw[]
 }
 
 model RaffleDraw {
-  id        String   @id @default(cuid())
-  drawnAt   DateTime @default(now())
-  entryId   String
-  entry     RaffleEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  id      String      @id @default(cuid())
+  drawnAt DateTime    @default(now())
+  entryId String
+  entry   RaffleEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
 }
 
 model PedidoItem {
@@ -369,28 +423,28 @@ model StoreSettings {
 }
 
 model WhatsappCampaign {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   message      String
-  delaySeconds Int      @default(15)
-  status       String   @default("RUNNING")
+  delaySeconds Int       @default(15)
+  status       String    @default("RUNNING")
   total        Int
-  sent         Int      @default(0)
-  failed       Int      @default(0)
+  sent         Int       @default(0)
+  failed       Int       @default(0)
   lastSentAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   recipients WhatsappCampaignRecipient[]
 }
 
 model WhatsappCampaignRecipient {
-  id         String   @id @default(cuid())
-  phone      String
-  status     String   @default("PENDING")
-  error      String?
-  sentAt     DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String    @id @default(cuid())
+  phone     String
+  status    String    @default("PENDING")
+  error     String?
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   campaignId String
   campaign   WhatsappCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -435,4 +489,32 @@ enum OrderStatus {
   READY
   DELIVERED
   CANCELLED
+}
+
+enum OrderSource {
+  SITE
+  WHATSAPP
+  ADMIN
+}
+
+enum OrderEventType {
+  ORDER_CREATED
+  PAYMENT_CREATED
+  PAYMENT_APPROVED
+  PAYMENT_REJECTED
+  PAYMENT_CANCELLED
+  ORDER_STATUS_CHANGED
+  ORDER_READY
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+  ORDER_EDITED
+  BOT_ORDER_CREATED
+}
+
+enum OrderEventSource {
+  SITE
+  WHATSAPP
+  ADMIN
+  MERCADO_PAGO
+  SYSTEM
 }

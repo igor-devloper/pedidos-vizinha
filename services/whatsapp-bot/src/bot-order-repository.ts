@@ -67,29 +67,30 @@ export async function createBotOrder(input: CreateBotOrderInput) {
     const code = generateOrderCode();
     const result = await db.query<BotOrder>(
       `
-        INSERT INTO "BotOrder" (
-          "id",
-          code,
-          "instanceId",
-          "leadId",
-          "customerRemoteJid",
-          "customerPhoneNumber",
-          "customerName",
-          "menuCategoria",
-          "eventoDetalhes",
-          "horarioEntrega",
-          observacoes,
-          summary,
-          status,
-          "paymentStatus",
-          "createdAt",
-          "updatedAt"
+        WITH created_order AS (
+          INSERT INTO "BotOrder" (
+            "id", code, "instanceId", "leadId", "customerRemoteJid",
+            "customerPhoneNumber", "customerName", "menuCategoria",
+            "eventoDetalhes", "horarioEntrega", observacoes, summary,
+            status, "paymentStatus", "createdAt", "updatedAt"
+          )
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8::"CategoriaProduto", $9, $10, $11, $12,
+            'PENDING_OWNER_APPROVAL', 'PENDING', NOW(), NOW()
+          )
+          RETURNING *
+        ), audit_event AS (
+          INSERT INTO "OrderEvent" (
+            "id", "orderId", event, "previousStatus", "newStatus", source, metadata, "createdAt"
+          )
+          SELECT
+            $13, "id", 'BOT_ORDER_CREATED'::"OrderEventType", NULL,
+            status, 'WHATSAPP'::"OrderEventSource",
+            jsonb_build_object('entityType', 'BotOrder', 'code', code, 'instanceId', "instanceId"),
+            NOW()
+          FROM created_order
         )
-        VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8::"CategoriaProduto", $9, $10, $11, $12,
-          'PENDING_OWNER_APPROVAL', 'PENDING', NOW(), NOW()
-        )
-        RETURNING *
+        SELECT * FROM created_order
       `,
       [
         randomUUID(),
@@ -104,7 +105,13 @@ export async function createBotOrder(input: CreateBotOrderInput) {
         input.horarioEntrega,
         input.observacoes || null,
         input.summary,
+        randomUUID(),
       ]
+    );
+
+    logger.info(
+      { orderId: result.rows[0]?.id, code: result.rows[0]?.code, event: "BOT_ORDER_CREATED" },
+      "Bot order created and audited"
     );
 
     return result.rows[0] || null;

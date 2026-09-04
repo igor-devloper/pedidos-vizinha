@@ -12,6 +12,7 @@ import { getOrCreateLead, updateLead, type BotLead } from "./lead-repository.js"
 import { logger } from "./logger.js";
 import { formatProductPriceForCustomer, listActiveProducts } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
+import { getOrCreateDraft, markSiteLinkSent, patchDraft, type WhatsappDraft } from "./whatsapp-draft-repository.js";
 import {
   buildAwaitingAnalysisMessage,
   buildAwaitingPaymentReminderMessage,
@@ -504,6 +505,8 @@ function getLeadLabel(lead: BotLead) {
 }
 
 async function transferToHumanAttendant(job: InboundMessageJob, lead: BotLead, reply?: string) {
+  const draft = await getOrCreateDraft(job.instanceId, job.remoteJid);
+  if (draft) await patchDraft(draft.id, { stage: "HANDOFF", status: "HANDOFF", whatsappOfferDueAt: null });
   const nextLead = await updateLead(lead.id, {
     stage: "human_handoff",
     status: "handoff",
@@ -563,19 +566,51 @@ async function handleExistingOpenOrder(job: InboundMessageJob, lead: BotLead) {
   return false;
 }
 
-async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead) {
+async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft | null) {
   if (!config.geminiApiKey || !canUseSalesAgent(lead)) {
     return false;
   }
 
-  const agentResult = await runSalesAgent(job, lead);
+  const agentResult = await runSalesAgent(job, lead, draft);
 
   if (!agentResult?.reply) {
     return false;
   }
 
   if (agentResult.status === "handoff") {
+    if (draft) await patchDraft(draft.id, { status: "HANDOFF", stage: "HANDOFF", whatsappOfferDueAt: null });
     return transferToHumanAttendant(job, lead, agentResult.reply);
+  }
+
+  let currentDraft = draft;
+  if (draft) {
+    const extracted = agentResult.extracted || {};
+    const allowed = ["customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
+    const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined).map((key) => [key, extracted[key]]));
+    patch.lastCustomerMessageAt = new Date();
+    if (agentResult.action === "SEND_SITE") await markSiteLinkSent(draft.id);
+    else if (agentResult.action === "START_WHATSAPP_ORDER") Object.assign(patch, { stage: "COLLECTING", status: "ACTIVE", whatsappOfferDueAt: null });
+    else if (agentResult.action === "CANCEL_DRAFT") Object.assign(patch, { stage: "CANCELLED", status: "ABANDONED", whatsappOfferDueAt: null });
+    else if (agentResult.action === "SHOW_SUMMARY") patch.stage = "AWAITING_CONFIRMATION";
+    currentDraft = await patchDraft(draft.id, patch) || draft;
+    if (agentResult.action === "CONFIRM_ORDER") {
+      const response = await fetch(`${config.appUrl}/api/internal/whatsapp-orders`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
+        body: JSON.stringify({ ...currentDraft, draftId: currentDraft.id }),
+      });
+      const data = await response.json() as { error?: string; order?: { id: string; code?: string; chargedAmount: string }; pixCopyPaste?: string; checkoutUrl?: string };
+      if (!response.ok || !data.order) {
+        await sendAndTrack(job, lead, `Não consegui confirmar ainda: ${data.error || "revise os dados do pedido"}`);
+        return true;
+      }
+      const code = data.order.code || data.order.id.slice(0, 8).toUpperCase();
+      const paymentText = data.pixCopyPaste
+        ? `Valor a pagar agora: R$ ${Number(data.order.chargedAmount).toFixed(2).replace(".", ",")}\n\nPix copia e cola:\n${data.pixCopyPaste}`
+        : `Pague com cartão no checkout seguro:\n${data.checkoutUrl}`;
+      await sendAndTrack(job, lead, `Seu pedido #${code} foi criado 😊\n${paymentText}\n\nAssim que o pagamento for confirmado, eu aviso por aqui.`);
+      return true;
+    }
   }
 
   const nextLead = await updateLead(lead.id, {
@@ -728,6 +763,8 @@ export async function processInboundMessage(job: InboundMessageJob) {
     remoteJid: job.remoteJid,
     pushName: job.pushName,
   });
+  const draft = await getOrCreateDraft(job.instanceId, job.remoteJid);
+  if (draft) await patchDraft(draft.id, { lastCustomerMessageAt: new Date() });
 
   if (!lead) {
     if (job.mediaKind && !hasMeaningfulText) {
@@ -752,7 +789,7 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
-  if (await maybeHandleSalesAgent(job, lead)) {
+  if (await maybeHandleSalesAgent(job, lead, draft)) {
     return;
   }
 
@@ -762,7 +799,7 @@ export async function processInboundMessage(job: InboundMessageJob) {
   }
 
   if (config.geminiApiKey) {
-    const agentResult = await runSalesAgent(job, lead);
+    const agentResult = await runSalesAgent(job, lead, draft);
 
     if (agentResult?.reply) {
       if (agentResult.status === "handoff") {

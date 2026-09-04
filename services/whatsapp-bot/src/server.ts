@@ -11,6 +11,8 @@ import { logger } from "./logger.js";
 import { createPrintJob, listPrintJobs } from "./print-job-store.js";
 import { updateLeadByRemoteJid } from "./lead-repository.js";
 import { qrStore } from "./qr-store.js";
+import { findDraftsForPanel } from "./whatsapp-draft-repository.js";
+import { startWhatsappFollowupWorker } from "./whatsapp-followup.js";
 
 const createInstanceSchema = z.object({
   name: z.string().min(2),
@@ -84,6 +86,10 @@ async function bootstrap() {
   app.get("/instances", async (_req, res) => {
     const instances = await instanceStore.list();
     res.json(instances);
+  });
+
+  app.get("/whatsapp-attendances", async (_req, res) => {
+    res.json({ ok: true, drafts: await findDraftsForPanel() });
   });
 
   app.post("/instances", async (req, res) => {
@@ -194,6 +200,7 @@ async function bootstrap() {
   );
 
   await instanceManager.bootConfiguredInstances();
+  startWhatsappFollowupWorker();
 
   app.listen(config.port, () => {
     logger.info(

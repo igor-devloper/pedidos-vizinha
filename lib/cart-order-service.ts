@@ -6,10 +6,12 @@
 
 import { prisma } from "@/lib/db";
 import { createMercadoPagoPreference } from "@/lib/mercado-pago";
+import { getStatusAuditEvent, recordOrderEvent } from "@/lib/order-audit";
 import { calculatePaymentAmounts, formatCurrency } from "@/lib/pedidos";
 import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
 import { sendCartOrderToPrintService } from "@/lib/print-service";
 import { BUSINESS_INFO } from "@/lib/site-config";
+import { getOrderBalanceUrl } from "@/lib/order-urls";
 import { sendWhatsappText } from "@/lib/whatsapp";
 import {
   formatWhatsAppList,
@@ -264,7 +266,7 @@ function buildCartOrderReadyMessage(
         "💰 *Falta um valor para quitar seu pedido*",
         `Valor restante: *${formatCurrency(Number(order.saldoTotalCobrado))}*`,
         "🔗 Pague pelo checkout seguro da Vizinha:",
-        `${BUSINESS_INFO.appUrl}/checkout/saldo/${order.id}`,
+        getOrderBalanceUrl(order.id),
       ]
       : null,
     "🙏 Agradecemos pela preferência e esperamos você!",
@@ -527,6 +529,8 @@ export async function editCartOrder({
   deliveryCity,
   deliveryLatitude,
   deliveryLongitude,
+  scheduledAt,
+  paidAmount,
 }: {
   id: string;
   items: Array<{ productId: string; quantity: number; selectedItems?: Array<{ tipo: string; quantidade: number }> }>;
@@ -538,6 +542,8 @@ export async function editCartOrder({
   deliveryCity?: string;
   deliveryLatitude?: number;
   deliveryLongitude?: number;
+  scheduledAt: string;
+  paidAmount: number;
 }) {
   const current = await loadCartOrder(id);
   if (!current) throw new Error("Pedido do carrinho não encontrado.");
@@ -595,13 +601,26 @@ export async function editCartOrder({
   if (isDelivery && (!address || !neighborhood || reference.length < 3)) throw new Error("Informe endereço, bairro e referência para a entrega.");
   const delivery = isDelivery ? getDeliveryFee(neighborhood) : { fee: 0, agreed: true };
   const totalAmount = Number((normalizedItems.reduce((sum, item) => sum + item.subtotal, 0) + delivery.fee).toFixed(2));
+  const scheduledMatch = scheduledAt.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!scheduledMatch) throw new Error("Informe uma data e hora válidas para retirada/entrega.");
+  const [, year, month, day, hour, minute] = scheduledMatch;
+  const normalizedScheduledAt = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)));
+  const fullCharge = calculatePaymentAmounts(totalAmount, 100, current.paymentMethod).totalToCharge;
+  const normalizedPaidAmount = Number(paidAmount.toFixed(2));
+  if (!Number.isFinite(normalizedPaidAmount) || normalizedPaidAmount < 0 || normalizedPaidAmount > fullCharge + 0.005) {
+    throw new Error(`O valor pago deve ficar entre R$ 0,00 e ${formatCurrency(fullCharge)}.`);
+  }
+  const paymentPercentage = fullCharge > 0 ? Math.min(100, Math.max(0, Math.round(normalizedPaidAmount / fullCharge * 100))) : 100;
 
   const order = await prisma.$transaction(async (tx) => {
     await tx.orderItem.deleteMany({ where: { orderId: id } });
-    return tx.order.update({
+    const updatedOrder = await tx.order.update({
       where: { id },
       data: {
         totalAmount,
+        scheduledAt: normalizedScheduledAt,
+        chargedAmount: normalizedPaidAmount,
+        paymentPercentage,
         fulfillmentType,
         deliveryAddress: isDelivery ? address : null,
         deliveryReference: isDelivery ? reference : null,
@@ -627,6 +646,23 @@ export async function editCartOrder({
       },
       include: { items: true },
     });
+    await recordOrderEvent({
+      orderId: updatedOrder.id,
+      event: "ORDER_EDITED",
+      source: "ADMIN",
+      previousStatus: current.status,
+      newStatus: updatedOrder.status,
+      metadata: {
+        entityType: "Order",
+        previousItemCount: current.items.length,
+        newItemCount: updatedOrder.items.length,
+        previousScheduledAt: current.scheduledAt?.toISOString() || null,
+        newScheduledAt: updatedOrder.scheduledAt?.toISOString() || null,
+        previousPaidAmount: Number(current.chargedAmount),
+        newPaidAmount: Number(updatedOrder.chargedAmount),
+      },
+    }, tx);
+    return updatedOrder;
   });
 
   if (order.customerPhone) {
@@ -646,8 +682,11 @@ export async function editCartOrder({
         `📍 *${deliveryLabel}*`,
         isDelivery ? `Endereço: ${address}` : null,
         isDelivery && reference ? `Referência: ${reference}` : null,
+        `🕒 *Nova data/hora:* ${formatScheduledAt(order) || "Não informada"}`,
         `💰 *Total anterior:* ${formatCurrency(Number(current.totalAmount))}`,
         `💰 *Novo total:* ${formatCurrency(totalAmount)}`,
+        `✅ *Valor pago registrado:* ${formatCurrency(normalizedPaidAmount)}`,
+        `💳 *Saldo estimado:* ${formatCurrency(Math.max(0, fullCharge - normalizedPaidAmount))}`,
         "",
         "Quando o pedido ficar pronto, enviaremos o link seguro caso reste algum valor.",
       ].filter((line): line is string => Boolean(line)).join("\n"),
@@ -707,6 +746,33 @@ export async function updateCartOrderStatus(id: string, status: OrderStatus) {
     },
     include: { items: true },
   });
+
+  if (order.status !== current.status) {
+    await recordOrderEvent({
+      orderId: order.id,
+      event: getStatusAuditEvent(order.status),
+      source: "ADMIN",
+      previousStatus: current.status,
+      newStatus: order.status,
+      metadata: { entityType: "Order" },
+    });
+  }
+
+  if (balanceCharge) {
+    await recordOrderEvent({
+      orderId: order.id,
+      event: "PAYMENT_CREATED",
+      source: "SYSTEM",
+      previousStatus: current.status,
+      newStatus: order.status,
+      metadata: {
+        entityType: "Order",
+        paymentKind: "BALANCE_PREFERENCE",
+        preferenceId: balanceCharge.saldoPreferenceId,
+        externalReference: balanceCharge.saldoExternalReference,
+      },
+    });
+  }
 
   if (shouldPrepareReady && order.customerPhone) {
     const claimedAt = new Date();
@@ -825,8 +891,36 @@ export async function markCartOrderPaidManually({
     include: { items: true },
   });
 
+  if (order.status !== "PAID") {
+    await recordOrderEvent({
+      orderId: updated.id,
+      event: "PAYMENT_APPROVED",
+      source: "ADMIN",
+      previousStatus: order.status,
+      newStatus: updated.status,
+      metadata: {
+        entityType: "Order",
+        paymentKind: "MANUAL",
+      },
+    });
+    await recordOrderEvent({
+      orderId: updated.id,
+      event: getStatusAuditEvent(updated.status),
+      source: "ADMIN",
+      previousStatus: order.status,
+      newStatus: updated.status,
+      metadata: { entityType: "Order", trigger: "MANUAL_PAYMENT" },
+    });
+  }
+
   if (order.cartId) {
-    await prisma.cartItem.deleteMany({ where: { cartId: order.cartId } });
+    const cleanup = await prisma.cartItem.deleteMany({ where: { cartId: order.cartId } });
+    console.info("[cart-cleanup] manually paid cart items removed; order retained", {
+      orderId: updated.id,
+      cartId: order.cartId,
+      removedCartItemCount: cleanup.count,
+      retainedOrderItemCount: updated.items.length,
+    });
   }
 
   return acceptPaidCartOrder(updated);
@@ -839,6 +933,7 @@ export type SerializedCartOrderAdmin = ReturnType<
 export function serializeCartOrderForAdmin(order: CartOrderWithItems) {
   return {
     id: order.id,
+    source: order.source,
     status: order.status,
     isConfeiteira: order.isConfeiteira,
     customerName: order.customerName,
