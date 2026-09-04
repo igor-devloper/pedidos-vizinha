@@ -133,6 +133,8 @@ export async function POST(req: Request) {
           status: payment.status,
           statusDetail: payment.status_detail,
           transactionAmount: payment.transaction_amount,
+          dateApproved: payment.date_approved,
+          liveMode: payment.live_mode,
           payload: body,
         });
 

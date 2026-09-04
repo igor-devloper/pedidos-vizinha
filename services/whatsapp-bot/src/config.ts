@@ -19,6 +19,7 @@ export const config = {
   nodeEnv: readOptional("NODE_ENV", "development"),
   baseUrl: readOptional("BASE_URL", `http://localhost:${process.env.PORT || 8787}`),
   apiKey: readRequired("BOT_API_KEY"),
+  internalOrderApiKey: readOptional("INTERNAL_ORDER_API_KEY", process.env.BOT_SERVICE_API_KEY?.trim() || readRequired("BOT_API_KEY")),
   appUrl: readOptional("APP_URL", "http://localhost:3000").replace(/\/$/, ""),
   webhookUrl: process.env.WEBHOOK_URL?.trim() || undefined,
   geminiApiKey:

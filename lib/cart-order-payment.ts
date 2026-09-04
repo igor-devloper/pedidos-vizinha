@@ -11,6 +11,8 @@ type MercadoPagoCartPayment = {
   status_detail?: string;
   external_reference?: string;
   transaction_amount?: number;
+  date_approved?: string;
+  live_mode?: boolean;
 };
 
 export class CartOrderPaymentApplyError extends Error {
@@ -70,6 +72,17 @@ export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
     ? Number(current.saldoTotalCobrado || 0)
     : Number(current.chargedAmount || 0);
   if (payment.status === "approved") {
+    if (!payment.date_approved) {
+      throw new CartOrderPaymentApplyError("Pagamento aprovado sem data de aprovação confirmada pelo Mercado Pago.", {
+        orderId: current.id, paymentId: payment.id, externalReference: payment.external_reference,
+      });
+    }
+    if (process.env.NODE_ENV === "production" && payment.live_mode !== true) {
+      throw new CartOrderPaymentApplyError("Pagamento de teste não pode confirmar pedido em produção.", {
+        orderId: current.id, paymentId: payment.id, externalReference: payment.external_reference,
+        liveMode: payment.live_mode,
+      });
+    }
     if (typeof payment.transaction_amount !== "number") {
       throw new CartOrderPaymentApplyError("Pagamento aprovado sem valor confirmado pelo Mercado Pago.", {
         orderId: current.id,

@@ -24,6 +24,8 @@ export type MercadoPagoPaymentResponse = {
   status_detail?: string;
   transaction_amount?: number;
   date_approved?: string;
+  live_mode?: boolean;
+  collector_id?: string | number;
   payment_method_id?: string;
   payment_type_id?: string;
   external_reference?: string;
@@ -473,6 +475,8 @@ export async function createCartMercadoPagoPixPayment({
     qrCodeBase64:
       payment.point_of_interaction?.transaction_data?.qr_code_base64 || null,
     expirationDate: payment.date_of_expiration || null,
+    liveMode: payment.live_mode,
+    dateApproved: payment.date_approved || null,
   };
 }
 

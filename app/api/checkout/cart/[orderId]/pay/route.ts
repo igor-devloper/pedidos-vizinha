@@ -11,6 +11,7 @@ import { recordOrderEvent } from "@/lib/order-audit";
 import {
   createCartMercadoPagoCardPayment,
   createCartMercadoPagoPixPayment,
+  getMercadoPagoPayment,
   getMercadoPagoErrorMessage,
   getMercadoPagoPaymentStatusMessage,
   MercadoPagoApiError,
@@ -122,8 +123,6 @@ export async function POST(
           ? order.mercadoPagoPaymentId || "expired"
           : undefined,
       });
-      const status = getOrderStatusFromMercadoPagoStatus(payment.status);
-
       await recordOrderEvent({
         orderId: order.id,
         event: "PAYMENT_CREATED",
@@ -139,19 +138,18 @@ export async function POST(
         },
       });
 
-      await applyCartOrderPayment({
-        id: payment.id,
-        status: payment.status,
-        external_reference: paymentOrder.externalReference,
-        transaction_amount: payment.transactionAmount,
-      });
+      const verifiedPayment = await getMercadoPagoPayment(String(payment.id));
+      await applyCartOrderPayment(verifiedPayment);
+      const verifiedStatus = getOrderStatusFromMercadoPagoStatus(verifiedPayment.status);
 
       await prisma.order.update({
         where: { id: order.id },
-        data: {
+        data: balance ? {
+          saldoPaymentId: String(verifiedPayment.id),
+        } : {
           mercadoPagoId: String(payment.id),
           mercadoPagoPaymentId: String(payment.id),
-          mercadoPagoStatusDetail: payment.statusDetail,
+          mercadoPagoStatusDetail: verifiedPayment.status_detail,
           pixQrCode: payment.qrCode,
           pixQrCodeBase64: payment.qrCodeBase64,
           pixExpirationDate: payment.expirationDate
@@ -163,9 +161,9 @@ export async function POST(
       return NextResponse.json({
         orderId: order.id,
         externalReference: paymentOrder.externalReference,
-        status,
-        paymentStatus: payment.status,
-        statusDetail: payment.statusDetail,
+        status: verifiedStatus,
+        paymentStatus: verifiedPayment.status,
+        statusDetail: verifiedPayment.status_detail,
         pix: {
           qrCode: payment.qrCode,
           qrCodeBase64: payment.qrCodeBase64,
@@ -198,8 +196,6 @@ export async function POST(
       issuerId: body.issuer_id,
       installments: body.installments,
     });
-    const status = getOrderStatusFromMercadoPagoStatus(payment.status);
-
     await recordOrderEvent({
       orderId: order.id,
       event: "PAYMENT_CREATED",
@@ -215,32 +211,32 @@ export async function POST(
       },
     });
 
-    await applyCartOrderPayment({
-      id: payment.id,
-      status: payment.status,
-      external_reference: paymentOrder.externalReference,
-      transaction_amount: payment.transactionAmount,
-    });
+    const verifiedPayment = await getMercadoPagoPayment(String(payment.id));
+    await applyCartOrderPayment(verifiedPayment);
+    const verifiedStatus = getOrderStatusFromMercadoPagoStatus(verifiedPayment.status);
 
     await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        mercadoPagoId: String(payment.id),
-        mercadoPagoPaymentId: String(payment.id),
-        mercadoPagoStatusDetail: payment.statusDetail,
-        customerEmail: body.payer.email,
+        where: { id: order.id },
+        data: balance ? {
+          saldoPaymentId: String(verifiedPayment.id),
+          customerEmail: body.payer.email,
+        } : {
+          mercadoPagoId: String(payment.id),
+          mercadoPagoPaymentId: String(payment.id),
+          mercadoPagoStatusDetail: verifiedPayment.status_detail,
+          customerEmail: body.payer.email,
       },
     });
 
     return NextResponse.json({
       orderId: order.id,
       externalReference: paymentOrder.externalReference,
-      status,
-      paymentStatus: payment.status,
-      statusDetail: payment.statusDetail,
+      status: verifiedStatus,
+      paymentStatus: verifiedPayment.status,
+      statusDetail: verifiedPayment.status_detail,
       message:
-        payment.status === "rejected"
-          ? getMercadoPagoPaymentStatusMessage(payment.statusDetail)
+        verifiedPayment.status === "rejected"
+          ? getMercadoPagoPaymentStatusMessage(verifiedPayment.status_detail)
           : null,
     });
   } catch (error) {

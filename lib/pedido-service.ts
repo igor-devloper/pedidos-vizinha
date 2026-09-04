@@ -427,6 +427,8 @@ export async function handleMercadoPagoPaymentUpdate({
   status,
   statusDetail,
   transactionAmount,
+  dateApproved,
+  liveMode,
   payload,
 }: {
   externalReference: string;
@@ -435,6 +437,8 @@ export async function handleMercadoPagoPaymentUpdate({
   status: string;
   statusDetail?: string;
   transactionAmount?: number;
+  dateApproved?: string;
+  liveMode?: boolean;
   payload?: unknown;
 }) {
   const pedido = (await loadPedidoByReference(externalReference)) as PedidoWithReadyFields | null;
@@ -448,6 +452,10 @@ export async function handleMercadoPagoPaymentUpdate({
     ? Number(pedido.saldoTotalCobrado || 0)
     : Number(pedido.totalCobrado);
   if (status === "approved") {
+    if (!dateApproved) throw new Error(`Pagamento aprovado sem data de aprovação para o pedido ${pedido.codigo}.`);
+    if (process.env.NODE_ENV === "production" && liveMode !== true) {
+      throw new Error(`Pagamento de teste não pode confirmar o pedido ${pedido.codigo} em produção.`);
+    }
     if (typeof transactionAmount !== "number" || Math.abs(transactionAmount - expectedAmount) > 0.01) {
       throw new Error(`Valor aprovado diverge do pedido ${pedido.codigo}.`);
     }
@@ -566,6 +574,8 @@ export async function syncPedidoPaymentByExternalReference(externalReference: st
     status: payment.status,
     statusDetail: payment.status_detail,
     transactionAmount: payment.transaction_amount,
+    dateApproved: payment.date_approved,
+    liveMode: payment.live_mode,
     payload: {
       source: "checkout-return-sync",
       paymentId: payment.id,

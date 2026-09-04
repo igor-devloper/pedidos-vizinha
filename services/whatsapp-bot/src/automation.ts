@@ -13,6 +13,7 @@ import { logger } from "./logger.js";
 import { formatProductPriceForCustomer, listActiveProducts } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
 import { getOrCreateDraft, markSiteLinkSent, patchDraft, type WhatsappDraft } from "./whatsapp-draft-repository.js";
+import { getMissingDraftField, getNextDraftQuestion as getCanonicalNextDraftQuestion, normalizeFulfillmentType, parseBrazilianScheduledAt } from "./whatsapp-draft-state.js";
 import {
   buildAwaitingAnalysisMessage,
   buildAwaitingPaymentReminderMessage,
@@ -158,23 +159,20 @@ function normalizeDraftPaymentMethod(value: unknown) {
   return undefined;
 }
 
-function getNextDraftQuestion(draft: WhatsappDraft) {
-  if (!draft.paymentPercentage) return "Você prefere pagar 50% agora ou o valor total?";
-  if (!draft.customerName) return "Qual é o nome de quem vai retirar ou receber o pedido?";
-  if (!draft.customerEmail) return "Qual e-mail devemos usar no pagamento?";
-  if (!draft.scheduledAt) return "Para qual data e horário você quer o pedido?";
-  if (draft.fulfillmentType === "DELIVERY" && !draft.deliveryReference) return "Qual é o ponto de referência da entrega?";
-  return "Já tenho os dados principais. Posso mostrar o resumo completo para você confirmar?";
-}
+const getNextDraftQuestion = getCanonicalNextDraftQuestion;
 
-function normalizeDraftItems(value: unknown) {
+async function normalizeDraftItems(value: unknown) {
   if (!Array.isArray(value)) return [];
+  const products = await listActiveProducts();
   return value.flatMap((raw) => {
     if (!raw || typeof raw !== "object") return [];
     const item = raw as Record<string, unknown>;
-    const productId = String(item.productId || item.id || "").trim();
-    const requestedUnits = Math.floor(Number(item.requestedUnits ?? item.quantity));
-    if (!productId || !Number.isInteger(requestedUnits) || requestedUnits < 1) return [];
+    const productReference = String(item.productId || item.id || item.productName || item.produto || item.nome || "").trim();
+    const normalizedReference = normalizeText(productReference);
+    const matchedProduct = products.find((product) => product.id === productReference)
+      || products.find((product) => normalizeText(product.nome) === normalizedReference || normalizeText(product.slug) === normalizedReference)
+      || products.find((product) => normalizedReference.length > 3 && (normalizeText(product.nome).includes(normalizedReference) || normalizedReference.includes(normalizeText(product.nome))));
+    const productId = matchedProduct?.id || (products.some((product) => product.id === productReference) ? productReference : "");
     const rawTypes = Array.isArray(item.selectedItems)
       ? item.selectedItems
       : Array.isArray(item.types)
@@ -187,6 +185,9 @@ function normalizeDraftItems(value: unknown) {
       const quantidade = Math.floor(Number(type.quantidade ?? type.quantity));
       return tipo && Number.isInteger(quantidade) && quantidade > 0 ? [{ tipo, quantidade }] : [];
     });
+    const selectedTotal = selectedItems.reduce((sum, selected) => sum + selected.quantidade, 0);
+    const requestedUnits = Math.floor(Number(item.requestedUnits ?? item.totalUnits ?? item.quantidade ?? (selectedTotal || item.quantity)));
+    if (!productId || !Number.isInteger(requestedUnits) || requestedUnits < 1) return [];
     return [{ productId, quantity: 1, requestedUnits, selectedItems }];
   });
 }
@@ -214,6 +215,16 @@ async function maybeHandleDeterministicDraftPayment(job: InboundMessageJob, lead
         ? "cartão de crédito"
         : "pagamento";
   await sendAndTrack(job, lead, `Certo, registrei ${methodLabel} no seu pedido. ${getNextDraftQuestion(updated)}`);
+  return true;
+}
+
+async function maybeHandleDeterministicDraftSchedule(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft | null) {
+  if (!draft || draft.status !== "ACTIVE" || getMissingDraftField(draft) !== "scheduledAt") return false;
+  const scheduledAt = parseBrazilianScheduledAt(job.text);
+  if (!scheduledAt) return false;
+  const updated = await patchDraft(draft.id, { scheduledAt, stage: "COLLECTING", lastCustomerMessageAt: new Date() }) || draft;
+  logger.info({ draftId: draft.id, scheduledAt }, "Draft schedule captured deterministically");
+  await sendAndTrack(job, lead, `Certo, anotei o dia e horário. ${getNextDraftQuestion(updated)}`);
   return true;
 }
 
@@ -674,10 +685,21 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
   let currentDraft = draft;
   if (draft) {
     const extracted = agentResult.extracted || {};
-    if (extracted.items !== undefined) extracted.items = normalizeDraftItems(extracted.items);
+    if (extracted.items !== undefined) {
+      const normalizedItems = await normalizeDraftItems(extracted.items);
+      if (normalizedItems.length) extracted.items = normalizedItems;
+      else delete extracted.items;
+    }
     if (extracted.paymentMethod !== undefined) {
       extracted.paymentMethod = normalizeDraftPaymentMethod(extracted.paymentMethod);
     }
+    const fulfillmentType = normalizeFulfillmentType(extracted.fulfillmentType);
+    if (fulfillmentType) extracted.fulfillmentType = fulfillmentType;
+    else delete extracted.fulfillmentType;
+    const scheduledAt = parseBrazilianScheduledAt(extracted.scheduledAt ?? agentResult.horarioEntrega);
+    if (scheduledAt) extracted.scheduledAt = scheduledAt;
+    else delete extracted.scheduledAt;
+    if (!extracted.customerName && agentResult.nome) extracted.customerName = agentResult.nome;
     const allowed = ["customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
     const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined).map((key) => [key, extracted[key]]));
     patch.lastCustomerMessageAt = new Date();
@@ -694,9 +716,15 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
       paymentMethod: currentDraft.paymentMethod,
     }, "Structured sales action persisted");
     if (agentResult.action === "CONFIRM_ORDER") {
+      const missingField = getMissingDraftField(currentDraft);
+      if (missingField) {
+        logger.warn({ draftId: currentDraft.id, missingField }, "Blocked incomplete WhatsApp order confirmation");
+        await sendAndTrack(job, lead, `Antes de confirmar, falta uma informação: ${getNextDraftQuestion(currentDraft)}`);
+        return true;
+      }
       const response = await fetch(`${config.appUrl}/api/internal/whatsapp-orders`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${config.internalOrderApiKey}` },
         body: JSON.stringify({ ...currentDraft, draftId: currentDraft.id }),
       });
       const data = await response.json() as { error?: string; order?: { id: string; code?: string; chargedAmount: string }; pixCopyPaste?: string; checkoutUrl?: string };
@@ -726,15 +754,22 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     observacoes: agentResult.observacoes ?? lead.observacoes,
   });
 
-  const activeOrderInProgress = currentDraft?.status === "ACTIVE"
-    && Array.isArray(currentDraft.items) && currentDraft.items.length > 0;
+  const activeOrderInProgress = currentDraft?.status === "ACTIVE" && (
+    (Array.isArray(currentDraft.items) && currentDraft.items.length > 0)
+    || Boolean(currentDraft.fulfillmentType || currentDraft.paymentMethod || currentDraft.customerName)
+  );
   const normalizedReply = normalizeText(agentResult.reply);
   const genericFlowBreaker = agentResult.reply.includes(config.cardapioUrl)
     || normalizedReply.includes("como funciona o pagamento")
     || normalizedReply.includes("como fazer sua encomenda");
+  const structuredCollectionAction = agentResult.action?.startsWith("SET_")
+    || agentResult.action === "START_WHATSAPP_ORDER";
+  const incompleteSummary = agentResult.action === "SHOW_SUMMARY" && currentDraft && getMissingDraftField(currentDraft);
   const reply = activeOrderInProgress && genericFlowBreaker
     ? `Vamos continuar seu pedido por aqui. ${getNextDraftQuestion(currentDraft!)}`
-    : agentResult.reply;
+    : activeOrderInProgress && (structuredCollectionAction || incompleteSummary)
+      ? `Certo, anotei. ${getNextDraftQuestion(currentDraft!)}`
+      : agentResult.reply;
   await sendAndTrack(job, nextLead || lead, reply);
   return true;
 }
@@ -891,6 +926,10 @@ export async function processInboundMessage(job: InboundMessageJob) {
   }
 
   if (await maybeHandleDeterministicDraftPayment(job, lead, draft)) {
+    return;
+  }
+
+  if (await maybeHandleDeterministicDraftSchedule(job, lead, draft)) {
     return;
   }
 

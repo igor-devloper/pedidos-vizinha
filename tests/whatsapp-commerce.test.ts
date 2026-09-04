@@ -11,6 +11,16 @@ test("PIX pendente e cartao rejeitado nao marcam Order como pago", () => {
   assert.equal(getOrderStatusFromMercadoPagoStatus("approved"), "PAID");
 });
 
+test("saldo só confirma após consultar o pagamento real", () => {
+  const route = read("app/api/checkout/cart/[orderId]/pay/route.ts");
+  const payment = read("lib/cart-order-payment.ts");
+  assert.match(route, /getMercadoPagoPayment\(String\(payment\.id\)\)/);
+  assert.match(route, /status: verifiedStatus/);
+  assert.match(payment, /Pagamento aprovado sem data de aprovação/);
+  assert.match(payment, /Pagamento de teste não pode confirmar pedido em produção/);
+  assert.match(payment, /payment\.live_mode !== true/);
+});
+
 test("pagamento aprovado valida valor e referencia antes da alteracao", () => {
   const source = read("lib/cart-order-payment.ts");
   assert.match(source, /external_reference\?\.startsWith\("cart-"\)/);
