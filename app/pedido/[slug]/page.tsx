@@ -117,11 +117,11 @@ export default async function PedidoPage({
               <div className="grid gap-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-surface)] p-4 text-sm text-[var(--theme-muted)]">
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--theme-accent)]" />
-                  {produto.totalUnidades} unidades por item adicionado.
+                  {produto.productType?.allowsMultiple && produto.precisaSelecaoDeTipos && produto.totalUnidades >= 50 ? "Quantidade mínima de 50 unidades." : `${produto.totalUnidades} unidades por item adicionado.`}
                 </p>
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--theme-accent)]" />
-                  Até {produto.maxTiposSalgado} tipos diferentes por item.
+                  {produto.precisaSelecaoDeTipos && produto.totalUnidades >= 50 ? "50 unidades permitem 2 tipos; cada 100 permitem 4 tipos." : `Até ${produto.maxTiposSalgado} tipos diferentes por item.`}
                 </p>
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--theme-accent)]" />
@@ -161,7 +161,7 @@ export default async function PedidoPage({
                   <ShoppingCart className="h-4 w-4" />
                   Adicionar ao carrinho
                 </div>
-                <AddToCartControls productId={produto.id} siteTheme={businessStatus.siteTheme} minimumQuantity={produto.productType?.minQuantity} usesMinimumQuantity={Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
+                <AddToCartControls productId={produto.id} siteTheme={businessStatus.siteTheme} minimumQuantity={produto.productType?.allowsMultiple && produto.precisaSelecaoDeTipos && produto.totalUnidades >= 50 ? 50 : produto.productType?.minQuantity} usesMinimumQuantity={Boolean(produto.productType?.allowsMultiple && produto.productType?.minQuantity)} />
               </div>
             </CardContent>
           </Card>

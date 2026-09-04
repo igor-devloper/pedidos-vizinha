@@ -335,6 +335,11 @@ async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: 
 
   await instanceManager.sendText(job.instanceId, job.remoteJid, outboundText);
 
+  if (outboundText.includes(config.cardapioUrl)) {
+    const draft = await getOrCreateDraft(job.instanceId, job.remoteJid, job.phoneNumber);
+    if (draft) await markSiteLinkSent(draft.id);
+  }
+
   if (lead) {
     await updateLead(lead.id, { lastOutboundText: outboundText });
   }
@@ -505,7 +510,7 @@ function getLeadLabel(lead: BotLead) {
 }
 
 async function transferToHumanAttendant(job: InboundMessageJob, lead: BotLead, reply?: string) {
-  const draft = await getOrCreateDraft(job.instanceId, job.remoteJid);
+  const draft = await getOrCreateDraft(job.instanceId, job.remoteJid, job.phoneNumber);
   if (draft) await patchDraft(draft.id, { stage: "HANDOFF", status: "HANDOFF", whatsappOfferDueAt: null });
   const nextLead = await updateLead(lead.id, {
     stage: "human_handoff",
@@ -763,7 +768,7 @@ export async function processInboundMessage(job: InboundMessageJob) {
     remoteJid: job.remoteJid,
     pushName: job.pushName,
   });
-  const draft = await getOrCreateDraft(job.instanceId, job.remoteJid);
+  const draft = await getOrCreateDraft(job.instanceId, job.remoteJid, job.phoneNumber);
   if (draft) await patchDraft(draft.id, { lastCustomerMessageAt: new Date() });
 
   if (!lead) {

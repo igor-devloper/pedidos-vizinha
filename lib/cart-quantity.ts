@@ -17,7 +17,13 @@ export type CartQuantityProduct = {
     allowsMultiple?: boolean | null;
   } | null;
   comboItens?: unknown;
+  saboresSugeridos?: string[];
 };
+
+export function getAllowedSalgadoTypes(units: number, configuredMaximum: number) {
+  if (Number.isInteger(units) && units >= 50) return Math.max(2, Math.floor(units / 50) * 2);
+  return Math.max(1, configuredMaximum);
+}
 
 export class CartQuantityValidationError extends Error {
   constructor(
@@ -91,7 +97,10 @@ export function validateCartItemQuantities({
       ? product.productType.minQuantity
       : null;
   const usesMinimumQuantity = Number.isInteger(Number(configuredMinimum)) && Number(configuredMinimum) > 0;
-  const minimumQuantity = usesMinimumQuantity ? Number(configuredMinimum) : 1;
+  const usesFiftyUnitRule = product.precisaSelecaoDeTipos && product.totalUnidades >= 50;
+  const minimumQuantity = usesMinimumQuantity
+    ? (usesFiftyUnitRule ? 50 : Number(configuredMinimum))
+    : 1;
   const mode = usesMinimumQuantity ? "MINIMUM" as const : "FIXED" as const;
   const effectiveRequestedUnits = usesMinimumQuantity
     ? requirePositiveInteger(requestedUnits ?? minimumQuantity, "A quantidade solicitada")
@@ -106,7 +115,10 @@ export function validateCartItemQuantities({
 
   const normalizedSelectedItems = normalizeCartSelectedItemsCanonical(selectedItems);
   const selectedUnits = normalizedSelectedItems.reduce((sum, item) => sum + item.quantidade, 0);
-  const maxTypes = requirePositiveInteger(product.maxTiposSalgado, "O máximo de tipos") * canonicalQuantity;
+  const configuredMaxTypes = requirePositiveInteger(product.maxTiposSalgado, "O máximo de tipos");
+  const maxTypes = usesFiftyUnitRule
+    ? getAllowedSalgadoTypes(effectiveRequestedUnits, configuredMaxTypes)
+    : configuredMaxTypes * canonicalQuantity;
 
   if (product.precisaSelecaoDeTipos && requireCompleteSelection) {
     if (selectedUnits !== effectiveRequestedUnits) {
@@ -120,6 +132,18 @@ export function validateCartItemQuantities({
         `Você selecionou ${normalizedSelectedItems.length} tipos; o máximo é ${maxTypes}.`,
         { selectedUnits, requestedUnits: effectiveRequestedUnits, minimumQuantity, mode },
       );
+    }
+
+    if (String(product.categoria) !== "COMBO" && product.saboresSugeridos?.length) {
+      const normalizeName = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+      const allowed = new Set(product.saboresSugeridos.map(normalizeName));
+      const invalid = normalizedSelectedItems.find((item) => !allowed.has(normalizeName(item.tipo)));
+      if (invalid) {
+        throw new CartQuantityValidationError(
+          `${invalid.tipo} não é uma opção disponível para ${product.nome || "este produto"}.`,
+          { selectedUnits, requestedUnits: effectiveRequestedUnits, minimumQuantity, mode },
+        );
+      }
     }
 
     if (String(product.categoria) === "COMBO" && Array.isArray(product.comboItens)) {

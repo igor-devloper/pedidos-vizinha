@@ -21,13 +21,15 @@ const ALLOWED_COLUMNS = new Set([
   "whatsappOfferSentAt", "siteOrderDetectedAt", "orderId", "lastCustomerMessageAt", "lastBotMessageAt",
 ]);
 
-export async function getOrCreateDraft(instanceId: string, remoteJid: string) {
+export async function getOrCreateDraft(instanceId: string, remoteJid: string, knownPhone?: string) {
   if (!db) return null;
-  const phone = remoteJid.replace(/\D/g, "");
+  const phone = knownPhone?.replace(/\D/g, "") || (remoteJid.endsWith("@s.whatsapp.net") ? remoteJid.replace(/\D/g, "") : "");
   const result = await db.query<WhatsappDraft>(
     `INSERT INTO "WhatsappOrderDraft" (id, "instanceId", "remoteJid", phone, "createdAt", "updatedAt")
      VALUES ($1,$2,$3,$4,NOW(),NOW())
-     ON CONFLICT ("instanceId", "remoteJid") DO UPDATE SET "updatedAt"=NOW()
+     ON CONFLICT ("instanceId", "remoteJid") DO UPDATE SET
+       phone=CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE "WhatsappOrderDraft".phone END,
+       "updatedAt"=NOW()
      RETURNING *`, [randomUUID(), instanceId, remoteJid, phone],
   );
   return result.rows[0] || null;
@@ -47,12 +49,18 @@ export async function patchDraft(id: string, patch: Record<string, unknown>) {
 }
 
 export async function markSiteLinkSent(draftId: string, now = new Date()) {
-  return patchDraft(draftId, {
-    siteLinkSentAt: now,
-    whatsappOfferDueAt: new Date(now.getTime() + 10 * 60_000),
-    whatsappOfferSentAt: null,
-    status: "AWAITING_SITE_ORDER",
-  });
+  if (!db) return null;
+  const result = await db.query<WhatsappDraft>(
+    `UPDATE "WhatsappOrderDraft"
+     SET "siteLinkSentAt"=COALESCE("siteLinkSentAt", $2),
+         "whatsappOfferDueAt"=COALESCE("whatsappOfferDueAt", $3),
+         status='AWAITING_SITE_ORDER', "updatedAt"=NOW()
+     WHERE id=$1 AND "orderId" IS NULL AND "whatsappOfferSentAt" IS NULL
+       AND status NOT IN ('HANDOFF','ABANDONED','COMPLETED')
+     RETURNING *`,
+    [draftId, now, new Date(now.getTime() + 10 * 60_000)],
+  );
+  return result.rows[0] || null;
 }
 
 export async function claimDueWhatsappOffers(limit = 25) {

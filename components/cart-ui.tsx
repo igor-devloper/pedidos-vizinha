@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
 import type { CartAudience } from "@/lib/cart";
-import { validateCartItemQuantities } from "@/lib/cart-quantity";
+import { getAllowedSalgadoTypes, validateCartItemQuantities } from "@/lib/cart-quantity";
 
 type CartItem = {
   id: string;
@@ -342,7 +342,7 @@ export function AddToCartControls({
     <div style={getCartThemeStyle(siteTheme)} className="mt-auto flex flex-col gap-3">
       <div className="space-y-1">
         <label className="text-sm font-bold text-[var(--cart-dark)]">{usesMinimumQuantity ? "Quantidade de unidades" : "Quantidade"}</label>
-        <Input type="number" inputMode="numeric" min="0" step="1" value={quantity} onChange={(event) => { setQuantity(event.target.value); setErrorMessage(null); }} className="h-14 rounded-full border-[var(--cart-border)] bg-white px-5 text-center text-lg font-black text-[var(--cart-dark)]" />
+        <Input type="number" inputMode="numeric" min={usesMinimumQuantity ? minimumQuantity || 1 : 1} step="1" value={quantity} onChange={(event) => { setQuantity(event.target.value); setErrorMessage(null); }} className="h-14 rounded-full border-[var(--cart-border)] bg-white px-5 text-center text-lg font-black text-[var(--cart-dark)]" />
         {usesMinimumQuantity ? <p className="text-xs text-[var(--cart-muted)]">Mínimo de {minimumQuantity} unidades; você pode informar qualquer quantidade inteira maior.</p> : null}
       </div>
 
@@ -950,7 +950,7 @@ export function FloatingCart({
                     >
                       <Minus className="h-4 w-4" />
                     </Button> : null}
-                    {item.usesMinimumQuantity ? <Input type="number" inputMode="numeric" min="0" step="1" value={quantityDrafts[item.id] ?? String(item.requestedUnits)} onChange={(event) => { setQuantityDrafts((current) => ({ ...current, [item.id]: event.target.value })); setItemError(null); }} onBlur={() => commitRequestedUnits(item)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className="h-11 w-28 text-center font-black" /> : <span className="w-8 text-center text-lg font-black text-[#17251a]">{item.quantity}</span>}
+                    {item.usesMinimumQuantity ? <Input type="number" inputMode="numeric" min={item.minimumQuantity} step="1" value={quantityDrafts[item.id] ?? String(item.requestedUnits)} onChange={(event) => { setQuantityDrafts((current) => ({ ...current, [item.id]: event.target.value })); setItemError(null); }} onBlur={() => commitRequestedUnits(item)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className="h-11 w-28 text-center font-black" /> : <span className="w-8 text-center text-lg font-black text-[#17251a]">{item.quantity}</span>}
                     {!item.usesMinimumQuantity ? <Button
                       type="button"
                       variant="outline"
@@ -1077,14 +1077,14 @@ export function FloatingCart({
 
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm text-[var(--cart-muted)]">
-                          Maximo de {item.maxTiposSalgado * item.quantity} tipos para este item.
+                          Mínimo de {item.minimumQuantity} unidades. Máximo de {getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado)} tipos. Regra: 50 unidades = 2 tipos; cada 100 = 4 tipos.
                         </p>
                         <Button
                           type="button"
                           variant="outline"
                           disabled={
                             item.category === "COMBO" ||
-                            item.selectedItems.length >= item.maxTiposSalgado * item.quantity
+                            item.selectedItems.length >= getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado)
                           }
                           onClick={() =>
                             updateSelectedItems(item, [

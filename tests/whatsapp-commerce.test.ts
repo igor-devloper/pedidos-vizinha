@@ -27,10 +27,13 @@ test("webhook concorrente possui claim atomico e nao duplica efeitos", () => {
 
 test("follow-up de dez minutos e persistido, unico e cancelado quando existe Order", () => {
   const source = read("services/whatsapp-bot/src/whatsapp-draft-repository.ts");
+  const automation = read("services/whatsapp-bot/src/automation.ts");
   assert.match(source, /10 \* 60_000/);
   assert.match(source, /whatsappOfferSentAt/);
   assert.match(source, /NOT EXISTS/);
   assert.match(source, /FOR UPDATE SKIP LOCKED/);
+  assert.match(automation, /outboundText\.includes\(config\.cardapioUrl\)/);
+  assert.match(automation, /markSiteLinkSent\(draft\.id\)/);
 });
 
 test("confirmacao repetida reutiliza Order do draft", () => {

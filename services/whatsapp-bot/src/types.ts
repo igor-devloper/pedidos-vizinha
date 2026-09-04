@@ -35,6 +35,7 @@ export type SendTextPayload = {
 export type InboundMessageJob = {
   instanceId: string;
   remoteJid: string;
+  phoneNumber?: string;
   pushName?: string;
   text: string;
   originalText?: string;

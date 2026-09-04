@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { validateCartItemQuantities } from "../lib/cart-quantity";
+import { getAllowedSalgadoTypes, validateCartItemQuantities } from "../lib/cart-quantity";
 
 const fixedProduct = {
   nome: "Cento",
@@ -24,6 +24,21 @@ test("25+25+25+25 para 100 e valido", () => {
   const result = validateCartItemQuantities({ product: fixedProduct, audience: "VIZINHA", quantity: 1, requestedUnits: 100, selectedItems: flavors });
   assert.equal(result.selectedUnits, 100);
   assert.equal(result.requestedUnits, 100);
+});
+
+test("50 unidades permitem 2 tipos e cada 100 permitem 4", () => {
+  assert.equal(getAllowedSalgadoTypes(50, 7), 2);
+  assert.equal(getAllowedSalgadoTypes(100, 7), 4);
+  assert.equal(getAllowedSalgadoTypes(150, 7), 6);
+  assert.equal(getAllowedSalgadoTypes(200, 7), 8);
+});
+
+test("backend rejeita sabor que nao pertence ao produto", () => {
+  assert.throws(() => validateCartItemQuantities({
+    product: { ...fixedProduct, totalUnidades: 50, productType: { minQuantity: 50, allowsMultiple: true }, saboresSugeridos: ["Coxinha de frango", "Empada de frango"] },
+    audience: "VIZINHA", quantity: 1, requestedUnits: 50,
+    selectedItems: [{ tipo: "Pastel frito", quantidade: 50 }],
+  }), /não é uma opção disponível/);
 });
 
 test("99 informa a diferenca real", () => {

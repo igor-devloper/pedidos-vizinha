@@ -227,6 +227,7 @@ class InstanceManager {
         await handleInboundMessage({
           instanceId,
           remoteJid: message.key.remoteJid,
+          phoneNumber: message.key.remoteJidAlt?.replace(/\D/g, "") || undefined,
           pushName: message.pushName || undefined,
           text: text || `[${media?.kind || "mensagem"} recebida]`,
           originalText: text || undefined,
