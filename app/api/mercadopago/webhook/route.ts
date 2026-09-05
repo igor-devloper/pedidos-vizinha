@@ -117,7 +117,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, ignored: true }, { status: 200 });
       }
 
-      if (payment.external_reference.startsWith("cart-")) {
+      if (payment.external_reference.startsWith("cart-") || payment.external_reference.startsWith("whatsapp-")) {
         const order = await applyCartOrderPayment(payment);
 
         console.log("[MP webhook] Order do carrinho atualizado com sucesso:", {

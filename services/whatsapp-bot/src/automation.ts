@@ -5,6 +5,7 @@ import {
   type BotOrder,
 } from "./bot-order-repository.js";
 import { config } from "./config.js";
+import { requestWhatsappOrder } from "./internal-order-client.js";
 import { findMatchingFlow } from "./flow-repository.js";
 import { runSalesAgent } from "./gemini-sales-agent.js";
 import { instanceManager } from "./instance-manager.js";
@@ -159,7 +160,57 @@ function normalizeDraftPaymentMethod(value: unknown) {
   return undefined;
 }
 
-const getNextDraftQuestion = getCanonicalNextDraftQuestion;
+async function sendDraftProgress(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft) {
+  const products = await listActiveProducts();
+  const requiresFullPayment = draft.items.some((raw) => {
+    const item = raw as { productId?: string };
+    return products.some((product) => product.id === item.productId && !product.permitePagamentoParcial);
+  });
+  if (requiresFullPayment && draft.paymentPercentage !== 100) {
+    draft = await patchDraft(draft.id, { paymentPercentage: 100 }) || draft;
+  }
+  if (getMissingDraftField(draft, products)) {
+    await sendAndTrack(job, lead, getCanonicalNextDraftQuestion(draft, products));
+    return;
+  }
+  await submitDraft(job, lead, draft, true);
+}
+
+async function submitDraft(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft, preview = false) {
+  try {
+    const result = await requestWhatsappOrder(config.appUrl, config.internalOrderApiKeys, draft.id, preview);
+    const data = result.data;
+    if (!result.ok || !data || (preview ? !data.summary : !data.order)) {
+      logger.error({ draftId: draft.id, httpStatus: result.status, code: data?.code }, "WhatsApp order request failed");
+      await patchDraft(draft.id, { stage: preview ? "SUMMARY_FAILED" : "PAYMENT_FAILED" });
+      const retryable = result.status >= 500 || result.status === 401;
+      await sendAndTrack(job, lead, retryable
+        ? "Tive um problema ao conectar com o pagamento. Seu pedido está salvo; me diga 'tente novamente' para eu tentar de novo."
+        : data?.error || "Não consegui conferir o pedido agora. Seus dados estão salvos; pode pedir para tentar novamente.");
+      return;
+    }
+    if (preview) {
+      await sendAndTrack(job, lead, data.summary!);
+      await patchDraft(draft.id, { stage: "AWAITING_CONFIRMATION" });
+      return;
+    }
+    const order = data.order!;
+    const code = order.code || order.id.slice(0, 8).toUpperCase();
+    const amount = Number(order.chargedAmount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    if (data.pixCopyPaste) {
+      await sendAndTrack(job, lead, `Seu pedido #${code} foi criado 😊\nValor a pagar agora: ${amount}.\nCopie o código Pix da próxima mensagem e cole no app do seu banco. Assim que o pagamento for confirmado, eu aviso por aqui.`);
+      await sendAndTrack(job, lead, data.pixCopyPaste);
+    } else if (data.checkoutUrl) {
+      await sendAndTrack(job, lead, `Seu pedido #${code} foi criado 😊\nValor a pagar agora: ${amount}.\nPague com cartão no checkout seguro:\n${data.checkoutUrl}\nAssim que o pagamento for confirmado, eu aviso por aqui.`);
+    } else {
+      throw new Error("Order response missing payment instructions");
+    }
+  } catch (error) {
+    logger.error({ draftId: draft.id, error }, "WhatsApp order connection failed");
+    await patchDraft(draft.id, { stage: preview ? "SUMMARY_FAILED" : "PAYMENT_FAILED" });
+    await sendAndTrack(job, lead, "Não consegui concluir a conexão. Seu pedido está salvo; me diga 'tente novamente' para tentar de novo.");
+  }
+}
 
 function draftHasOrderProgress(draft: WhatsappDraft | null | undefined) {
   if (!draft || ["HANDOFF", "ABANDONED", "COMPLETED"].includes(draft.status)) return false;
@@ -171,18 +222,22 @@ function draftHasOrderProgress(draft: WhatsappDraft | null | undefined) {
     );
 }
 
-async function normalizeDraftItems(value: unknown) {
+async function normalizeDraftItems(value: unknown, previousItems: unknown[] = []) {
   if (!Array.isArray(value)) return [];
   const products = await listActiveProducts();
   return value.flatMap((raw) => {
     if (!raw || typeof raw !== "object") return [];
-    const item = raw as Record<string, unknown>;
+    let item = raw as Record<string, unknown>;
     const productReference = String(item.productId || item.id || item.productName || item.produto || item.nome || "").trim();
     const normalizedReference = normalizeText(productReference);
     const matchedProduct = products.find((product) => product.id === productReference)
       || products.find((product) => normalizeText(product.nome) === normalizedReference || normalizeText(product.slug) === normalizedReference)
       || products.find((product) => normalizedReference.length > 3 && (normalizeText(product.nome).includes(normalizedReference) || normalizedReference.includes(normalizeText(product.nome))));
     const productId = matchedProduct?.id || (products.some((product) => product.id === productReference) ? productReference : "");
+    const previous = previousItems.find((entry) => entry && typeof entry === "object" && (entry as Record<string, unknown>).productId === productId);
+    if (previous && typeof previous === "object") {
+      item = { ...previous, ...Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined && value !== null)) };
+    }
     const rawTypes = Array.isArray(item.selectedItems)
       ? item.selectedItems
       : Array.isArray(item.types)
@@ -192,18 +247,19 @@ async function normalizeDraftItems(value: unknown) {
       if (!rawType || typeof rawType !== "object") return [];
       const type = rawType as Record<string, unknown>;
       const tipo = String(type.tipo || type.name || "").trim();
-      const quantidade = Math.floor(Number(type.quantidade ?? type.quantity));
+      const quantidade = Number(type.quantidade ?? type.quantity);
       return tipo && Number.isInteger(quantidade) && quantidade > 0 ? [{ tipo, quantidade }] : [];
     });
     const selectedTotal = selectedItems.reduce((sum, selected) => sum + selected.quantidade, 0);
-    const requestedUnits = Math.floor(Number(item.requestedUnits ?? item.totalUnits ?? item.quantidade ?? (selectedTotal || item.quantity)));
-    if (!productId || !Number.isInteger(requestedUnits) || requestedUnits < 1) return [];
-    return [{ productId, quantity: 1, requestedUnits, selectedItems }];
+    const requestedUnits = Number(item.requestedUnits ?? item.totalUnits ?? item.quantidade ?? (selectedTotal || (matchedProduct?.allowsMultiple ? item.quantity : undefined)));
+    if (!productId) return [];
+    const quantity = matchedProduct?.allowsMultiple ? 1 : Number(item.quantity ?? (requestedUnits ? requestedUnits / Number(matchedProduct?.totalUnidades) : 0));
+    return [{ productId, quantity: Number.isFinite(quantity) ? quantity : 0, requestedUnits: Number.isFinite(requestedUnits) ? requestedUnits : 0, selectedItems }];
   });
 }
 
 async function maybeHandleDeterministicDraftPayment(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft | null) {
-  if (!draft || ["HANDOFF", "ABANDONED", "COMPLETED", "AWAITING_PAYMENT"].includes(draft.status)) return false;
+  if (config.geminiApiKey || !draft || ["HANDOFF", "ABANDONED", "COMPLETED", "AWAITING_PAYMENT"].includes(draft.status)) return false;
   const parsed = parseDraftPayment(job.text);
   if (!parsed.paymentMethod && !parsed.paymentPercentage) return false;
   const updated = await patchDraft(draft.id, {
@@ -217,24 +273,17 @@ async function maybeHandleDeterministicDraftPayment(job: InboundMessageJob, lead
     paymentMethod: updated.paymentMethod,
     paymentPercentage: updated.paymentPercentage,
   }, "Draft payment captured deterministically");
-  const methodLabel = parsed.paymentMethod === "PIX"
-    ? "Pix"
-    : parsed.paymentMethod === "CARTAO_DEBITO"
-      ? "cartão de débito"
-      : parsed.paymentMethod === "CARTAO_CREDITO"
-        ? "cartão de crédito"
-        : "pagamento";
-  await sendAndTrack(job, lead, `Certo, registrei ${methodLabel} no seu pedido. ${getNextDraftQuestion(updated)}`);
+  await sendDraftProgress(job, lead, updated);
   return true;
 }
 
 async function maybeHandleDeterministicDraftSchedule(job: InboundMessageJob, lead: BotLead, draft: WhatsappDraft | null) {
-  if (!draft || ["HANDOFF", "ABANDONED", "COMPLETED", "AWAITING_PAYMENT"].includes(draft.status) || getMissingDraftField(draft) !== "scheduledAt") return false;
+  if (config.geminiApiKey || !draft || ["HANDOFF", "ABANDONED", "COMPLETED", "AWAITING_PAYMENT"].includes(draft.status) || getMissingDraftField(draft) !== "scheduledAt") return false;
   const scheduledAt = parseBrazilianScheduledAt(job.text);
   if (!scheduledAt) return false;
   const updated = await patchDraft(draft.id, { scheduledAt, stage: "COLLECTING", lastCustomerMessageAt: new Date() }) || draft;
   logger.info({ draftId: draft.id, scheduledAt }, "Draft schedule captured deterministically");
-  await sendAndTrack(job, lead, `Certo, anotei o dia e horário. ${getNextDraftQuestion(updated)}`);
+  await sendDraftProgress(job, lead, updated);
   return true;
 }
 
@@ -427,7 +476,7 @@ async function maybeHandleDeliveryRequest(job: InboundMessageJob, lead: BotLead)
 }
 
 async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: string) {
-  const outboundText = appendOutsideHoursNotice(text);
+  const outboundText = !lead?.lastOutboundText ? appendOutsideHoursNotice(text) : text;
   logger.info(
     {
       instanceId: job.instanceId,
@@ -693,10 +742,11 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
   }
 
   let currentDraft = draft;
+  let draftChanged = false;
   if (draft) {
     const extracted = agentResult.extracted || {};
     if (extracted.items !== undefined) {
-      const normalizedItems = await normalizeDraftItems(extracted.items);
+      const normalizedItems = await normalizeDraftItems(extracted.items, draft.items);
       if (normalizedItems.length) extracted.items = normalizedItems;
       else delete extracted.items;
     }
@@ -706,21 +756,23 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     const fulfillmentType = normalizeFulfillmentType(extracted.fulfillmentType);
     if (fulfillmentType) extracted.fulfillmentType = fulfillmentType;
     else delete extracted.fulfillmentType;
-    const scheduledAt = parseBrazilianScheduledAt(extracted.scheduledAt ?? agentResult.horarioEntrega);
+    const scheduledAt = parseBrazilianScheduledAt(job.text) || parseBrazilianScheduledAt(extracted.scheduledAt ?? agentResult.horarioEntrega);
     if (scheduledAt) extracted.scheduledAt = scheduledAt;
     else delete extracted.scheduledAt;
     if (!extracted.customerName && agentResult.nome) extracted.customerName = agentResult.nome;
-    const allowed = ["customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
-    const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined).map((key) => [key, extracted[key]]));
+    if (typeof extracted.phone === "string") extracted.phone = extracted.phone.replace(/\D/g, "");
+    const allowed = ["phone", "customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
+    const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined && extracted[key] !== null && extracted[key] !== ""
+      && JSON.stringify(extracted[key]) !== JSON.stringify(draft[key as keyof WhatsappDraft])).map((key) => [key, extracted[key]]));
     patch.lastCustomerMessageAt = new Date();
     const extractedOrderProgress = Object.keys(patch).some((key) => key !== "lastCustomerMessageAt");
+    draftChanged = extractedOrderProgress;
     if (extractedOrderProgress && agentResult.action !== "CANCEL_DRAFT") {
       Object.assign(patch, { stage: "COLLECTING", status: "ACTIVE", whatsappOfferDueAt: null });
     }
     if (agentResult.action === "SEND_SITE" && !draftHasOrderProgress(draft) && !extractedOrderProgress) await markSiteLinkSent(draft.id);
     else if (agentResult.action === "START_WHATSAPP_ORDER") Object.assign(patch, { stage: "COLLECTING", status: "ACTIVE", whatsappOfferDueAt: null });
     else if (agentResult.action === "CANCEL_DRAFT") Object.assign(patch, { stage: "CANCELLED", status: "ABANDONED", whatsappOfferDueAt: null });
-    else if (agentResult.action === "SHOW_SUMMARY") patch.stage = "AWAITING_CONFIRMATION";
     currentDraft = await patchDraft(draft.id, patch) || draft;
     logger.info({
       draftId: draft.id,
@@ -730,27 +782,13 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
       paymentMethod: currentDraft.paymentMethod,
     }, "Structured sales action persisted");
     if (agentResult.action === "CONFIRM_ORDER") {
-      const missingField = getMissingDraftField(currentDraft);
-      if (missingField) {
+      const missingField = getMissingDraftField(currentDraft, await listActiveProducts());
+      if (missingField || draft.stage !== "AWAITING_CONFIRMATION" || extractedOrderProgress) {
         logger.warn({ draftId: currentDraft.id, missingField }, "Blocked incomplete WhatsApp order confirmation");
-        await sendAndTrack(job, lead, `Antes de confirmar, falta uma informação: ${getNextDraftQuestion(currentDraft)}`);
+        await sendDraftProgress(job, lead, currentDraft);
         return true;
       }
-      const response = await fetch(`${config.appUrl}/api/internal/whatsapp-orders`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${config.internalOrderApiKey}` },
-        body: JSON.stringify({ ...currentDraft, draftId: currentDraft.id }),
-      });
-      const data = await response.json() as { error?: string; order?: { id: string; code?: string; chargedAmount: string }; pixCopyPaste?: string; checkoutUrl?: string };
-      if (!response.ok || !data.order) {
-        await sendAndTrack(job, lead, `Não consegui confirmar ainda: ${data.error || "revise os dados do pedido"}`);
-        return true;
-      }
-      const code = data.order.code || data.order.id.slice(0, 8).toUpperCase();
-      const paymentText = data.pixCopyPaste
-        ? `Valor a pagar agora: R$ ${Number(data.order.chargedAmount).toFixed(2).replace(".", ",")}\n\nPix copia e cola:\n${data.pixCopyPaste}`
-        : `Pague com cartão no checkout seguro:\n${data.checkoutUrl}`;
-      await sendAndTrack(job, lead, `Seu pedido #${code} foi criado 😊\n${paymentText}\n\nAssim que o pagamento for confirmado, eu aviso por aqui.`);
+      await submitDraft(job, lead, currentDraft);
       return true;
     }
   }
@@ -775,13 +813,11 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     || normalizedReply.includes("como fazer sua encomenda");
   const structuredCollectionAction = agentResult.action?.startsWith("SET_")
     || agentResult.action === "START_WHATSAPP_ORDER";
-  const incompleteSummary = agentResult.action === "SHOW_SUMMARY" && currentDraft && getMissingDraftField(currentDraft);
-  const reply = activeOrderInProgress && genericFlowBreaker
-    ? `Vamos continuar seu pedido por aqui. ${getNextDraftQuestion(currentDraft!)}`
-    : activeOrderInProgress && (structuredCollectionAction || incompleteSummary)
-      ? `Certo, anotei. ${getNextDraftQuestion(currentDraft!)}`
-      : agentResult.reply;
-  await sendAndTrack(job, nextLead || lead, reply);
+  if (activeOrderInProgress && (draftChanged || structuredCollectionAction || agentResult.action === "SHOW_SUMMARY" || genericFlowBreaker)) {
+    await sendDraftProgress(job, nextLead || lead, currentDraft!);
+  } else {
+    await sendAndTrack(job, nextLead || lead, agentResult.reply);
+  }
   return true;
 }
 
@@ -933,6 +969,14 @@ export async function processInboundMessage(job: InboundMessageJob) {
 
   if (job.mediaKind && !hasMeaningfulText) {
     await sendAndTrack(job, lead, buildMediaRetryMessage(job.mediaKind));
+    return;
+  }
+
+  if (draft && ["AWAITING_CONFIRMATION", "SUMMARY_FAILED", "PAYMENT_FAILED", "ORDER_CREATED"].includes(draft.stage)
+    && /^(pode( sim)?|sim|confirmo|confirmar|tente novamente|tenta novamente|tentar novamente|ok)[.! ]*$/.test(normalized)) {
+    if (draft.stage === "SUMMARY_FAILED") await sendDraftProgress(job, lead, draft);
+    else if (!getMissingDraftField(draft, await listActiveProducts())) await submitDraft(job, lead, draft);
+    else await sendDraftProgress(job, lead, draft);
     return;
   }
 

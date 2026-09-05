@@ -15,7 +15,7 @@ export type WhatsappDraft = {
 };
 
 const ALLOWED_COLUMNS = new Set([
-  "customerName", "customerEmail", "stage", "status", "fulfillmentType", "scheduledAt",
+  "customerName", "customerEmail", "phone", "stage", "status", "fulfillmentType", "scheduledAt",
   "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference",
   "paymentMethod", "paymentPercentage", "items", "siteLinkSentAt", "whatsappOfferDueAt",
   "whatsappOfferSentAt", "siteOrderDetectedAt", "orderId", "lastCustomerMessageAt", "lastBotMessageAt",
@@ -28,7 +28,7 @@ export async function getOrCreateDraft(instanceId: string, remoteJid: string, kn
     `INSERT INTO "WhatsappOrderDraft" (id, "instanceId", "remoteJid", phone, "createdAt", "updatedAt")
      VALUES ($1,$2,$3,$4,NOW(),NOW())
      ON CONFLICT ("instanceId", "remoteJid") DO UPDATE SET
-       phone=CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE "WhatsappOrderDraft".phone END,
+       phone=CASE WHEN "WhatsappOrderDraft".phone = '' THEN EXCLUDED.phone ELSE "WhatsappOrderDraft".phone END,
        "updatedAt"=NOW()
      RETURNING *`, [randomUUID(), instanceId, remoteJid, phone],
   );

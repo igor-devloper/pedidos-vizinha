@@ -1,9 +1,26 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { getOrderStatusFromMercadoPagoStatus } from "../lib/cart-order-payment";
+import { applyCartOrderPayment, getOrderStatusFromMercadoPagoStatus } from "../lib/cart-order-payment";
+import { prisma } from "../lib/db";
 
 const read = (path: string) => readFileSync(path, "utf8");
+
+test("pagamento com referência whatsapp consulta Order sem cair no fluxo legado", async () => {
+  const original = prisma.order.findFirst;
+  let query: unknown;
+  prisma.order.findFirst = (async (args: unknown) => { query = args; return null; }) as typeof original;
+  try {
+    await applyCartOrderPayment({ id: "payment-test", status: "pending", external_reference: "whatsapp-draft-test" });
+    assert.deepEqual(query, {
+      where: { OR: [{ externalReference: "whatsapp-draft-test" }, { saldoExternalReference: "whatsapp-draft-test" }] },
+    });
+  } finally {
+    prisma.order.findFirst = original;
+  }
+  const webhook = read("app/api/mercadopago/webhook/route.ts");
+  assert.match(webhook, /external_reference\.startsWith\("whatsapp-"\)/);
+});
 
 test("PIX pendente e cartao rejeitado nao marcam Order como pago", () => {
   assert.equal(getOrderStatusFromMercadoPagoStatus("pending"), "PENDING");
@@ -78,9 +95,9 @@ test("pagamento em draft ativo nao cai nas mensagens genericas", () => {
   assert.match(source, /paymentMethod: parsed\.paymentMethod/);
   assert.match(source, /hasActiveDraftProgress \? false/);
   assert.match(source, /genericFlowBreaker/);
-  assert.match(source, /Vamos continuar seu pedido por aqui/);
+  assert.match(source, /sendDraftProgress\(job, nextLead \|\| lead, currentDraft!/);
   assert.match(source, /function normalizeDraftItems/);
-  assert.match(source, /return \[\{ productId, quantity: 1, requestedUnits, selectedItems \}\]/);
+  assert.match(source, /quantity: Number\.isFinite\(quantity\)/);
 });
 
 test("data ou endereço mantêm o pedido no WhatsApp mesmo sem itens persistidos", () => {

@@ -26,6 +26,24 @@ Este servico cria uma base de bot WhatsApp no estilo "instancia + QR + webhook",
 2. Em Railway, monte um Volume em `/app/data` para persistir `./data/auth` e `./data/instances.json`.
 3. Para usar o CRUD visual de fluxos no bot, defina `DATABASE_URL` apontando para o mesmo Postgres do app Next.
 
+## Pedidos e pagamento pelo WhatsApp
+
+Configure `APP_URL=https://vizinhasalgateria.site` no bot para chamar o site correto.
+Configure `INTERNAL_ORDER_API_KEY` com o mesmo segredo no ambiente do site e do bot.
+Como alternativa, a `BOT_API_KEY` do bot deve corresponder à `BOT_SERVICE_API_KEY`
+do site. As chaves não devem ser publicadas nem usar o prefixo `NEXT_PUBLIC_`.
+Depois de alterar as variáveis, publique/reinicie os dois serviços.
+
+O bot chama `POST /api/internal/whatsapp-orders` com `{ draftId, preview: true }`
+para validar e calcular o resumo sem criar pedido ou cobrança. A confirmação
+usa o mesmo endpoint sem preview. Um 401 indica divergência nas chaves entre
+os ambientes, antes de chamar o Mercado Pago. Erros do provedor retornam 502
+com `PAYMENT_PROVIDER_ERROR`; o pedido permanece disponível para nova tentativa.
+
+O fluxo coleta produto e quantidades/tipos, data e horário, dados pessoais,
+modalidade/endereço e pagamento. O resumo usa o cálculo do site. Após confirmar,
+o Pix vai em mensagem separada e o cartão usa o checkout do pedido.
+
 ## Endpoints principais
 
 - `GET /health`

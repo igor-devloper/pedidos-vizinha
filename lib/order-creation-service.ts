@@ -16,17 +16,13 @@ export type NormalizedOrderInput = {
   items: Array<{ productId: string; quantity: number; requestedUnits?: number; selectedItems?: unknown }>;
 };
 
-export async function createValidatedOrder(input: NormalizedOrderInput) {
+export async function previewValidatedOrder(input: NormalizedOrderInput) {
   const name = input.customerName.trim();
   const phone = input.customerPhone.replace(/\D/g, "");
   const email = input.customerEmail.trim();
   if (name.length < 2 || phone.length < 10 || !/^\S+@\S+\.\S+$/.test(email)) throw new Error("Dados do cliente incompletos.");
   if (!input.items.length) throw new Error("O pedido precisa ter pelo menos um item.");
 
-  if (input.idempotencyKey) {
-    const existing = await prisma.order.findUnique({ where: { externalReference: `whatsapp-${input.idempotencyKey}` }, include: { items: true } });
-    if (existing) return existing;
-  }
   const products = await prisma.produto.findMany({
     where: { id: { in: input.items.map((item) => item.productId) }, ativo: true }, include: { productType: true },
   });
@@ -56,6 +52,15 @@ export async function createValidatedOrder(input: NormalizedOrderInput) {
   if (input.fulfillmentType === "DELIVERY" && (!input.deliveryAddress || !input.deliveryNumber || !input.deliveryNeighborhood)) throw new Error("Endereço de entrega incompleto.");
   const total = Number((normalizedItems.reduce((sum, item) => sum + item.subtotal, 0) + delivery.fee).toFixed(2));
   const payment = calculatePaymentAmounts(total, input.paymentPercentage, input.paymentMethod);
+  return { name, phone, email, normalizedItems, delivery, total, payment };
+}
+
+export async function createValidatedOrder(input: NormalizedOrderInput) {
+  if (input.idempotencyKey) {
+    const existing = await prisma.order.findUnique({ where: { externalReference: `whatsapp-${input.idempotencyKey}` }, include: { items: true } });
+    if (existing) return existing;
+  }
+  const { name, phone, email, normalizedItems, delivery, total, payment } = await previewValidatedOrder(input);
   const code = `C${Date.now().toString(36).toUpperCase()}${randomUUID().slice(0, 4).toUpperCase()}`;
   const externalReference = input.idempotencyKey ? `whatsapp-${input.idempotencyKey}` : `cart-${code}`;
   return prisma.$transaction(async (tx) => {

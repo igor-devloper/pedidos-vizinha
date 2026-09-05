@@ -8,7 +8,7 @@ import type { ProductRecord } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
 
 export type AgentResult = {
-  action?: "ANSWER_QUESTION" | "SEND_SITE" | "START_WHATSAPP_ORDER" | "SET_PRODUCT" | "SET_QUANTITY" | "SET_FLAVORS" | "SET_NAME" | "SET_EMAIL" | "SET_DATETIME" | "SET_FULFILLMENT" | "SET_ADDRESS" | "SET_PAYMENT" | "SHOW_SUMMARY" | "CONFIRM_ORDER" | "CANCEL_DRAFT" | "HANDOFF";
+  action?: "ANSWER_QUESTION" | "SEND_SITE" | "START_WHATSAPP_ORDER" | "SET_PRODUCT" | "SET_QUANTITY" | "SET_FLAVORS" | "SET_NAME" | "SET_EMAIL" | "SET_PHONE" | "SET_DATETIME" | "SET_FULFILLMENT" | "SET_ADDRESS" | "SET_PAYMENT" | "SHOW_SUMMARY" | "CONFIRM_ORDER" | "CANCEL_DRAFT" | "HANDOFF";
   extracted?: Record<string, unknown>;
   reply: string;
   stage?: string;
@@ -94,6 +94,7 @@ function formatProductsForPrompt(products: Awaited<ReturnType<typeof listActiveP
           `descrição: ${product.descricao}`,
           `quantidade mínima: ${product.minQuantity || product.totalUnidades}`,
           `permite quantidade variável: ${Boolean(product.allowsMultiple)}`,
+          `exige seleção de tipos: ${product.precisaSelecaoDeTipos}`,
           `limite de tipos: ${product.maxTiposSalgado} por lote de ${product.minQuantity || product.totalUnidades} unidades`,
           `opções EXCLUSIVAS deste produto: ${product.saboresSugeridos.length ? product.saboresSugeridos.join("; ") : "não possui seleção de tipos"}`,
           `combo: ${JSON.stringify(product.comboItens)}`,
@@ -138,6 +139,20 @@ Seu papel:
 - nunca inventar itens fora do cardápio.
 
 Regras importantes:
+- conduza o pedido nesta ordem: produto; quantidade e divisão de tipos (quando houver); data e horário; nome, e-mail e telefone; entrega ou retirada e endereço de entrega; método e percentual de pagamento; resumo e confirmação;
+- conclua a quantidade e a seleção de tipos ANTES de perguntar data, dados pessoais ou entrega. Não invente a quantidade quando o cliente só disser o nome do produto;
+- agrupe perguntas relacionadas: nome e e-mail juntos (use o número do WhatsApp salvo e informe que ele será o contato); rua, número, bairro e referência juntos; método de pagamento e percentual juntos. Não repita "Certo, anotei" a cada mensagem;
+- aceite todos os dados enviados antecipadamente ou juntos; salve cada um em extracted, mesmo que a action represente apenas um deles. Nunca apague campos anteriores com null, texto vazio ou valores inferidos;
+- extracted usa somente customerName, customerEmail, phone, fulfillmentType (DELIVERY ou PICKUP), scheduledAt, deliveryStreet, deliveryNumber, deliveryNeighborhood, deliveryReference, paymentMethod (PIX, CARTAO_CREDITO ou CARTAO_DEBITO), paymentPercentage (50 ou 100) e items;
+- extracted.items contém o carrinho completo atualizado, preservando itens anteriores, com productId, quantity (número de produtos/pacotes para quantidade fixa; 1 para quantidade variável), requestedUnits (total de unidades para quantidade variável) e selectedItems: [{tipo: "nome exato", quantidade: número}]. Ao alterar só sabores, preserve produto e quantidade. Nunca preencha seleção de tipos por conta própria;
+- combos de composição fixa usam os itens e quantidades configurados multiplicados pela quantidade de combos; não peça para escolher sabores de um combo fixo;
+- interprete todo horário em America/Sao_Paulo: "dia 10 de 17hr" significa dia 10 às 17:00, com offset -03:00, nunca 17:00Z;
+- aproveite bairro, nome e outros dados já salvos. Se não houver referência, registre "Sem referência" quando o cliente disser isso;
+- retirada usa o endereço da loja; peça endereço do cliente somente em entrega;
+- só ofereça 50% se TODOS os produtos permitirem pagamento parcial; caso contrário informe pagamento integral;
+- quando todos os dados estiverem completos, use SHOW_SUMMARY imediatamente. Não peça autorização para mostrar resumo e não invente totais: o backend enviará o resumo calculado;
+- só use CONFIRM_ORDER se o cliente confirmar o resumo já mostrado (stage AWAITING_CONFIRMATION). Correção de dados exige novo resumo;
+- "tente novamente" depois de falha técnica significa repetir a operação, não transferir automaticamente para humano;
 - use o contexto atual da conversa antes de responder, principalmente a última mensagem enviada pela empresa e a última mensagem recebida do cliente;
 - se a mensagem do cliente parecer continuação de algo já falado no chat, responda em cima desse contexto em vez de reiniciar o atendimento;
 - se o cliente estiver respondendo sobre retirada, entrega, mototáxi, pagamento, prazo ou pedido já existente, priorize esse assunto e não ofereça cardápio à toa;
@@ -190,7 +205,7 @@ ${job.text}
 Responda SOMENTE em JSON válido, sem markdown fora do JSON, neste formato:
 {
   "shouldRespond": true,
-  "action": "ANSWER_QUESTION|SEND_SITE|START_WHATSAPP_ORDER|SET_PRODUCT|SET_QUANTITY|SET_FLAVORS|SET_NAME|SET_EMAIL|SET_DATETIME|SET_FULFILLMENT|SET_ADDRESS|SET_PAYMENT|SHOW_SUMMARY|CONFIRM_ORDER|CANCEL_DRAFT|HANDOFF",
+  "action": "ANSWER_QUESTION|SEND_SITE|START_WHATSAPP_ORDER|SET_PRODUCT|SET_QUANTITY|SET_FLAVORS|SET_NAME|SET_EMAIL|SET_PHONE|SET_DATETIME|SET_FULFILLMENT|SET_ADDRESS|SET_PAYMENT|SHOW_SUMMARY|CONFIRM_ORDER|CANCEL_DRAFT|HANDOFF",
   "extracted": {},
   "reply": "texto da resposta para o cliente",
   "stage": "awaiting_intent|site_order_guided|outro-stage-atual",

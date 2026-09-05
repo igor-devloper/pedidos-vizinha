@@ -39,7 +39,7 @@ export function getOrderStatusFromMercadoPagoStatus(status: string) {
 }
 
 export async function applyCartOrderPayment(payment: MercadoPagoCartPayment) {
-  if (!payment.external_reference?.startsWith("cart-")) {
+  if (!payment.external_reference?.startsWith("cart-") && !payment.external_reference?.startsWith("whatsapp-")) {
     return null;
   }
 
