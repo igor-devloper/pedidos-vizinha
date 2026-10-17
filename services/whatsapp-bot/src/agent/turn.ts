@@ -24,7 +24,8 @@ import type { AgentProduct } from "./cart.js";
 import { createGeminiModel } from "./gemini-model.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { createSiteApi, type StoreInfo } from "./site-api.js";
-import { describeDraft, type DraftState } from "./state.js";
+import { extractPayment } from "./payment-parse.js";
+import { describeDraft, missingFields, type DraftState } from "./state.js";
 import { buildMenuMessage, executeTool, type ToolDeps } from "./tools.js";
 
 const FALLBACK_REPLY =
@@ -150,6 +151,28 @@ export async function handleAgentTurn(
   if (history.at(-1)?.role !== "user") {
     // O pipeline registra a mensagem antes do turno; este é só um reforço de segurança.
     history.push({ role: "user", parts: [{ text: job.text }] } satisfies AgentContent);
+  }
+
+  // Pedido completo e só falta o pagamento: "50", "50% no crédito", "pix" etc. são registrados pelo código,
+  // sem depender de o modelo lembrar de chamar a ferramenta (ele chegou a repetir a pergunta em loop).
+  const pending = missingFields(draft, products);
+  const onlyPaymentMissing = pending.length > 0 && pending.every((field) => /50% ou 100%|forma de pagamento/.test(field));
+  // Também vale quando a última fala do bot perguntou sobre pagamento, mesmo que falte outro dado no rascunho.
+  const lastBotText = [...history].reverse().find((content) => content.role === "model")?.parts
+    .map((part) => (typeof part.text === "string" ? part.text : ""))
+    .join(" ") ?? "";
+  const botAskedPayment = /pagar|pagamento|\bpix\b|cr[eé]dito|d[eé]bito/i.test(lastBotText);
+  const choice = onlyPaymentMissing || botAskedPayment ? extractPayment(job.text) : {};
+  if (choice.percentual || choice.forma) {
+    const args = { ...choice };
+    const result = await executeTool("definir_pagamento", args, deps);
+    await logMessage(job.instanceId, job.remoteJid, "tool", "definir_pagamento", { args, result, auto: true });
+    const outcome = result.ok === false
+      ? `não foi aceito: ${String(result.erro)}`
+      : `registrado. Ainda falta: ${(result.faltaPreencher as string[] | undefined)?.join(", ") || "nada"}`;
+    history.at(-1)?.parts.push({
+      text: `[Sistema] O pagamento informado pelo cliente nesta mensagem foi ${outcome}. Não repita a pergunta sobre o que já foi registrado.`,
+    });
   }
 
   const model = createGeminiModel(
