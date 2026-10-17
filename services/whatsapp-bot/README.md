@@ -9,7 +9,7 @@ Este servico cria uma base de bot WhatsApp no estilo "instancia + QR + webhook",
 - Processamento inline das mensagens no proprio runtime da instancia.
 - Webhook de saida para seu backend principal.
 - Fila HTTP autenticada para jobs de impressao termica (`/print-jobs`).
-- Persistencia de credenciais por pasta, pronta para ser montada em Volume no Railway.
+- Persistencia da sessao no Postgres (ou em pasta, no dev local).
 - Leitura dos fluxos visuais cadastrados no banco principal via `DATABASE_URL`.
 
 ## Estrutura
@@ -19,12 +19,26 @@ Este servico cria uma base de bot WhatsApp no estilo "instancia + QR + webhook",
 - `src/instance-store.ts`: metadados das instancias em arquivo JSON.
 - `src/message-pipeline.ts`: webhook + automacao no mesmo processo.
 
+## Sessao do WhatsApp e deploys
+
+- Com `DATABASE_URL`, a sessao (credenciais e chaves do Baileys) fica no Postgres (`wa_auth`),
+  os dados das instancias em `wa_instance` e o lock de instancia unica em `wa_lock`.
+  As tabelas sao criadas sozinhas no boot (e existe a migration equivalente no Prisma).
+  Nao precisa de Volume. Sem `DATABASE_URL` (dev local) usa a pasta `AUTH_DIR`.
+- Uma pasta de sessao antiga (`AUTH_DIR`) e importada para o banco uma unica vez.
+- So um processo mantem o socket de cada instancia (lock com TTL de 30 s, renovado a cada 10 s).
+  Durante um deploy a copia nova fica em `standby` e assume sozinha quando a antiga solta o lock.
+- Reconexao com backoff exponencial (2 s ate 60 s) para qualquer motivo, exceto `loggedOut`.
+  So `loggedOut` apaga a sessao. `connectionReplaced` cede a vez em vez de brigar pela conexao.
+- `SIGTERM`/`SIGINT`: grava credenciais, solta o lock e fecha com `end()`. `logout()` so e chamado
+  por `POST /instances/:id/logout` (botao "Desconectar WhatsApp" do painel).
+- Instancias com `autoStart` sobem sozinhas no boot; so "Parar" no painel desliga isso.
+- O start command e `node dist/server.js` (sem npm) para o app receber o SIGTERM.
+
 ## Observacoes importantes
 
-1. Este projeto usa `useMultiFileAuthState` por simplicidade operacional.
-   A documentacao oficial do Baileys recomenda criar um auth state proprio para producao e avisa para nao usar esse helper como padrao de producao.
-2. Em Railway, monte um Volume em `/app/data` para persistir `./data/auth` e `./data/instances.json`.
-3. Para usar o CRUD visual de fluxos no bot, defina `DATABASE_URL` apontando para o mesmo Postgres do app Next.
+1. `useMultiFileAuthState` so e usado sem banco (dev). Em producao o auth state e o do Postgres.
+2. Para usar o CRUD visual de fluxos no bot, defina `DATABASE_URL` apontando para o mesmo Postgres do app Next.
 
 ## Pedidos e pagamento pelo WhatsApp
 
@@ -93,7 +107,6 @@ Isso devolve a string do QR e um `dataUrl` pronto para renderizar no frontend.
 
 - Root Directory: `services/whatsapp-bot`
 - Start Command: `npm run start`
-- Mount Volume: `/app/data`
 - Variaveis:
   - `BOT_API_KEY`
   - `DATABASE_URL`
@@ -121,7 +134,5 @@ De acordo com a documentacao do Railway:
 
 ## Proximos passos recomendados
 
-- trocar o store JSON por Postgres;
-- trocar `useMultiFileAuthState` por auth state proprio em banco;
 - expandir o CRUD visual para uma DSL de fluxos com condicoes e passos;
 - adicionar observabilidade e retries de webhook.

@@ -286,7 +286,6 @@ export function ManhiaBotDashboard({
 
     const interval = window.setInterval(() => void refreshInstances(true), 10000);
     return () => window.clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [botConfigured]);
 
   useEffect(() => {
