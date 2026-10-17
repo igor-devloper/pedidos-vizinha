@@ -25,7 +25,8 @@ const cento = product({ id: "cento", nome: "Cento Tradicional", preco: "90", emP
 const meio = product({ id: "meio", nome: "Meio cento", preco: "45", totalUnidades: 50, minQuantity: 50, maxTiposSalgado: 2 });
 const integral = product({ id: "integral", nome: "Torta", preco: "60", permitePagamentoParcial: false, totalUnidades: 1, minQuantity: null, allowsMultiple: false, precisaSelecaoDeTipos: false });
 
-function harness(overrides: { products?: AgentProduct[]; draft?: Partial<DraftState>; customerText?: string } = {}) {
+function harness(overrides: { products?: AgentProduct[]; draft?: Partial<DraftState>; customerText?: string; now?: Date; closedByOwner?: boolean } = {}) {
+  const clock = overrides.now ?? NOW;
   const sent: string[] = [];
   const owner: string[] = [];
   const handoffs: string[] = [];
@@ -40,7 +41,7 @@ function harness(overrides: { products?: AgentProduct[]; draft?: Partial<DraftSt
 
   const api: SiteApi = {
     async storeInfo() {
-      const base = buildStoreInfo({ now: NOW });
+      const base = buildStoreInfo({ now: clock, storeOpenManually: !overrides.closedByOwner });
       return {
         ...base,
         allowMultipleOrdersPerSlot: false,
@@ -49,7 +50,7 @@ function harness(overrides: { products?: AgentProduct[]; draft?: Partial<DraftSt
       };
     },
     async checkSchedule(iso) {
-      const result = checkSchedule(new Date(iso), { now: NOW });
+      const result = checkSchedule(new Date(iso), { now: clock, storeOpenManually: !overrides.closedByOwner });
       return result.ok ? { ok: true } : { ok: false, reason: result.reason, suggestions: result.suggestions };
     },
     async requestOrder(_id, preview) {
@@ -70,7 +71,7 @@ function harness(overrides: { products?: AgentProduct[]; draft?: Partial<DraftSt
     async notifyOwner(text) { owner.push(text); },
     async handoff(reason) { handoffs.push(reason); },
     lastCustomerText: () => customerText,
-    now: () => NOW,
+    now: () => clock,
     business: { name: "Vizinha Salgateria", cardapioUrl: "https://www.vizinhasalgateria.site/cardapio", pickupAddress: "Rua A, 1", pickupReference: "Perto do mercadinho" },
   };
 
@@ -246,4 +247,45 @@ test("erros inesperados viram resposta estruturada, não exceção", async () =>
   assert.equal(result.ok, false);
   assert.match(String(result.detalhe), /site fora do ar/);
   assert.equal((await h.run("ferramenta_que_nao_existe")).ok, false);
+});
+
+// Cenário real: é sábado (17/10), a loja está fechada pelo painel para hoje e a cliente pede "sábado" / "dia 24".
+const SABADO_FECHADO_HOJE = { now: new Date("2026-10-17T11:00:00-03:00"), closedByOwner: true };
+
+test("sábado dito num sábado em que a loja não recebe hoje vale para o PRÓXIMO sábado (24/10)", async () => {
+  const h = harness(SABADO_FECHADO_HOJE);
+  const result = await h.run("verificar_data_hora", { dia_da_semana: "sábado", periodo: "tarde" });
+  assert.equal(result.ok, true);
+  assert.equal(result.data, "sábado, 24/10/2026");
+  assert.match(String(result.observacao), /próximo dia/);
+  assert.equal(result.janelaDisponivel, "das 13h às 17h");
+
+  const exact = await h.run("verificar_data_hora", { dia_da_semana: "sábado", hora: "15h" });
+  assert.equal(exact.ok, true);
+  assert.equal(new Date(h.draft.scheduledAt!).toISOString(), "2026-10-24T18:00:00.000Z");
+});
+
+test("'dia 24' (sábado) está disponível: a ferramenta confirma em vez de o bot achar que está fechado", async () => {
+  const h = harness(SABADO_FECHADO_HOJE);
+  const result = await h.run("verificar_data_hora", { data: "2026-10-24", hora: "10:00" });
+  assert.equal(result.ok, true);
+  assert.equal(new Date(h.draft.scheduledAt!).toISOString(), "2026-10-24T13:00:00.000Z");
+});
+
+test("hoje, com a loja fechada pelo painel, é recusado e as sugestões começam amanhã", async () => {
+  const h = harness(SABADO_FECHADO_HOJE);
+  const today = await h.run("verificar_data_hora", { dia_relativo: "hoje", hora: "15h" });
+  assert.equal(today.ok, false);
+  assert.match(String(today.erro), /Hoje não estamos recebendo/);
+  assert.doesNotMatch((today.sugestoes as string[]).join(" "), /\(17\/10\)/);
+});
+
+test("ver_horarios: lista mais de 3 dias, não inclui hoje fechado e avisa que a lista é parcial", async () => {
+  const h = harness(SABADO_FECHADO_HOJE);
+  const result = await h.run("ver_horarios");
+  const days = result.proximosDiasDisponiveis as string[];
+  assert.ok(days.length >= 5);
+  assert.doesNotMatch(days.join(" "), /\(17\/10\)/);
+  assert.match(days[0], /Domingo \(18\/10\)/);
+  assert.match(String(result.observacao), /parcial.*verificar_data_hora/s);
 });

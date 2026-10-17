@@ -155,7 +155,12 @@ export function buildStoreInfo({
   const status = getBusinessHoursStatus(now, schedule);
   const weekday = getBusinessWeekday(now);
   const today = getScheduleForWeekday(schedule, weekday);
-  const earliest = findEarliestSlot(now, minimumLeadHours, schedule);
+  // Loja fechada pelo painel não recebe encomenda para HOJE: as sugestões começam amanhã.
+  const parts = getBusinessTimeParts(now);
+  const reference = storeOpenManually
+    ? now
+    : new Date(localDate(parts.year, parts.month, parts.day + 1, 0).getTime() - minimumLeadHours * 3_600_000);
+  const earliest = findEarliestSlot(reference, minimumLeadHours, schedule);
 
   return {
     now: now.toISOString(),
@@ -167,7 +172,7 @@ export function buildStoreInfo({
     minimumLeadHours,
     slotMinutes: BUSINESS_RULES.slotMinutes,
     earliestOrderTime: earliest ? earliest.toISOString() : null,
-    nextOpenDays: getNextOpenDays(now, minimumLeadHours, schedule),
+    nextOpenDays: getNextOpenDays(reference, minimumLeadHours, schedule, 6),
     acceptsOrdersForFutureDates: true,
   };
 }

@@ -12,6 +12,7 @@ import {
 import {
   addDays,
   describeLocalDate,
+  localParts,
   parseTime,
   PERIOD_WINDOWS,
   resolveDate,
@@ -351,6 +352,8 @@ async function viewHours(deps: ToolDeps): Promise<ToolResult> {
     horariosDaSemana: info.weeklyHours,
     antecedenciaMinimaHoras: info.minimumLeadHours,
     proximosDiasDisponiveis: info.nextOpenDays,
+    observacao:
+      "A lista de próximos dias é só uma SUGESTÃO e é parcial: qualquer dia de funcionamento mais adiante também está disponível. Para saber se uma data específica está disponível, use verificar_data_hora; nunca diga que uma data está indisponível sem consultar.",
     aceitaEncomendaParaOutroDia: info.acceptsOrdersForFutureDates,
     enderecoDeRetirada: [deps.business.pickupAddress, deps.business.pickupReference].filter(Boolean).join(" — "),
   };
@@ -428,15 +431,40 @@ async function checkDateTime(args: Record<string, unknown>, deps: ToolDeps): Pro
   if (!resolved.ok) return { ok: false, erro: resolved.erro };
 
   const info = await deps.api.storeInfo();
-  const weekday = weekdayOf(resolved.date);
+  let date = resolved.date;
+  let nota: string | undefined;
+
+  // Hoje não dá mais para encomendar (loja fechada pelo painel, ou já passou do horário de fechar)?
+  const today = localParts(now);
+  const isToday = date.year === today.year && date.month === today.month && date.day === today.day;
+  if (isToday) {
+    const todayEntry = info.weekly.find((entry) => entry.weekday === weekdayOf(date));
+    const closedForToday =
+      info.closedByOwner || !todayEntry?.open || (todayEntry.closeHour !== null && today.hour >= todayEntry.closeHour);
+    if (closedForToday) {
+      if (text(args.dia_da_semana)) {
+        // "sábado" dito num sábado em que hoje não vale = o próximo sábado
+        date = addDays(date, 7);
+        nota = `Hoje não dá para encomendar; considerei o próximo dia (${describeLocalDate(date)}).`;
+      } else {
+        return {
+          ok: false,
+          erro: info.closedByOwner ? "Hoje não estamos recebendo encomendas." : "Hoje a loja já fechou.",
+          sugestoes: info.nextOpenDays,
+        };
+      }
+    }
+  }
+
+  const weekday = weekdayOf(date);
   const day = info.weekly.find((entry) => entry.weekday === weekday);
-  const label = describeLocalDate(resolved.date);
+  const label = describeLocalDate(date);
 
   if (!day?.open || day.openHour === null || day.closeHour === null) {
     return {
       ok: false,
       erro: `Não atendemos nesse dia (${label}).`,
-      sugestoes: openDaysAfter(resolved.date, info.weekly),
+      sugestoes: openDaysAfter(date, info.weekly),
     };
   }
 
@@ -452,6 +480,7 @@ async function checkDateTime(args: Record<string, unknown>, deps: ToolDeps): Pro
       ok: true,
       precisaDoHorario: true,
       data: label,
+      ...(nota ? { observacao: nota } : {}),
       janelaDisponivel: `das ${from}h às ${to}h`,
       instrucao: `Pergunte o horário exato dentro da janela (intervalos de ${info.slotMinutes} minutos). Antecedência mínima: ${info.minimumLeadHours}h.`,
     };
@@ -460,7 +489,7 @@ async function checkDateTime(args: Record<string, unknown>, deps: ToolDeps): Pro
   const time = parseTime(text(args.hora));
   if (!time) return { ok: false, erro: `Não entendi o horário "${text(args.hora)}". Peça no formato 15h ou 15:30.` };
 
-  const instant = toInstant(resolved.date, time);
+  const instant = toInstant(date, time);
   const productIds = parseLines(deps.getDraft()).map((line) => line.productId);
   const check = await deps.api.checkSchedule(instant.toISOString(), productIds);
   if (!check.ok) {
