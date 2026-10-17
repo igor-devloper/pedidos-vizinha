@@ -4,12 +4,14 @@ import { prisma } from "@/lib/db";
 import { createCartMercadoPagoPixPayment, MercadoPagoApiError, getMercadoPagoErrorMessage } from "@/lib/mercado-pago";
 import { createValidatedOrder, previewValidatedOrder, type NormalizedOrderInput } from "@/lib/order-creation-service";
 import { recordOrderEvent } from "@/lib/order-audit";
-import { getInternalOrderKeys, normalizeApiKey } from "@/services/whatsapp-bot/src/internal-order-client";
+import { hasValidInternalAuthorization } from "@/lib/internal-auth";
 
-function hasValidInternalAuthorization(request: Request) {
-  const supplied = normalizeApiKey(request.headers.get("authorization") || "");
-  const accepted = getInternalOrderKeys(process.env);
-  return supplied.length > 0 && accepted.includes(supplied);
+// Cliente que não informou e-mail: o Mercado Pago exige um endereço válido para o pagador,
+// então usamos um endereço interno derivado do telefone (o recibo vai pelo WhatsApp).
+function resolveCustomerEmail(email: string | null, phone: string) {
+  const trimmed = (email || "").trim();
+  if (trimmed) return trimmed;
+  return `${phone.replace(/\D/g, "")}@whatsapp.vizinhasalgateria.site`;
 }
 
 export async function POST(request: Request) {
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
     if (Number.isNaN(scheduledAt.getTime())) throw new Error("Data e horário inválidos.");
     const input: NormalizedOrderInput = {
       customerName: String(draft.customerName || ""), customerPhone: draft.phone,
-      customerEmail: String(draft.customerEmail || ""), scheduledAt,
+      customerEmail: resolveCustomerEmail(draft.customerEmail, draft.phone), scheduledAt,
       fulfillmentType: ["DELIVERY", "ENTREGA"].includes(String(draft.fulfillmentType).toUpperCase()) ? "DELIVERY" : "PICKUP",
       deliveryAddress: draft.deliveryStreet || undefined, deliveryNumber: draft.deliveryNumber || undefined,
       deliveryNeighborhood: draft.deliveryNeighborhood || undefined, deliveryReference: draft.deliveryReference || undefined,
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
         ...quote.normalizedItems.map(({ product, quantities, subtotal }) => `${quantities.usesMinimumQuantity ? quantities.requestedUnits + " unidades" : quantities.quantity + " ×"} de ${product.nome}: ${money(subtotal)}${quantities.selectedItems.length ? "\n" + quantities.selectedItems.map((item) => `  ${item.quantidade} ${item.tipo}`).join("\n") : ""}`),
         `${input.fulfillmentType === "DELIVERY" ? "Entrega" : "Retirada"}: ${scheduledAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}`,
         ...(input.fulfillmentType === "DELIVERY" ? [`Endereço: ${draft.deliveryStreet}, ${draft.deliveryNumber}, ${draft.deliveryNeighborhood}. Referência: ${draft.deliveryReference || "Sem referência"}`, `Entrega: ${quote.delivery.agreed ? money(quote.delivery.fee) : "taxa a combinar"}`] : []),
-        `Contato: ${quote.phone} • ${quote.email}`,
+        `Contato: ${quote.phone}${draft.customerEmail ? " • " + quote.email : ""}`,
         `Total dos produtos e entrega: ${money(quote.total)}`,
         `${quote.payment.methodLabel} • ${input.paymentPercentage}% agora`,
         `Taxa do pagamento: ${money(quote.payment.feeAmount)}`,
