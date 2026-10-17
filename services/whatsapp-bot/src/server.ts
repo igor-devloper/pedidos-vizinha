@@ -15,11 +15,27 @@ import { qrStore } from "./qr-store.js";
 import { findDraftsForPanel } from "./whatsapp-draft-repository.js";
 import { startWhatsappFollowupWorker } from "./whatsapp-followup.js";
 import { ensureWaSchema } from "./wa-schema.js";
+import {
+  getConversationLog,
+  listConversations,
+  pauseConversation,
+  pruneOldRecords,
+  resumeConversation,
+} from "./conversation-repository.js";
 
 const createInstanceSchema = z.object({
   name: z.string().min(2),
   phoneNumber: z.string().optional(),
   webhookUrl: z.string().url().optional(),
+});
+
+const conversationRefSchema = z.object({
+  instanceId: z.string().min(1),
+  jid: z.string().min(3),
+});
+
+const pauseSchema = conversationRefSchema.extend({
+  hours: z.number().min(0.1).max(24 * 14).optional(),
 });
 
 const sendTextSchema = z.object({
@@ -101,6 +117,31 @@ async function bootstrap() {
 
   app.get("/whatsapp-attendances", async (_req, res) => {
     res.json({ ok: true, drafts: await findDraftsForPanel() });
+  });
+
+  // Conversas do WhatsApp: lista, histórico (com chamadas de ferramenta) e pausa/retomada do bot.
+  app.get("/conversations", async (_req, res) => {
+    res.json({ ok: true, conversations: await listConversations() });
+  });
+
+  app.get("/conversations/log", async (req, res) => {
+    const { instanceId, jid } = conversationRefSchema.parse({
+      instanceId: req.query.instanceId,
+      jid: req.query.jid,
+    });
+    res.json({ ok: true, messages: await getConversationLog(instanceId, jid) });
+  });
+
+  app.post("/conversations/pause", async (req, res) => {
+    const { instanceId, jid, hours } = pauseSchema.parse(req.body);
+    await pauseConversation(instanceId, jid, hours ?? config.handoffPauseHours, "Pausado pelo painel", "panel");
+    res.json({ ok: true });
+  });
+
+  app.post("/conversations/resume", async (req, res) => {
+    const { instanceId, jid } = conversationRefSchema.parse(req.body);
+    await resumeConversation(instanceId, jid);
+    res.json({ ok: true });
   });
 
   app.post("/instances", async (req, res) => {
@@ -217,6 +258,7 @@ async function bootstrap() {
     }
   );
 
+  void pruneOldRecords().catch((error) => logger.warn({ error }, "Failed to prune old WhatsApp records"));
   await instanceManager.bootConfiguredInstances();
   startWhatsappFollowupWorker();
 

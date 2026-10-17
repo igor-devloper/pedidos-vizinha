@@ -103,12 +103,15 @@ export async function enrichInboundMedia(job: InboundMessageJob) {
       return job;
     }
 
+    // Texto limpo para o agente: áudio = transcrição; imagem = texto lido + descrição.
+    const label = job.mediaKind === "audio" ? "(áudio)" : "(imagem)";
     const extractedParts = [
       job.originalText?.trim() || "",
-      parsed.extractedText,
-      parsed.summary,
-      parsed.containsPaymentProof ? "comprovante pix pagamento pago" : "",
+      parsed.extractedText || (job.mediaKind === "audio" ? parsed.summary : ""),
+      job.mediaKind === "audio" ? "" : parsed.summary,
+      parsed.containsPaymentProof ? "(parece comprovante de pagamento)" : "",
     ].filter(Boolean);
+    if (extractedParts.length) extractedParts.unshift(label);
 
     const nextText = extractedParts.join("\n").trim();
 

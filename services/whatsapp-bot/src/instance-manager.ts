@@ -14,6 +14,7 @@ import QRCode from "qrcode";
 
 import { type OpenedAuthState, openAuthState } from "./auth-state.js";
 import { config } from "./config.js";
+import { conversationKey, logMessage, pauseConversation } from "./conversation-repository.js";
 import { db } from "./db.js";
 import { InstanceLock, createLocalLockStore, createPgLockStore } from "./instance-lock.js";
 import { instanceStore } from "./instance-store.js";
@@ -76,6 +77,8 @@ class InstanceManager {
   private readonly openInstances = new Set<string>();
   private readonly lockStore = db ? createPgLockStore() : createLocalLockStore();
   private shuttingDown = false;
+  /** Mensagens enviadas pelo próprio bot: o eco "fromMe" delas não é a Vizinha respondendo. */
+  private readonly botSentIds = new Map<string, number>();
 
   /**
    * Liga a instância. Devolve o socket, ou null se outro processo segura a trava
@@ -295,11 +298,33 @@ class InstanceManager {
         "messages.upsert received"
       );
 
-      if (event.type !== "notify") {
+      if (event.type !== "notify" && event.type !== "append") {
         return;
       }
 
       for (const message of event.messages) {
+        // Mensagem enviada por nós (celular da Vizinha ou o próprio bot): pode ser uma assunção humana.
+        if (message.key.fromMe) {
+          if (message.key.remoteJid && this.isDirectChat(message.key.remoteJid)) {
+            void this.handleOutgoingMessage(instanceId, message);
+          }
+          continue;
+        }
+
+        // "append" são mensagens antigas sincronizadas; só "notify" é conversa nova.
+        if (event.type !== "notify") {
+          continue;
+        }
+
+        const ageSeconds = Date.now() / 1000 - Number(message.messageTimestamp || 0);
+        if (message.messageTimestamp && ageSeconds > config.maxInboundAgeSeconds) {
+          logger.info(
+            { instanceId, remoteJid: message.key.remoteJid, messageId: message.key.id, ageSeconds: Math.round(ageSeconds) },
+            "Skipping old message received after reconnecting"
+          );
+          continue;
+        }
+
         logger.info(
           {
             instanceId,
@@ -516,9 +541,14 @@ class InstanceManager {
       throw new Error("WhatsApp send did not return a message id.");
     }
 
+    this.rememberBotMessage(messageId);
     await updateLeadByRemoteJid(instanceId, jid, {
       lastOutboundText: formatWhatsAppText(text),
     });
+    // Histórico da conversa (alimenta o agente e o painel). Mensagens para a Vizinha não entram.
+    if (conversationKey(number).replace(/\D/g, "") !== config.ownerApprovalNumber.replace(/\D/g, "")) {
+      await logMessage(instanceId, conversationKey(number), "out", formatWhatsAppText(text));
+    }
 
     return {
       jid,
@@ -548,12 +578,65 @@ class InstanceManager {
       throw new Error("WhatsApp image send did not return a message id.");
     }
 
+    this.rememberBotMessage(messageId);
+
     return {
       jid,
       verifiedJid,
       attemptedJids,
       messageId,
     } satisfies SendTextResult;
+  }
+
+  private rememberBotMessage(messageId: string) {
+    const now = Date.now();
+    this.botSentIds.set(messageId, now + 10 * 60_000);
+    for (const [id, expiresAt] of this.botSentIds) {
+      if (expiresAt < now) this.botSentIds.delete(id);
+    }
+  }
+
+  private isDirectChat(remoteJid: string) {
+    return remoteJid.endsWith("@s.whatsapp.net") || remoteJid.endsWith("@lid");
+  }
+
+  /**
+   * Mensagem "fromMe" que o bot não enviou = a Vizinha respondeu pelo celular.
+   * O bot se cala naquela conversa pelo tempo configurado e guarda a fala dela no histórico.
+   */
+  private async handleOutgoingMessage(instanceId: string, message: { key: { id?: string | null; remoteJid?: string | null }; message?: unknown; messageTimestamp?: unknown }) {
+    // O eco da nossa própria mensagem pode chegar antes de o envio terminar: espera um instante.
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+
+    const messageId = message.key.id || "";
+    const remoteJid = message.key.remoteJid;
+    if (!remoteJid || (messageId && this.botSentIds.has(messageId))) {
+      return;
+    }
+
+    const ageSeconds = Date.now() / 1000 - Number(message.messageTimestamp || 0);
+    if (message.messageTimestamp && ageSeconds > config.maxInboundAgeSeconds) {
+      return;
+    }
+
+    if (remoteJid.replace(/\D/g, "") === config.ownerApprovalNumber.replace(/\D/g, "")) {
+      return;
+    }
+
+    try {
+      const text = this.extractText(message.message) || "[mensagem sem texto]";
+      await logMessage(instanceId, remoteJid, "out", `[Vizinha] ${text}`, { messageId, by: "owner" });
+      await pauseConversation(
+        instanceId,
+        remoteJid,
+        config.handoffPauseHours,
+        "A Vizinha respondeu pelo celular",
+        "owner"
+      );
+      logger.info({ instanceId, remoteJid, hours: config.handoffPauseHours }, "Owner replied manually; bot paused for this conversation");
+    } catch (error) {
+      logger.error({ error, instanceId, remoteJid }, "Failed to pause conversation after owner reply");
+    }
   }
 
   getQr(instanceId: string) {

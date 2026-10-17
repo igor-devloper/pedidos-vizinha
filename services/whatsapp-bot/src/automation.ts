@@ -4,7 +4,9 @@ import {
   updateBotOrder,
   type BotOrder,
 } from "./bot-order-repository.js";
+import { handleAgentTurn } from "./agent/turn.js";
 import { config } from "./config.js";
+import { getActivePause } from "./conversation-repository.js";
 import { requestWhatsappOrder } from "./internal-order-client.js";
 import { findMatchingFlow } from "./flow-repository.js";
 import { runSalesAgent } from "./gemini-sales-agent.js";
@@ -13,7 +15,7 @@ import { getOrCreateLead, updateLead, type BotLead } from "./lead-repository.js"
 import { logger } from "./logger.js";
 import { formatProductPriceForCustomer, listActiveProducts } from "./product-repository.js";
 import type { InboundMessageJob } from "./types.js";
-import { getOrCreateDraft, markSiteLinkSent, patchDraft, type WhatsappDraft } from "./whatsapp-draft-repository.js";
+import { expireDraftIfStale, getOrCreateDraft, markSiteLinkSent, patchDraft, type WhatsappDraft } from "./whatsapp-draft-repository.js";
 import { getMissingDraftField, getNextDraftQuestion as getCanonicalNextDraftQuestion, normalizeFulfillmentType, parseBrazilianScheduledAt } from "./whatsapp-draft-state.js";
 import {
   buildAwaitingAnalysisMessage,
@@ -949,13 +951,40 @@ export async function processInboundMessage(job: InboundMessageJob) {
     return;
   }
 
+  // A Vizinha assumiu a conversa (respondeu pelo celular ou o bot chamou um humano): o bot fica quieto.
+  const pause = await getActivePause(job.instanceId, job.remoteJid);
+  if (pause) {
+    logger.info(
+      { instanceId: job.instanceId, remoteJid: job.remoteJid, pausedUntil: pause.pausedUntil, pausedBy: pause.pausedBy },
+      "Conversation paused for human attendance; bot will not answer"
+    );
+    return;
+  }
+
   const lead = await getOrCreateLead({
     instanceId: job.instanceId,
     remoteJid: job.remoteJid,
     pushName: job.pushName,
   });
-  const draft = await getOrCreateDraft(job.instanceId, job.remoteJid, job.phoneNumber);
-  if (draft) await patchDraft(draft.id, { lastCustomerMessageAt: new Date() });
+  const draftBefore = await getOrCreateDraft(job.instanceId, job.remoteJid, job.phoneNumber);
+  const draft = draftBefore
+    ? (await patchDraft(draftBefore.id, { lastCustomerMessageAt: job.receivedAt })) ?? draftBefore
+    : null;
+
+  // Agente com ferramentas: o modelo conversa, o código valida cada alteração do pedido.
+  if (config.agentMode === "tools" && config.geminiApiKey && draftBefore && draft) {
+    if (job.mediaKind && !hasMeaningfulText) {
+      await sendAndTrack(job, lead, buildMediaRetryMessage(job.mediaKind));
+      return;
+    }
+
+    const { draft: fresh, expired } = await expireDraftIfStale(draftBefore, config.draftTtlHours);
+    const turnDraft = expired
+      ? (await patchDraft(fresh.id, { lastCustomerMessageAt: job.receivedAt })) ?? fresh
+      : draft;
+    await handleAgentTurn(job, lead, turnDraft, { draftExpired: expired });
+    return;
+  }
 
   if (!lead) {
     if (job.mediaKind && !hasMeaningfulText) {

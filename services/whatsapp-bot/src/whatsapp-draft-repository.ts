@@ -127,7 +127,8 @@ export async function resetDraft(draft: WhatsappDraft) {
 
 /** Rascunho parado há mais que o prazo vira vazio; pedido já criado também recomeça do zero. */
 export async function expireDraftIfStale(draft: WhatsappDraft, ttlHours: number, now = new Date()) {
-  const idleMs = now.getTime() - new Date(draft.updatedAt).getTime();
+  // Última atividade do cliente (updatedAt é renovado a cada mensagem pelo getOrCreateDraft).
+  const idleMs = now.getTime() - new Date(draft.lastCustomerMessageAt ?? draft.updatedAt).getTime();
   const stale = idleMs > ttlHours * 3_600_000;
   if (draft.orderId && stale) {
     return { draft: (await resetDraft(draft)) ?? draft, expired: true };
