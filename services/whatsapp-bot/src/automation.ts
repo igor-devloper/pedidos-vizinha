@@ -4,6 +4,7 @@ import {
   updateBotOrder,
   type BotOrder,
 } from "./bot-order-repository.js";
+import { extractPayment } from "./agent/payment-parse.js";
 import { handleAgentTurn } from "./agent/turn.js";
 import { config } from "./config.js";
 import { getStoreHours } from "./store-hours.js";
@@ -740,7 +741,11 @@ async function maybeHandleSalesAgent(job: InboundMessageJob, lead: BotLead, draf
     else delete extracted.scheduledAt;
     if (!extracted.customerName && agentResult.nome) extracted.customerName = agentResult.nome;
     if (typeof extracted.phone === "string") extracted.phone = extracted.phone.replace(/\D/g, "");
-    const allowed = ["phone", "customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
+    // O cliente respondeu o pagamento ("50% no crédito") mas o modelo não extraiu: o código lê da mensagem.
+    const typedPayment = extractPayment(job.text);
+    if (!extracted.paymentPercentage && !draft.paymentPercentage && typedPayment.percentual) extracted.paymentPercentage = typedPayment.percentual;
+    if (!extracted.paymentMethod && !draft.paymentMethod && typedPayment.forma) extracted.paymentMethod = typedPayment.forma.toUpperCase();
+    const allowed =["phone", "customerName", "customerEmail", "fulfillmentType", "scheduledAt", "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference", "paymentMethod", "paymentPercentage", "items"];
     const patch = Object.fromEntries(allowed.filter((key) => extracted[key] !== undefined && extracted[key] !== null && extracted[key] !== ""
       && JSON.stringify(extracted[key]) !== JSON.stringify(draft[key as keyof WhatsappDraft])).map((key) => [key, extracted[key]]));
     patch.lastCustomerMessageAt = new Date();
@@ -949,7 +954,12 @@ export async function processInboundMessage(job: InboundMessageJob) {
     : null;
 
   // Agente com ferramentas: o modelo conversa, o código valida cada alteração do pedido.
-  if (config.agentMode === "tools" && config.geminiApiKey && draftBefore && draft) {
+  const useAgent = config.agentMode === "tools" && Boolean(config.geminiApiKey) && Boolean(draftBefore) && Boolean(draft);
+  logger.info(
+    { instanceId: job.instanceId, path: useAgent ? "agent" : "legacy", agentMode: config.agentMode, hasDraft: Boolean(draft) },
+    "Inbound message routed"
+  );
+  if (useAgent && draftBefore && draft) {
     if (job.mediaKind && !hasMeaningfulText) {
       await sendAndTrack(job, lead, buildMediaRetryMessage(job.mediaKind));
       return;

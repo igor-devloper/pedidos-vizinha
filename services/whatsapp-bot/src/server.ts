@@ -266,6 +266,10 @@ async function bootstrap() {
     logger.info(
       {
         port: config.port,
+        agentMode: config.agentMode,
+        hasGeminiKey: Boolean(config.geminiApiKey),
+        commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 8),
+        branch: process.env.RAILWAY_GIT_BRANCH,
         publicUrl:
           config.railwayPublicDomain || config.baseUrl,
       },
