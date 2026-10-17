@@ -6,6 +6,7 @@ import Image from "next/image";
 import {
   Bot,
   LoaderCircle,
+  LogOut,
   PauseCircle,
   PlayCircle,
   Plus,
@@ -120,6 +121,30 @@ function isFlowItem(data: unknown): data is FlowItem {
   );
 }
 
+const STATUS_INFO: Record<string, { label: string; hint: string }> = {
+  connected: { label: "Conectado", hint: "O WhatsApp está funcionando normalmente." },
+  connecting: { label: "Conectando", hint: "Abrindo a conexão com o WhatsApp..." },
+  reconnecting: {
+    label: "Reconectando",
+    hint: "A conexão caiu e o sistema está tentando voltar sozinho. A sessão foi mantida.",
+  },
+  standby: {
+    label: "Em espera",
+    hint: "Outra cópia do bot está conectada (normal durante um deploy). Esta assume sozinha se a outra parar.",
+  },
+  qr: { label: "Precisa ler o QR", hint: "Clique em Ver QR e leia com o WhatsApp do celular." },
+  disconnected: {
+    label: "Desconectado",
+    hint: "O WhatsApp encerrou a sessão. Clique em Ver QR para conectar de novo.",
+  },
+  idle: { label: "Parado", hint: "O bot está parado. Clique em Iniciar." },
+  error: { label: "Erro", hint: "Algo deu errado. Veja os logs do serviço." },
+};
+
+function getStatusInfo(status: string) {
+  return STATUS_INFO[status] ?? { label: status, hint: "" };
+}
+
 function getStatusClass(status: string) {
   switch (status) {
     case "connected":
@@ -127,6 +152,8 @@ function getStatusClass(status: string) {
     case "qr":
       return "border border-amber-200 bg-amber-50 text-amber-700";
     case "connecting":
+    case "reconnecting":
+    case "standby":
       return "border border-sky-200 bg-sky-50 text-sky-700";
     case "disconnected":
       return "border border-slate-200 bg-slate-100 text-slate-600";
@@ -169,7 +196,7 @@ export function ManhiaBotDashboard({
     [instances]
   );
 
-  const refreshInstances = async () => {
+  const refreshInstances = async (quiet = false) => {
     try {
       setLoadingInstances(true);
       const response = await fetch("/api/manhia/bot/instances", {
@@ -192,7 +219,9 @@ export function ManhiaBotDashboard({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Falha ao atualizar as instâncias.";
-      toast.error(message);
+      if (!quiet) {
+        toast.error(message);
+      }
     } finally {
       setLoadingInstances(false);
     }
@@ -249,6 +278,17 @@ export function ManhiaBotDashboard({
     }
   };
 
+  // Mantém o status da conexão sempre atualizado, mesmo sem o QR aberto.
+  useEffect(() => {
+    if (!botConfigured) {
+      return;
+    }
+
+    const interval = window.setInterval(() => void refreshInstances(true), 10000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botConfigured]);
+
   useEffect(() => {
     if (!qrInstanceId) {
       return;
@@ -302,8 +342,17 @@ export function ManhiaBotDashboard({
 
   const handleInstanceAction = async (
     instanceId: string,
-    action: "start" | "stop" | "delete"
+    action: "start" | "stop" | "delete" | "logout"
   ) => {
+    if (
+      action === "logout" &&
+      !window.confirm(
+        "Desconectar o WhatsApp? O aparelho será desvinculado e o bot deixa de responder até você ler um QR novo. Use só se quiser trocar de número ou resolver um problema de sessão."
+      )
+    ) {
+      return;
+    }
+
     try {
       setActingInstanceId(instanceId);
       const response = await fetch(
@@ -341,7 +390,9 @@ export function ManhiaBotDashboard({
           ? "Instancia iniciada."
           : action === "stop"
             ? "Instancia parada."
-            : "Instancia excluida."
+            : action === "logout"
+              ? "WhatsApp desconectado. Leia um QR novo para conectar de novo."
+              : "Instancia excluida."
       );
 
       void refreshInstances();
@@ -644,9 +695,14 @@ export function ManhiaBotDashboard({
                               {instance.name}
                             </h2>
                             <Badge className={getStatusClass(instance.status)}>
-                              {instance.status}
+                              {getStatusInfo(instance.status).label}
                             </Badge>
                           </div>
+                          {getStatusInfo(instance.status).hint && (
+                            <p className="text-sm text-slate-600">
+                              {getStatusInfo(instance.status).hint}
+                            </p>
+                          )}
                           <p className="text-sm text-slate-500">
                             ID: <span className="font-mono text-xs">{instance.id}</span>
                           </p>
@@ -702,6 +758,16 @@ export function ManhiaBotDashboard({
                           >
                             <QrCode className="mr-2 h-4 w-4" />
                             Ver QR
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={actingInstanceId === instance.id || !botConfigured}
+                            onClick={() => void handleInstanceAction(instance.id, "logout")}
+                            className="rounded-full border-amber-300 text-amber-700 hover:bg-amber-50"
+                          >
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Desconectar WhatsApp
                           </Button>
                           <Button
                             type="button"
