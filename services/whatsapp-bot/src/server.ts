@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireApiKey } from "./auth.js";
 import { config } from "./config.js";
+import { db } from "./db.js";
 import { ensureDir, ensureParent } from "./fs-utils.js";
 import { instanceManager } from "./instance-manager.js";
 import { instanceStore } from "./instance-store.js";
@@ -13,6 +14,7 @@ import { updateLeadByRemoteJid } from "./lead-repository.js";
 import { qrStore } from "./qr-store.js";
 import { findDraftsForPanel } from "./whatsapp-draft-repository.js";
 import { startWhatsappFollowupWorker } from "./whatsapp-followup.js";
+import { ensureWaSchema } from "./wa-schema.js";
 
 const createInstanceSchema = z.object({
   name: z.string().min(2),
@@ -60,9 +62,16 @@ async function bootstrap() {
     );
   }
 
-  await ensureDir(config.authDir);
+  if (db) {
+    await ensureWaSchema();
+  } else {
+    logger.warn(
+      "DATABASE_URL not set: WhatsApp session will be stored on local disk and lost on redeploy"
+    );
+    await ensureDir(config.authDir);
+    await ensureParent(config.instanceFile);
+  }
   await ensureDir(config.storeDir);
-  await ensureParent(config.instanceFile);
 
   const app = express();
   app.use(express.json({ limit: "2mb" }));
@@ -74,6 +83,8 @@ async function bootstrap() {
       ok: true,
       service: "whatsapp-bot",
       totalInstances: instances.length,
+      connectedInstances: instances.filter((item) => item.status === "connected").length,
+      sessionStorage: db ? "postgres" : "disk",
       gemini: {
         configured: Boolean(config.geminiApiKey),
         model: config.geminiModel,
@@ -102,6 +113,13 @@ async function bootstrap() {
     await instanceManager.start(req.params.id);
     const instance = await instanceStore.get(req.params.id);
     res.json(instance);
+  });
+
+  // Único caminho que chama logout() no WhatsApp: desvincula o aparelho e apaga a sessão.
+  app.post("/instances/:id/logout", async (req, res) => {
+    const result = await instanceManager.logout(req.params.id);
+    const instance = await instanceStore.get(req.params.id);
+    res.json({ ...result, instance });
   });
 
   app.post("/instances/:id/stop", async (req, res) => {
@@ -202,7 +220,7 @@ async function bootstrap() {
   await instanceManager.bootConfiguredInstances();
   startWhatsappFollowupWorker();
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     logger.info(
       {
         port: config.port,
@@ -212,6 +230,36 @@ async function bootstrap() {
       "WhatsApp bot API listening"
     );
   });
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    logger.info({ signal }, "Shutting down: saving credentials and releasing WhatsApp locks");
+
+    // Rede de segurança: nunca ficar preso no desligamento.
+    setTimeout(() => process.exit(1), 12_000).unref();
+
+    server.close();
+    try {
+      await instanceManager.shutdown();
+    } catch (error) {
+      logger.error({ error }, "Error during graceful shutdown");
+    }
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
-void bootstrap();
+process.on("unhandledRejection", (reason) => {
+  logger.error({ reason }, "Unhandled promise rejection");
+});
+
+bootstrap().catch((error) => {
+  logger.error({ error }, "Bot failed to start");
+  process.exit(1);
+});

@@ -121,3 +121,13 @@ export class InstanceLock {
     await this.store.release(this.instanceId, this.owner).catch(() => undefined);
   }
 }
+
+/** Sem banco (dev local) há um único processo: a trava é sempre concedida. */
+export function createLocalLockStore(): LockStore {
+  return {
+    async tryAcquire() {
+      return true;
+    },
+    async release() {},
+  };
+}

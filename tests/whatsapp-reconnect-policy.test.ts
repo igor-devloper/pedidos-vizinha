@@ -47,3 +47,13 @@ test("queda inesperada reconecta com backoff e conta como falha", () => {
     failure: true,
   });
 });
+
+test("auto-start: explícito vale; registros antigos contam se estavam rodando", async () => {
+  const { shouldAutoStart } = await import("../services/whatsapp-bot/src/reconnect-policy.js");
+  assert.equal(shouldAutoStart({ autoStart: true, status: "idle" }), true);
+  assert.equal(shouldAutoStart({ autoStart: false, status: "connected" }), false);
+  assert.equal(shouldAutoStart({ status: "connected" }), true);
+  assert.equal(shouldAutoStart({ status: "reconnecting" }), true);
+  assert.equal(shouldAutoStart({ status: "idle" }), false);
+  assert.equal(shouldAutoStart({ status: "disconnected" }), false);
+});

@@ -1,30 +1,46 @@
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
+
 import makeWASocket, {
   Browsers,
   type ConnectionState,
-  DisconnectReason,
   downloadMediaMessage,
   fetchLatestBaileysVersion,
-  useMultiFileAuthState,
+  makeCacheableSignalKeyStore,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 
+import { type OpenedAuthState, openAuthState } from "./auth-state.js";
 import { config } from "./config.js";
-import { getInstanceAuthPath } from "./auth-paths.js";
-import { ensureDir, removeDir } from "./fs-utils.js";
+import { db } from "./db.js";
+import { InstanceLock, createLocalLockStore, createPgLockStore } from "./instance-lock.js";
 import { instanceStore } from "./instance-store.js";
 import { updateLeadByRemoteJid } from "./lead-repository.js";
 import { logger } from "./logger.js";
 import { handleInboundMessage } from "./message-pipeline.js";
 import { qrStore } from "./qr-store.js";
+import { decideReconnect, shouldAutoStart } from "./reconnect-policy.js";
+import type { InstanceRecord } from "./types.js";
 import { formatWhatsAppText } from "./whatsapp-format.js";
 
-const loadMultiFileAuthState = useMultiFileAuthState;
+const LOCK_TTL_MS = 30_000;
+const LOCK_RENEW_MS = 10_000;
+const STANDBY_RETRY_MS = 5_000;
+const SHUTDOWN_STEP_TIMEOUT_MS = 5_000;
 
-type RuntimeInstance = {
+const processOwnerId = `${process.env.RAILWAY_DEPLOYMENT_ID || hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
+
+type Runtime = {
   id: string;
-  socket: WASocket;
+  socket: WASocket | null;
+  auth: OpenedAuthState | null;
+  lock: InstanceLock;
+  /** Parada intencional (stop/logout/shutdown): eventos de fechamento não reconectam. */
+  stopping: boolean;
+  failures: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
 };
 
 type MediaPayload = {
@@ -45,13 +61,30 @@ type SendImageInput = {
   imageUrl?: string;
 };
 
-class InstanceManager {
-  private readonly sockets = new Map<string, RuntimeInstance>();
-  private readonly openInstances = new Set<string>();
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
-  async start(instanceId: string) {
-    if (this.sockets.has(instanceId)) {
-      return this.sockets.get(instanceId)!.socket;
+class InstanceManager {
+  private readonly runtimes = new Map<string, Runtime>();
+  private readonly openInstances = new Set<string>();
+  private readonly lockStore = db ? createPgLockStore() : createLocalLockStore();
+  private shuttingDown = false;
+
+  /**
+   * Liga a instância. Devolve o socket, ou null se outro processo segura a trava
+   * (nesse caso a instância fica em "standby" e tenta assumir sozinha).
+   */
+  async start(instanceId: string): Promise<WASocket | null> {
+    const existing = this.runtimes.get(instanceId);
+    if (existing?.socket) {
+      return existing.socket;
     }
 
     const instance = await instanceStore.get(instanceId);
@@ -59,17 +92,97 @@ class InstanceManager {
       throw new Error("Instance not found");
     }
 
-    this.openInstances.delete(instanceId);
-    await instanceStore.update(instanceId, { status: "connecting" });
+    const runtime = existing ?? this.createRuntime(instanceId);
+    runtime.stopping = false;
+    await instanceStore.update(instanceId, { autoStart: true });
+    return this.attempt(runtime);
+  }
 
-    const authPath = getInstanceAuthPath(instanceId);
-    await ensureDir(authPath);
+  private createRuntime(instanceId: string) {
+    const runtime: Runtime = {
+      id: instanceId,
+      socket: null,
+      auth: null,
+      stopping: false,
+      failures: 0,
+      retryTimer: null,
+      lock: new InstanceLock(
+        this.lockStore,
+        instanceId,
+        processOwnerId,
+        { ttlMs: LOCK_TTL_MS, renewEveryMs: LOCK_RENEW_MS },
+        (reason) => void this.onLockLost(instanceId, reason)
+      ),
+    };
+    this.runtimes.set(instanceId, runtime);
+    return runtime;
+  }
 
-    const { state, saveCreds } = await loadMultiFileAuthState(authPath);
+  private scheduleAttempt(runtime: Runtime, delayMs: number) {
+    if (runtime.stopping || this.shuttingDown) {
+      return;
+    }
+
+    if (runtime.retryTimer) {
+      clearTimeout(runtime.retryTimer);
+    }
+
+    runtime.retryTimer = setTimeout(() => {
+      runtime.retryTimer = null;
+      void this.attempt(runtime).catch((error) => {
+        logger.error({ error, instanceId: runtime.id }, "Reconnect attempt failed");
+        this.scheduleAttempt(runtime, STANDBY_RETRY_MS);
+      });
+    }, delayMs);
+  }
+
+  private async attempt(runtime: Runtime): Promise<WASocket | null> {
+    const instanceId = runtime.id;
+    if (runtime.stopping || this.shuttingDown || runtime.socket) {
+      return runtime.socket;
+    }
+
+    let acquired = false;
+    try {
+      acquired = await runtime.lock.tryAcquire();
+    } catch (error) {
+      logger.error({ error, instanceId }, "Could not reach the lock store");
+    }
+
+    if (!acquired) {
+      logger.info({ instanceId, owner: processOwnerId }, "Another process holds the WhatsApp lock; standing by");
+      await instanceStore.update(instanceId, { status: "standby" }).catch(() => undefined);
+      this.scheduleAttempt(runtime, STANDBY_RETRY_MS);
+      return null;
+    }
+
+    try {
+      return await this.connect(runtime);
+    } catch (error) {
+      logger.error({ error, instanceId }, "Failed to open WhatsApp socket");
+      runtime.failures += 1;
+      await instanceStore.update(instanceId, { status: "reconnecting" }).catch(() => undefined);
+      this.scheduleAttempt(runtime, STANDBY_RETRY_MS * runtime.failures);
+      return null;
+    }
+  }
+
+  private async connect(runtime: Runtime): Promise<WASocket> {
+    const instanceId = runtime.id;
+    await instanceStore.update(instanceId, {
+      status: runtime.failures > 0 ? "reconnecting" : "connecting",
+    });
+
+    await runtime.auth?.flush().catch(() => undefined);
+    const auth = await openAuthState(instanceId);
+    runtime.auth = auth;
     const { version } = await fetchLatestBaileysVersion();
 
     const socket = makeWASocket({
-      auth: state,
+      auth: {
+        creds: auth.state.creds,
+        keys: makeCacheableSignalKeyStore(auth.state.keys, logger),
+      },
       version,
       browser: Browsers.ubuntu("Sinapse Bot"),
       markOnlineOnConnect: false,
@@ -78,11 +191,20 @@ class InstanceManager {
       printQRInTerminal: false,
       getMessage: async () => undefined,
     });
+    runtime.socket = socket;
 
-    socket.ev.on("creds.update", saveCreds);
+    socket.ev.on("creds.update", () => {
+      void auth.saveCreds().catch((error) => {
+        logger.error({ error, instanceId }, "Failed to persist WhatsApp credentials");
+      });
+    });
 
     socket.ev.on("connection.update", async (update) => {
       const { connection, lastDisconnect, qr } = update;
+      // Evento de um socket que já foi trocado ou encerrado: ignorar.
+      if (runtime.socket !== socket) {
+        return;
+      }
 
       if (qr) {
         this.openInstances.delete(instanceId);
@@ -98,6 +220,7 @@ class InstanceManager {
       }
 
       if (connection === "open") {
+        runtime.failures = 0;
         this.openInstances.add(instanceId);
         const connectedJid = socket.user?.id || undefined;
         const connectedNumber = connectedJid
@@ -120,28 +243,45 @@ class InstanceManager {
 
       if (connection === "close") {
         this.openInstances.delete(instanceId);
+        runtime.socket = null;
         const disconnectCode = (lastDisconnect?.error as Boom | undefined)?.output
           ?.statusCode;
+        const decision = decideReconnect(disconnectCode, runtime.failures);
+        const reason = String(disconnectCode || "unknown");
 
-        const shouldReconnect =
-          disconnectCode !== DisconnectReason.loggedOut &&
-          disconnectCode !== DisconnectReason.badSession;
-
-        await instanceStore.update(instanceId, {
-          status: shouldReconnect ? "connecting" : "disconnected",
-          lastDisconnectReason: String(disconnectCode || "unknown"),
-        });
-
-        this.sockets.delete(instanceId);
-
-        if (shouldReconnect) {
-          logger.warn({ instanceId, disconnectCode }, "Reconnecting instance");
-          setTimeout(() => {
-            void this.start(instanceId).catch((error) => {
-              logger.error({ error, instanceId }, "Reconnect failed");
-            });
-          }, 2_000);
+        if (runtime.stopping || this.shuttingDown) {
+          return;
         }
+
+        if (decision.action === "logged-out") {
+          // Único caso em que a sessão é apagada: o WhatsApp a invalidou (ou o aparelho foi desvinculado).
+          logger.warn({ instanceId }, "WhatsApp session logged out; clearing credentials and requesting a new QR");
+          await instanceStore.update(instanceId, { status: "disconnected", lastDisconnectReason: reason });
+          await auth.clear();
+          runtime.failures = 0;
+          this.scheduleAttempt(runtime, 1_000);
+          return;
+        }
+
+        if (decision.action === "yield") {
+          logger.warn({ instanceId }, "Session taken over by another connection; releasing lock");
+          await instanceStore.update(instanceId, { status: "standby", lastDisconnectReason: reason });
+          await auth.flush().catch(() => undefined);
+          await runtime.lock.release();
+          this.scheduleAttempt(runtime, decision.delayMs);
+          return;
+        }
+
+        if (decision.failure) {
+          runtime.failures += 1;
+        }
+
+        await instanceStore.update(instanceId, { status: "reconnecting", lastDisconnectReason: reason });
+        logger.warn(
+          { instanceId, disconnectCode, delayMs: decision.delayMs, failures: runtime.failures },
+          "Reconnecting instance"
+        );
+        this.scheduleAttempt(runtime, decision.delayMs);
       }
     });
 
@@ -240,33 +380,132 @@ class InstanceManager {
       }
     });
 
-    this.sockets.set(instanceId, { id: instanceId, socket });
     return socket;
   }
 
-  async stop(instanceId: string) {
-    const runtime = this.sockets.get(instanceId);
-    if (runtime) {
-      const stoppable = runtime.socket as unknown as {
-        end?: (error?: Error) => void;
-      };
-      stoppable.end?.(new Error("Instance stopped manually"));
-      this.sockets.delete(instanceId);
+  /** O heartbeat não conseguiu renovar a trava: fecha o socket já, para nunca haver dois. */
+  private async onLockLost(instanceId: string, reason: string) {
+    const runtime = this.runtimes.get(instanceId);
+    if (!runtime || runtime.stopping) {
+      return;
     }
 
-    this.openInstances.delete(instanceId);
-    await instanceStore.update(instanceId, { status: "idle" });
+    logger.error({ instanceId, reason }, "WhatsApp lock lost; closing socket to avoid duplicate connections");
+    this.closeSocket(runtime);
+    await instanceStore.update(instanceId, { status: "standby" }).catch(() => undefined);
+    this.scheduleAttempt(runtime, STANDBY_RETRY_MS);
+  }
+
+  /** Fecha o socket sem deslogar (end, nunca logout) e sem disparar reconexão. */
+  private closeSocket(runtime: Runtime) {
+    const socket = runtime.socket;
+    runtime.socket = null;
+    this.openInstances.delete(runtime.id);
+    try {
+      socket?.end(undefined);
+    } catch (error) {
+      logger.warn({ error, instanceId: runtime.id }, "Error while closing socket");
+    }
+  }
+
+  private async halt(runtime: Runtime) {
+    runtime.stopping = true;
+    if (runtime.retryTimer) {
+      clearTimeout(runtime.retryTimer);
+      runtime.retryTimer = null;
+    }
+
+    this.closeSocket(runtime);
+    await withTimeout(runtime.auth?.flush().catch(() => undefined) ?? Promise.resolve(), SHUTDOWN_STEP_TIMEOUT_MS);
+    await withTimeout(runtime.lock.release(), SHUTDOWN_STEP_TIMEOUT_MS);
+    this.runtimes.delete(runtime.id);
+  }
+
+  /** Parada manual pelo painel: não sobe sozinha no próximo deploy. */
+  async stop(instanceId: string) {
+    const runtime = this.runtimes.get(instanceId);
+    if (runtime) {
+      await this.halt(runtime);
+    }
+
+    await instanceStore.update(instanceId, { status: "idle", autoStart: false });
     qrStore.remove(instanceId);
+  }
+
+  /**
+   * Desconectar o WhatsApp de verdade: é o ÚNICO lugar que chama logout().
+   * O aparelho é desvinculado e a sessão apagada; será preciso ler um QR novo.
+   */
+  async logout(instanceId: string) {
+    const instance = await instanceStore.get(instanceId);
+    if (!instance) {
+      throw new Error("Instance not found");
+    }
+
+    const runtime = this.runtimes.get(instanceId);
+    let remoteLogout = false;
+
+    if (runtime?.socket && this.openInstances.has(instanceId)) {
+      runtime.stopping = true;
+      try {
+        await withTimeout(runtime.socket.logout(), SHUTDOWN_STEP_TIMEOUT_MS * 2);
+        remoteLogout = true;
+      } catch (error) {
+        logger.warn({ error, instanceId }, "Remote logout failed; clearing local session anyway");
+      }
+    }
+
+    const auth = runtime?.auth ?? (await openAuthState(instanceId));
+    if (runtime) {
+      await this.halt(runtime);
+    }
+    await auth.clear();
+    await instanceStore.update(instanceId, {
+      status: "idle",
+      autoStart: false,
+      connectedJid: undefined,
+      connectedNumber: undefined,
+      lastDisconnectReason: "logout",
+    });
+    qrStore.remove(instanceId);
+    return { remoteLogout };
   }
 
   async delete(instanceId: string) {
     await this.stop(instanceId);
-    await removeDir(getInstanceAuthPath(instanceId));
+    const auth = await openAuthState(instanceId);
+    await auth.clear();
     return instanceStore.remove(instanceId);
   }
 
+  /** Desligamento gracioso (SIGTERM/SIGINT): grava credenciais, solta a trava, nunca desloga. */
+  async shutdown() {
+    this.shuttingDown = true;
+    await Promise.all([...this.runtimes.values()].map((runtime) => this.halt(runtime)));
+  }
+
+  getRuntimeSummary() {
+    return [...this.runtimes.values()].map((runtime) => ({
+      id: runtime.id,
+      hasSocket: Boolean(runtime.socket),
+      open: this.openInstances.has(runtime.id),
+      lockHeld: runtime.lock.isHeld,
+      failures: runtime.failures,
+    }));
+  }
+
+  private requireSocket(instanceId: string) {
+    const socket = this.runtimes.get(instanceId)?.socket;
+    if (!socket) {
+      throw new Error(
+        `WhatsApp instance ${instanceId} is not connected on this server (stopped or standing by).`
+      );
+    }
+    return socket;
+  }
+
   async sendText(instanceId: string, number: string, text: string) {
-    const socket = await this.start(instanceId);
+    const socket = this.requireSocket(instanceId);
     await this.waitForSocketReady(instanceId, socket);
     const attemptedJids = this.buildCandidateJids(number);
     const { jid, verifiedJid } = await this.resolveDeliveryTarget(socket, attemptedJids);
@@ -290,7 +529,7 @@ class InstanceManager {
   }
 
   async sendImage(instanceId: string, number: string, input: SendImageInput) {
-    const socket = await this.start(instanceId);
+    const socket = this.requireSocket(instanceId);
     await this.waitForSocketReady(instanceId, socket);
     const attemptedJids = this.buildCandidateJids(number);
     const { jid, verifiedJid } = await this.resolveDeliveryTarget(socket, attemptedJids);
@@ -322,11 +561,15 @@ class InstanceManager {
   }
 
   async bootConfiguredInstances() {
-    if (config.instanceBootIds.length === 0) {
-      return;
+    const records: InstanceRecord[] = await instanceStore.list();
+    const ids = new Set(config.instanceBootIds);
+    for (const record of records) {
+      if (shouldAutoStart(record)) {
+        ids.add(record.id);
+      }
     }
 
-    for (const instanceId of config.instanceBootIds) {
+    for (const instanceId of ids) {
       try {
         await this.start(instanceId);
       } catch (error) {
@@ -336,7 +579,7 @@ class InstanceManager {
   }
 
   getConnectedInstance(instanceId: string) {
-    return this.sockets.get(instanceId)?.socket || null;
+    return this.runtimes.get(instanceId)?.socket || null;
   }
 
   private normalizeJid(number: string) {
@@ -546,7 +789,7 @@ class InstanceManager {
   }
 
   private findInstanceIdBySocket(socket: WASocket) {
-    for (const [instanceId, runtime] of this.sockets.entries()) {
+    for (const [instanceId, runtime] of this.runtimes.entries()) {
       if (runtime.socket === socket) {
         return instanceId;
       }

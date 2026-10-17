@@ -45,3 +45,13 @@ export function decideReconnect(
 
   return { action: "reconnect", delayMs: backoffDelay(failures, random), failure: true };
 }
+
+const RUNNING_STATUSES = new Set(["connected", "connecting", "reconnecting", "standby", "qr"]);
+
+/**
+ * Subir a instância sozinha no boot? Registros novos têm `autoStart` explícito; os antigos
+ * (anteriores a esse campo) contam como ativos se estavam rodando antes do deploy.
+ */
+export function shouldAutoStart(record: { autoStart?: boolean; status: string }) {
+  return record.autoStart ?? RUNNING_STATUSES.has(record.status);
+}
