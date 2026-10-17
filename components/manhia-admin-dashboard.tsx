@@ -54,6 +54,7 @@ import { type ComboItem, type ProductCategory } from "@/lib/produtos";
 import { normalizeSaboresList } from "@/lib/sabores";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
+import { ManhiaWhatsappStatus } from "@/components/manhia-whatsapp-status";
 import {
   formatCurrency,
   formatDateTime,
@@ -461,6 +462,64 @@ function getNextSimpleOrderStatus(status: SimpleOrderAdmin["status"]) {
   return null;
 }
 
+const ORDER_STATUS_UI: Record<SimpleOrderAdmin["status"], { label: string; className: string }> = {
+  PENDING: { label: "Aguardando pagamento", className: "border-amber-700 bg-amber-100 text-amber-950" },
+  PAID: { label: "Pago", className: "border-emerald-700 bg-emerald-100 text-emerald-950" },
+  READY: { label: "Pronto", className: "border-sky-700 bg-sky-100 text-sky-950" },
+  DELIVERED: { label: "Entregue", className: "border-slate-600 bg-slate-100 text-slate-900" },
+  CANCELLED: { label: "Cancelado", className: "border-red-700 bg-red-100 text-red-950" },
+};
+
+const ORDER_SOURCE_UI: Record<SimpleOrderAdmin["source"], { label: string; className: string }> = {
+  SITE: { label: "Pelo site", className: "border-sky-700 bg-sky-50 text-sky-950" },
+  WHATSAPP: { label: "Pelo WhatsApp", className: "border-green-800 bg-green-50 text-green-950" },
+  ADMIN: { label: "Feito no painel", className: "border-slate-600 bg-slate-100 text-slate-900" },
+};
+
+/** Status em cor E em texto: nunca só a cor. */
+function OrderStatusBadge({ status }: { status: SimpleOrderAdmin["status"] }) {
+  const ui = ORDER_STATUS_UI[status] ?? ORDER_STATUS_UI.PENDING;
+  return <Badge className={cn("border-2 text-base", ui.className)}>{ui.label}</Badge>;
+}
+
+function OrderOriginBadge({ source, isConfeiteira, isNew }: { source: SimpleOrderAdmin["source"]; isConfeiteira?: boolean; isNew?: boolean }) {
+  const ui = ORDER_SOURCE_UI[source] ?? ORDER_SOURCE_UI.SITE;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {isNew ? <Badge className="border-2 border-amber-800 bg-amber-300 text-amber-950">NOVO</Badge> : null}
+      <Badge className={cn("border-2 text-base", ui.className)}>{ui.label}</Badge>
+      {isConfeiteira ? <Badge className="border-2 border-purple-800 bg-purple-50 text-purple-950">Confeiteira</Badge> : null}
+    </span>
+  );
+}
+
+/** Texto do botão que muda o pedido para a próxima etapa, em palavras claras. */
+function advanceLabel(nextStatus: string | null | undefined) {
+  if (nextStatus === "PRONTO" || nextStatus === "READY") return "Marcar como pronto";
+  if (nextStatus === "ENTREGUE" || nextStatus === "DELIVERED") return "Marcar como entregue";
+  return "Finalizado";
+}
+
+/** Dois toques curtos, sem arquivo de áudio, para avisar de pedido novo. */
+function playNewOrderSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const context = new AudioContextClass();
+    [0, 0.35].forEach((delay) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.2, context.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + delay + 0.3);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(context.currentTime + delay);
+      oscillator.stop(context.currentTime + delay + 0.3);
+    });
+  } catch {
+    // sem áudio disponível: o aviso na tela continua
+  }
+}
+
 export function ManhiaAdminDashboard({
   initialProdutos,
   initialPedidos,
@@ -515,6 +574,9 @@ export function ManhiaAdminDashboard({
   >(null);
   const [deletingCupomId, setDeletingCupomId] = useState<string | null>(null);
   const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
+  const knownOrderKeys = useRef<Set<string> | null>(null);
+  const [newOrderKeys, setNewOrderKeys] = useState<string[]>([]);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [draggedPedidoId, setDraggedPedidoId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<
     "PAGO" | "PRONTO" | "ENTREGUE" | null
@@ -1001,6 +1063,30 @@ export function ManhiaAdminDashboard({
       setRefreshingPedidos(false);
     }
   };
+
+  useEffect(() => {
+    try {
+      setSoundEnabled(window.localStorage.getItem("manhia-order-sound") === "1");
+    } catch {
+      // sem armazenamento: o som fica desligado
+    }
+  }, []);
+
+  // Avisa quando chega pedido novo (na tela, com som se a Vizinha quiser).
+  useEffect(() => {
+    const keys = [...pedidos.map((pedido) => `p:${pedido.id}`), ...simpleOrders.map((order) => `o:${order.id}`)];
+    if (knownOrderKeys.current === null) {
+      knownOrderKeys.current = new Set(keys);
+      return;
+    }
+    const known = knownOrderKeys.current;
+    const fresh = keys.filter((key) => !known.has(key));
+    if (fresh.length === 0) return;
+    fresh.forEach((key) => known.add(key));
+    setNewOrderKeys((current) => [...current, ...fresh]);
+    toast.success(fresh.length === 1 ? "Chegou um pedido novo!" : `Chegaram ${fresh.length} pedidos novos!`, { duration: 15000 });
+    if (soundEnabled) playNewOrderSound();
+  }, [pedidos, simpleOrders, soundEnabled]);
 
   const handlePollingPedidos = useEffectEvent(() => {
     void refreshPedidos();
@@ -1860,7 +1946,7 @@ export function ManhiaAdminDashboard({
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f7fde7,#fffaf3_42%,#eef8db)] px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f7fde7,#fffaf3_42%,#eef8db)] px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
           <div className="grid gap-0 lg:grid-cols-[280px_1fr]">
@@ -1937,7 +2023,7 @@ export function ManhiaAdminDashboard({
                     setActiveTab(item.id);
                   }}
                   className={cn(
-                    "flex h-14 items-center justify-center gap-1.5 border-b border-r border-[#e4edc9] px-2 text-[11px] font-bold uppercase tracking-wide transition sm:gap-2 sm:border-b-0 sm:text-sm",
+                    "flex h-14 items-center justify-center gap-1.5 border-b border-r border-[#e4edc9] px-2 text-xs font-bold uppercase tracking-wide transition sm:gap-2 sm:border-b-0 sm:text-sm",
                     activeTab === item.id
                       ? "bg-[#fff3a8] text-[#0b3d18]"
                       : "bg-white text-[#48654f] hover:bg-[#f7fde7]",
@@ -1981,7 +2067,7 @@ export function ManhiaAdminDashboard({
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Pedidos por status</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">{PEDIDO_STATUS_OPTIONS.map((status) => <div key={status} className="rounded-xl bg-[#f7fde7] p-3"><p className="text-xs font-bold uppercase text-[#618038]">{getPedidoStatusMeta(status).label}</p><p className="mt-1 text-2xl font-bold text-[#0b3d18]">{analytics.statusCounts[status]}</p></div>)}</CardContent></Card>
-              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Ticket por pagamento</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.paymentAverages.length ? analytics.paymentAverages.map((item) => <div key={item.label} className="flex justify-between rounded-xl bg-[#f7fde7] p-3"><span className="text-[#48654f]">{item.label}</span><strong className="text-[#0b3d18]">{formatCurrency(item.average)}</strong></div>) : <p className="text-sm text-slate-500">Nenhum pedido no período.</p>}</CardContent></Card>
+              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Ticket por pagamento</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.paymentAverages.length ? analytics.paymentAverages.map((item) => <div key={item.label} className="flex justify-between rounded-xl bg-[#f7fde7] p-3"><span className="text-[#48654f]">{item.label}</span><strong className="text-[#0b3d18]">{formatCurrency(item.average)}</strong></div>) : <p className="text-sm text-slate-700">Nenhum pedido no período.</p>}</CardContent></Card>
               <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Top 5 por quantidade</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topQuantity.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#e4edc9] pb-2"><span className="text-[#48654f]">{index + 1}. {item.name}</span><strong className="text-[#0b3d18]">{item.quantity} un</strong></div>)}</CardContent></Card>
               <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Top 5 por receita</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topRevenue.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#e4edc9] pb-2"><span className="text-[#48654f]">{index + 1}. {item.name}</span><strong className="text-[#0b3d18]">{formatCurrency(item.revenue)}</strong></div>)}</CardContent></Card>
             </div>
@@ -1993,7 +2079,7 @@ export function ManhiaAdminDashboard({
                 <h2 className="text-2xl font-semibold text-slate-900">
                   Fila de pedidos
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-700">
                   O painel mostra pagamentos confirmados pelo webhook e permite
                   impressão manual.
                 </p>
@@ -2020,6 +2106,54 @@ export function ManhiaAdminDashboard({
               </div>
             </div>
 
+            <ManhiaWhatsappStatus />
+
+            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 border-[#7f9f4a] bg-white p-3 text-lg font-semibold text-[#0b3d18]">
+              <input
+                type="checkbox"
+                checked={soundEnabled}
+                onChange={(event) => {
+                  setSoundEnabled(event.target.checked);
+                  try {
+                    window.localStorage.setItem("manhia-order-sound", event.target.checked ? "1" : "0");
+                  } catch {
+                    // sem armazenamento: vale só nesta visita
+                  }
+                  if (event.target.checked) playNewOrderSound();
+                }}
+                className="h-6 w-6 accent-[#146b2e]"
+              />
+              Tocar um som quando chegar pedido novo
+            </label>
+
+            {newOrderKeys.length > 0 ? (
+              <section role="alert" className="rounded-3xl border-4 border-amber-600 bg-amber-50 p-5">
+                <h3 className="text-2xl font-extrabold text-amber-950">
+                  {newOrderKeys.length === 1 ? "1 pedido novo!" : `${newOrderKeys.length} pedidos novos!`}
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {newOrderKeys.map((key) => {
+                    const order = key.startsWith("o:") ? simpleOrders.find((item) => `o:${item.id}` === key) : null;
+                    const pedido = key.startsWith("p:") ? pedidos.find((item) => `p:${item.id}` === key) : null;
+                    if (!order && !pedido) return null;
+                    return (
+                      <li key={key} className="flex flex-wrap items-center gap-2 text-lg text-amber-950">
+                        <strong>{order ? getSimpleOrderCode(order) : pedido?.codigo}</strong>
+                        <span>{order ? order.customerName || "Cliente não informado" : pedido?.clienteNome}</span>
+                        <span className="font-bold">
+                          {formatCurrency(order ? Number(order.chargedAmount || order.totalAmount) : Number(pedido?.totalCobrado))}
+                        </span>
+                        <OrderOriginBadge source={order ? order.source : "SITE"} />
+                      </li>
+                    );
+                  })}
+                </ul>
+                <Button type="button" onClick={() => setNewOrderKeys([])} className="mt-4 h-14 rounded-full bg-amber-700 px-6 text-lg font-extrabold text-white hover:bg-amber-800">
+                  Entendi, marcar como visto
+                </Button>
+              </section>
+            ) : null}
+
             {simpleOrdersPendentes.length > 0 ? (
               <section className="rounded-[1.6rem] border border-[#d6e7a2] bg-white/95 p-4 shadow-sm">
                 <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -2027,7 +2161,7 @@ export function ManhiaAdminDashboard({
                     <h3 className="font-semibold text-slate-900">
                       Pedidos do carrinho
                     </h3>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-slate-700">
                       Pedidos recentes criados pelo novo checkout com múltiplos
                       itens.
                     </p>
@@ -2050,21 +2184,17 @@ export function ManhiaAdminDashboard({
                               Pedido{" "}
                               {order.code || order.id.slice(0, 8).toUpperCase()}
                             </span>
-                            <Badge className="border border-[#d6e7a2] bg-white text-[#0b3d18]">
-                              {order.status}
-                            </Badge>
-                            <Badge className="border border-[#d6e7a2] bg-[#eef8d2] text-[#0b3d18]">
-                              {order.source}
-                            </Badge>
+                            <OrderStatusBadge status={order.status} />
+                            <OrderOriginBadge source={order.source} isConfeiteira={order.isConfeiteira} isNew={newOrderKeys.includes(`o:${order.id}`)} />
                           </div>
-                          <p className="mt-1 text-sm text-slate-500">
+                          <p className="mt-1 text-sm text-slate-700">
                             {order.customerName || "Cliente não informado"} -{" "}
                             {formatDateTime(
                               order.scheduledAt || order.createdAt,
                             )}
                           </p>
                           {order.customerPhone ? (
-                            <p className="mt-1 text-sm text-slate-500">
+                            <p className="mt-1 text-sm text-slate-700">
                               {order.customerPhone}
                             </p>
                           ) : null}
@@ -2075,11 +2205,11 @@ export function ManhiaAdminDashboard({
                           )}
                         </p>
                       </div>
-                      <p className="mt-2 text-sm text-slate-500">
+                      <p className="mt-2 text-sm text-slate-700">
                         Entrega/retirada:{" "}
                         {formatDateTime(order.scheduledAt || order.createdAt)}
                       </p>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <p className="mt-1 text-sm text-slate-700">
                         Total: {formatCurrency(Number(order.totalAmount))} -{" "}
                         {order.paymentMethodLabel} ({order.paymentPercentage}%
                         agora)
@@ -2126,7 +2256,7 @@ export function ManhiaAdminDashboard({
 
             {pedidos.length === 0 && simpleOrders.length === 0 ? (
               <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
-                <CardContent className="py-10 text-center text-sm text-slate-500">
+                <CardContent className="py-10 text-center text-sm text-slate-700">
                   Nenhum pedido recebido ainda.
                 </CardContent>
               </Card>
@@ -2169,17 +2299,17 @@ export function ManhiaAdminDashboard({
                                   {getPedidoStatusMeta(pedido.status).label}
                                 </Badge>
                               </div>
-                              <p className="mt-1 text-sm text-slate-500">
+                              <p className="mt-1 text-sm text-slate-700">
                                 {pedido.clienteNome} -{" "}
                                 {formatDateTime(pedido.dataEntrega)}
                               </p>
-                              <p className="mt-1 text-sm text-slate-500">
+                              <p className="mt-1 text-sm text-slate-700">
                                 {pedido.produtoNomeSnapshot} -{" "}
                                 {pedido.metodoPagamentoLabel}
                               </p>
                             </div>
                             <div className="text-left sm:text-right">
-                              <p className="text-sm text-slate-400">Valor</p>
+                              <p className="text-sm text-slate-600">Valor</p>
                               <p className="text-xl font-bold text-[#0b3d18]">
                                 {formatCurrency(Number(pedido.totalCobrado))}
                               </p>
@@ -2230,20 +2360,20 @@ export function ManhiaAdminDashboard({
                     <summary className="cursor-pointer font-semibold text-slate-900">
                       Histórico de cancelados ({pedidosCancelados.length + simpleOrdersCancelados.length})
                     </summary>
-                    <p className="mt-2 text-sm text-slate-500">
+                    <p className="mt-2 text-sm text-slate-700">
                       Pedidos cancelados permanecem armazenados e podem ser consultados aqui.
                     </p>
                     <div className="mt-3 grid gap-2 lg:grid-cols-2">
                       {pedidosCancelados.map((pedido) => (
                         <button key={`cancelled:pedido:${pedido.id}`} type="button" onClick={() => setSelectedPedido(pedido)} className="rounded-xl border border-slate-200 bg-white p-3 text-left">
                           <strong>{pedido.codigo}</strong> · {pedido.clienteNome}
-                          <span className="block text-xs text-slate-500">Pedido legado · {formatDateTime(pedido.dataEntrega)}</span>
+                          <span className="block text-xs text-slate-700">Pedido legado · {formatDateTime(pedido.dataEntrega)}</span>
                         </button>
                       ))}
                       {simpleOrdersCancelados.map((order) => (
                         <button key={`cancelled:order:${order.id}`} type="button" onClick={() => setSelectedSimpleOrder(order)} className="rounded-xl border border-slate-200 bg-white p-3 text-left">
                           <strong>{getSimpleOrderCode(order)}</strong> · {order.customerName || "Cliente não informado"}
-                          <span className="block text-xs text-slate-500">Carrinho · {formatDateTime(getSimpleOrderDate(order))}</span>
+                          <span className="block text-xs text-slate-700">Carrinho · {formatDateTime(getSimpleOrderDate(order))}</span>
                         </button>
                       ))}
                     </div>
@@ -2264,7 +2394,7 @@ export function ManhiaAdminDashboard({
                           <h3 className="font-semibold text-slate-900">
                             {column.title}
                           </h3>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-700">
                             {column.description}
                           </p>
                         </div>
@@ -2296,7 +2426,7 @@ export function ManhiaAdminDashboard({
                                         {getPedidoStatusMeta(pedido.status).label}
                                       </Badge>
                                     </div>
-                                    <p className="mt-1 truncate text-sm text-slate-500">
+                                    <p className="mt-1 truncate text-sm text-slate-700">
                                       {pedido.clienteNome}
                                     </p>
                                   </div>
@@ -2307,7 +2437,7 @@ export function ManhiaAdminDashboard({
                                 <p className="mt-3 text-sm text-slate-600">
                                   {formatDateTime(pedido.dataEntrega)} • {pedido.totalUnidades} un
                                 </p>
-                                <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                                <p className="mt-1 line-clamp-2 text-xs text-slate-700">
                                   {pedido.itens
                                     .map((item) => `${item.tipo}: ${item.quantidade}`)
                                     .join(" • ")}
@@ -2333,7 +2463,7 @@ export function ManhiaAdminDashboard({
                                     }
                                     className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
                                   >
-                                    {nextStatus ? "Avançar" : "Finalizado"}
+                                    {advanceLabel(nextStatus)}
                                   </Button>
                                 </div>
                               </article>
@@ -2354,11 +2484,9 @@ export function ManhiaAdminDashboard({
                                     <h4 className="font-bold text-slate-900">
                                       {getSimpleOrderCode(order)}
                                     </h4>
-                                    <Badge className="border-[#d6e7a2] bg-[#f7fde7] text-[#1b5e20]">
-                                      {order.isConfeiteira ? "Confeiteira" : "Carrinho"}
-                                    </Badge>
+                                    <OrderOriginBadge source={order.source} isConfeiteira={order.isConfeiteira} isNew={newOrderKeys.includes(`o:${order.id}`)} />
                                   </div>
-                                  <p className="mt-1 truncate text-sm text-slate-500">
+                                  <p className="mt-1 truncate text-sm text-slate-700">
                                     {order.customerName || "Cliente não informado"}
                                   </p>
                                 </div>
@@ -2369,7 +2497,7 @@ export function ManhiaAdminDashboard({
                               <p className="mt-3 text-sm text-slate-600">
                                 {formatDateTime(getSimpleOrderDate(order))}
                               </p>
-                              <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                              <p className="mt-1 line-clamp-2 text-xs text-slate-700">
                                 {getSimpleOrderSalgadosSummary(order)}
                               </p>
                               <div className="mt-4 grid grid-cols-2 gap-2">
@@ -2393,7 +2521,7 @@ export function ManhiaAdminDashboard({
                                   }
                                   className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
                                 >
-                                  {nextStatus ? "Avançar" : "Finalizado"}
+                                  {advanceLabel(nextStatus)}
                                 </Button>
                               </div>
                             </article>
@@ -2401,7 +2529,7 @@ export function ManhiaAdminDashboard({
                         })}
 
                         {kanbanPedidosPorStatus[column.status].length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-[#b8ca91] bg-white/50 p-5 text-center text-sm text-slate-500">
+                          <p className="rounded-2xl border border-dashed border-[#b8ca91] bg-white/50 p-5 text-center text-sm text-slate-700">
                             Sem pedidos nesta etapa.
                           </p>
                         ) : null}
@@ -2432,7 +2560,7 @@ export function ManhiaAdminDashboard({
                           <h3 className="font-semibold text-slate-900">
                             {column.title}
                           </h3>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-slate-700">
                             {kanbanPedidosPorStatus[column.status].length}{" "}
                             pedido(s)
                           </p>
@@ -2475,7 +2603,7 @@ export function ManhiaAdminDashboard({
                                 {formatCurrency(Number(pedido.subtotal))}
                               </span>
                             </div>
-                            <p className="mt-1 truncate text-sm text-slate-500">
+                            <p className="mt-1 truncate text-sm text-slate-700">
                               {pedido.clienteNome} -{" "}
                               {formatDateTime(pedido.dataEntrega)}
                             </p>
@@ -2521,18 +2649,21 @@ export function ManhiaAdminDashboard({
                                 )}
                               </span>
                             </div>
-                            <p className="mt-1 truncate text-sm text-slate-500">
+                            <p className="mt-1 truncate text-sm text-slate-700">
                               {order.customerName || "Cliente não informado"} -{" "}
                               {formatDateTime(getSimpleOrderDate(order))}
                             </p>
-                            <p className="mt-1 text-xs font-semibold text-slate-500">Feito em: {formatDateTime(order.createdAt)}</p>
+                            <p className="mt-1 text-xs font-semibold text-slate-700">Feito em: {formatDateTime(order.createdAt)}</p>
                             {order.fulfillmentType === "DELIVERY" ? (
                               <p className="mt-1 text-xs font-semibold text-blue-700">Entrega: {order.deliveryNeighborhood || order.deliveryAddress}{order.deliveryReference ? ` • Ref.: ${order.deliveryReference}` : ""} • {order.deliveryFeeAgreed ? formatCurrency(order.deliveryFee) : "taxa a combinar"}{order.deliveryMapsUrl ? <> • <a href={order.deliveryMapsUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="underline">abrir mapa</a></> : null}</p>
                             ) : <p className="mt-1 text-xs font-semibold text-emerald-700">Retirada</p>}
-                            <p className="mt-1 truncate text-xs text-slate-500">
+                            <p className="mt-1 truncate text-xs text-slate-700">
                               {getSimpleOrderSalgadosSummary(order)}
                             </p>
-                            <p className="mt-1 truncate text-xs text-slate-400">
+                            <span className="mt-2 block">
+                              <OrderOriginBadge source={order.source} isConfeiteira={order.isConfeiteira} isNew={newOrderKeys.includes(`o:${order.id}`)} />
+                            </span>
+                            <p className="mt-1 truncate text-xs text-slate-600">
                               Carrinho •{" "}
                               {getSimpleOrderStatusLabel(order.status)} •{" "}
                               {order.paymentMethodLabel}
@@ -2542,7 +2673,7 @@ export function ManhiaAdminDashboard({
                         })}
 
                         {kanbanPedidosPorStatus[column.status].length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-[#d6e7a2] p-4 text-sm text-slate-500">
+                          <p className="rounded-2xl border border-dashed border-[#d6e7a2] p-4 text-sm text-slate-700">
                             Sem pedidos nesta etapa.
                           </p>
                         ) : null}
@@ -2572,22 +2703,22 @@ export function ManhiaAdminDashboard({
                                 {pedido.metodoPagamentoLabel}
                               </Badge>
                             </div>
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-slate-700">
                               {pedido.clienteNome} • {pedido.clienteTelefone}
                             </p>
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-slate-700">
                               Entrega: {formatDateTime(pedido.dataEntrega)}
                             </p>
                           </div>
 
                           <div className="text-left sm:text-right">
-                            <p className="text-sm text-slate-400">
+                            <p className="text-sm text-slate-600">
                               Total cobrado
                             </p>
                             <p className="text-2xl font-bold text-[#f4d330]">
                               {formatCurrency(Number(pedido.totalCobrado))}
                             </p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-700">
                               {pedido.percentualPagamento}% pago agora
                             </p>
                           </div>
@@ -2601,7 +2732,7 @@ export function ManhiaAdminDashboard({
                             <p className="mt-2 text-sm text-slate-700">
                               {pedido.produtoNomeSnapshot}
                             </p>
-                            <p className="mt-1 text-sm text-slate-500">
+                            <p className="mt-1 text-sm text-slate-700">
                               {pedido.totalUnidades} unidades •{" "}
                               {pedido.totalTipos} tipos
                             </p>
@@ -2709,7 +2840,7 @@ export function ManhiaAdminDashboard({
                 <h2 className="text-2xl font-semibold text-slate-900">
                   Salgados a produzir
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-700">
                   Quantidades consolidadas dos pedidos aceitos, agrupadas por
                   dia de entrega.
                 </p>
@@ -2727,7 +2858,7 @@ export function ManhiaAdminDashboard({
                       <p className="mt-2 text-4xl font-bold text-[#0b3d18]">
                         {totalSalgadosParaProduzir}
                       </p>
-                      <p className="text-sm font-medium text-slate-500">
+                      <p className="text-sm font-medium text-slate-700">
                         unidades para produzir
                       </p>
                     </CardContent>
@@ -2740,7 +2871,7 @@ export function ManhiaAdminDashboard({
                       <p className="mt-2 text-4xl font-bold text-[#0b3d18]">
                         {salgadosTotaisPorTipo.length}
                       </p>
-                      <p className="text-sm font-medium text-slate-500">
+                      <p className="text-sm font-medium text-slate-700">
                         sabores consolidados
                       </p>
                     </CardContent>
@@ -2781,7 +2912,7 @@ export function ManhiaAdminDashboard({
 
             {salgadosPorDia.length === 0 ? (
               <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
-                <CardContent className="py-10 text-center text-sm text-slate-500">
+                <CardContent className="py-10 text-center text-sm text-slate-700">
                   Nenhum pedido aceito com salgados ainda.
                 </CardContent>
               </Card>
@@ -2947,7 +3078,7 @@ export function ManhiaAdminDashboard({
               </div>
 
               {productTypes.length === 0 ? (
-                <div className="p-10 text-center text-sm text-slate-500">
+                <div className="p-10 text-center text-sm text-slate-700">
                   Nenhum tipo cadastrado ainda.
                 </div>
               ) : (
@@ -3212,7 +3343,7 @@ export function ManhiaAdminDashboard({
               </div>
 
               {cupons.length === 0 ? (
-                <div className="p-10 text-center text-sm text-slate-500">
+                <div className="p-10 text-center text-sm text-slate-700">
                   Nenhum cupom cadastrado ainda.
                 </div>
               ) : (
@@ -3250,7 +3381,7 @@ export function ManhiaAdminDashboard({
                             : ""}
                         </p>
                         {cupom.descricao ? (
-                          <p className="line-clamp-2 text-sm text-slate-500">
+                          <p className="line-clamp-2 text-sm text-slate-700">
                             {cupom.descricao}
                           </p>
                         ) : null}
@@ -3921,7 +4052,7 @@ export function ManhiaAdminDashboard({
                           }))
                         }
                       />
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-700">
                         Ex.: mínimo 100 e máximo 4 libera 4 tipos em 100 unidades e 8 tipos em 200.
                       </p>
                     </div>
@@ -3980,7 +4111,7 @@ export function ManhiaAdminDashboard({
                             <Plus className="mr-2 h-4 w-4" />
                             Adicionar item fixo
                           </Button>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-slate-700">
                             Para combo, as quantidades ficam travadas no
                             cadastro e entram prontas no pedido.
                           </p>
@@ -4028,7 +4159,7 @@ export function ManhiaAdminDashboard({
                             <Plus className="mr-2 h-4 w-4" />
                             Adicionar sabor
                           </Button>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-slate-700">
                             Cadastre cada tipo separadamente para a cliente
                             escolher um por vez na montagem.
                           </p>
@@ -4039,7 +4170,7 @@ export function ManhiaAdminDashboard({
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-medium text-slate-700">Antecedência mínima (horas)</label>
                       <Input type="number" min="0" step="1" value={form.antecedenciaMinimaHoras} onChange={(event) => setForm((current) => ({ ...current, antecedenciaMinimaHoras: event.target.value }))} placeholder={`Padrão da loja: ${settings.minimumLeadHours}h`} />
-                      <p className="text-xs text-slate-500">Deixe vazio para usar o padrão global da loja.</p>
+                      <p className="text-xs text-slate-700">Deixe vazio para usar o padrão global da loja.</p>
                     </div>
 
                     <div className="space-y-2 sm:col-span-2">
@@ -4211,7 +4342,7 @@ export function ManhiaAdminDashboard({
               </div>
 
               {produtos.length === 0 ? (
-                <div className="p-10 text-center text-sm text-slate-500">
+                <div className="p-10 text-center text-sm text-slate-700">
                   Nenhum produto cadastrado ainda.
                 </div>
               ) : (
@@ -4274,7 +4405,7 @@ export function ManhiaAdminDashboard({
                         {produto.emPromocao &&
                         Number(produto.descontoPercentual || 0) > 0 ? (
                           <div className="text-left md:text-right">
-                            <p className="text-sm text-slate-400 line-through">
+                            <p className="text-sm text-slate-600 line-through">
                               {formatCurrency(Number(produto.preco))}
                             </p>
                             <p className="text-xl font-bold text-[#0b3d18]">
@@ -4365,7 +4496,7 @@ export function ManhiaAdminDashboard({
                 placeholder="Escreva aqui a mensagem..."
                 onChange={(event) => setBulkMessage(event.target.value)}
               />
-              <p className="text-right text-xs text-slate-500">{bulkMessage.length}/1.500</p>
+              <p className="text-right text-xs text-slate-700">{bulkMessage.length}/1.500</p>
             </div>
 
             <div className="space-y-2">
@@ -4380,7 +4511,7 @@ export function ManhiaAdminDashboard({
                 onChange={(event) => setMessageDelaySeconds(event.target.value)}
               />
               <p className="text-xs text-amber-700">O mínimo é 10 segundos. O intervalo reduz rajadas, mas não elimina o risco de bloqueio pelo WhatsApp.</p>
-              <p className="text-xs text-slate-500">Mantenha esta página aberta até o envio terminar.</p>
+              <p className="text-xs text-slate-700">Mantenha esta página aberta até o envio terminar.</p>
             </div>
 
             {sendingMessages || messageProgress.processed > 0 ? (
@@ -4487,6 +4618,10 @@ export function ManhiaAdminDashboard({
               <DialogHeader>
                 <DialogTitle className="text-[#0b3d18]">Pedido {getSimpleOrderCode(selectedSimpleOrder)}{selectedSimpleOrder.isConfeiteira ? " • Confeiteira" : ""}</DialogTitle>
                 <DialogDescription>{selectedSimpleOrder.customerName || "Cliente não informado"}{selectedSimpleOrder.customerPhone ? ` • ${selectedSimpleOrder.customerPhone}` : ""}</DialogDescription>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <OrderStatusBadge status={selectedSimpleOrder.status} />
+                  <OrderOriginBadge source={selectedSimpleOrder.source} />
+                </div>
               </DialogHeader>
 
               <div className="grid gap-3 text-sm sm:grid-cols-2">
@@ -4512,6 +4647,17 @@ export function ManhiaAdminDashboard({
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setSelectedSimpleOrder(null)}>Fechar</Button>
                 <Button type="button" variant="outline" onClick={() => openSimpleOrderEditor(selectedSimpleOrder)}>Alterar pedido</Button>
+                {selectedSimpleOrder.status === "PENDING" ? (
+                  <Button type="button" disabled={statusLoadingId === selectedSimpleOrder.id} onClick={() => void handleConfirmSimpleOrderManualPayment(selectedSimpleOrder)} className="bg-emerald-700 text-white hover:bg-emerald-800">
+                    <CheckCheck className="mr-2 h-5 w-5" />
+                    Confirmar pagamento
+                  </Button>
+                ) : null}
+                {getNextSimpleOrderStatus(selectedSimpleOrder.status) ? (
+                  <Button type="button" disabled={statusLoadingId === selectedSimpleOrder.id} onClick={() => void handleUpdateSimpleOrderStatus(selectedSimpleOrder.id, getNextSimpleOrderStatus(selectedSimpleOrder.status)!)} className="bg-sky-800 text-white hover:bg-sky-900">
+                    {advanceLabel(getNextSimpleOrderStatus(selectedSimpleOrder.status))}
+                  </Button>
+                ) : null}
                 <Button type="button" disabled={printingPedidoId === selectedSimpleOrder.id} onClick={() => void handlePrintSimpleOrder(selectedSimpleOrder.id)} className="bg-[#1b7f31] text-white hover:bg-[#156326]">
                   <Printer className="mr-2 h-4 w-4" />
                   {printingPedidoId === selectedSimpleOrder.id ? "Enviando..." : "Imprimir"}
@@ -4531,10 +4677,10 @@ export function ManhiaAdminDashboard({
           <div className="space-y-4">
             <div className="grid gap-3 rounded-xl bg-[#f7fde7] p-3 sm:grid-cols-2">
               <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Data e hora da retirada/entrega</label><Input type="datetime-local" value={orderEditScheduledAt} onChange={(event) => setOrderEditScheduledAt(event.target.value)} /></div>
-              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Valor já pago (R$)</label><Input type="number" min="0" step="0.01" value={orderEditPaidAmount} onChange={(event) => setOrderEditPaidAmount(event.target.value)} /><p className="text-xs text-slate-500">Informe o valor efetivamente recebido. O saldo será recalculado.</p></div>
+              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Valor já pago (R$)</label><Input type="number" min="0" step="0.01" value={orderEditPaidAmount} onChange={(event) => setOrderEditPaidAmount(event.target.value)} /><p className="text-xs text-slate-700">Informe o valor efetivamente recebido. O saldo será recalculado.</p></div>
             </div>
             <div className="space-y-3">
-              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#618038]">Produtos e quantidades</p><p className="mt-1 text-sm text-slate-500">Ajuste cada produto e a composição dos sabores, como no carrinho.</p></div>
+              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#618038]">Produtos e quantidades</p><p className="mt-1 text-sm text-slate-700">Ajuste cada produto e a composição dos sabores, como no carrinho.</p></div>
               {orderEditItems.map((item, index) => (
                 <div key={`${item.productId}-${index}`} className="rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] p-3 shadow-sm">
                   <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_110px_auto]">
@@ -4559,6 +4705,6 @@ export function ManhiaAdminDashboard({
           <DialogFooter><Button type="button" variant="outline" disabled={savingOrderEdit} onClick={() => setEditingSimpleOrder(null)}>Cancelar</Button><Button type="button" disabled={savingOrderEdit} onClick={() => void saveSimpleOrderEdit()} className="bg-[#1b7f31] text-white hover:bg-[#156326]">{savingOrderEdit ? "Salvando..." : "Salvar alteração"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-    </main>
+    </div>
   );
 }

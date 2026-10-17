@@ -31,7 +31,7 @@ export default async function PedidoConfirmacaoPage({
   const isPaid = order?.status === "PAID";
 
   return (
-    <main className="min-h-screen px-4 py-8">
+    <div className="min-h-screen px-4 py-8">
       <div className="mx-auto max-w-2xl">
         <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-100/40">
           <CardContent className="space-y-6 p-6 text-center sm:p-8">
@@ -47,7 +47,7 @@ export default async function PedidoConfirmacaoPage({
               <h1 className="text-3xl font-black tracking-tight text-slate-900">
                 {isPaid ? "Pedido confirmado" : "Pedido em processamento"}
               </h1>
-              <p className="mt-3 text-sm leading-6 text-slate-500">
+              <p className="mt-3 text-sm leading-6 text-slate-700">
                 {isPaid
                   ? "Seu pagamento foi aprovado e o carrinho foi limpo."
                   : "Recebemos o retorno do pagamento. Sempre que esta página for aberta, conferimos novamente no Mercado Pago."}
@@ -65,7 +65,7 @@ export default async function PedidoConfirmacaoPage({
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="font-semibold text-slate-900">{item.productName}</p>
-                          <p className="text-slate-500">
+                          <p className="text-slate-700">
                             {item.productType} - {item.quantity} x {formatCurrency(Number(item.unitPrice))}
                           </p>
                         </div>
@@ -109,6 +109,6 @@ export default async function PedidoConfirmacaoPage({
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

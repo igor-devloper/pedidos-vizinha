@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function FinalPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-pink-50 via-pink-50 to-white px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 via-pink-50 to-white px-4 py-8">
       <div className="mx-auto flex max-w-lg flex-col items-center gap-4 text-center">
         <div className="mb-2 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
           <span className="text-3xl">🎉</span>
@@ -22,6 +22,6 @@ export default function FinalPage() {
           </Link>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

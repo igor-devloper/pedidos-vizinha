@@ -500,7 +500,7 @@ export function PedidoCheckout({
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,32,12,0.08),rgba(7,32,12,0.22))]" />
               <div
                 className={cn(
-                  "absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-white",
+                  "absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-white",
                   isValentinesTheme
                     ? "bg-[#5f1029]/85"
                     : isDefaultTheme
@@ -532,7 +532,7 @@ export function PedidoCheckout({
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={cn(
-                      "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white",
+                      "rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-white",
                       isValentinesTheme
                         ? "bg-[#be123c]"
                         : isDefaultTheme
@@ -545,7 +545,7 @@ export function PedidoCheckout({
                   {isCombo ? (
                     <span
                       className={cn(
-                        "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em]",
+                        "rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.18em]",
                         isValentinesTheme
                           ? "bg-[#ffe4ec] text-[#9f1239]"
                           : isDefaultTheme

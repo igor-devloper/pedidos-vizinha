@@ -194,3 +194,12 @@ export function getProdutoComboItens(produto: { comboItens?: unknown }): ComboIt
 export function isComboProduto(produto: { categoria?: unknown; comboItens?: unknown }): boolean {
   return produto.categoria === "COMBO" && getProdutoComboItens(produto).length > 0;
 }
+
+/**
+ * Texto do produto em linguagem simples. Descrições antigas dizem "por cento de salgado"
+ * quando querem dizer "a cada lote de salgados"; aqui a frase é corrigida na exibição.
+ */
+export function cleanProductDescription(description: string, lotSize?: number | null) {
+  const lot = lotSize && lotSize > 0 ? `a cada ${lotSize} salgados` : "a cada lote de salgados";
+  return description.replace(/por\s+cento\s+de\s+salgados?/gi, lot).trim();
+}

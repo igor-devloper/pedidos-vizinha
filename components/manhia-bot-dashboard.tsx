@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ManhiaConversationsPanel } from "@/components/manhia-conversations-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -505,7 +506,7 @@ export function ManhiaBotDashboard({
   };
 
   return (
-    <main className="px-4 py-8 sm:px-6 lg:px-8">
+    <div className="px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="flex flex-col gap-4 rounded-[2rem] border border-pink-200/80 bg-white/95 p-6 shadow-xl shadow-pink-100/50">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -516,7 +517,7 @@ export function ManhiaBotDashboard({
               <h1 className="text-3xl font-semibold text-pink-800">
                 Dashboard de instâncias e fluxos
               </h1>
-              <p className="max-w-3xl text-sm leading-6 text-slate-500">
+              <p className="max-w-3xl text-sm leading-6 text-slate-700">
                 Aqui você gerencia instâncias, abre QR em tempo real e edita os
                 fluxos automatizados do bot.
               </p>
@@ -575,7 +576,7 @@ export function ManhiaBotDashboard({
                 {botConfigured ? "Configurado" : "Pendente"}
               </p>
               {botBaseUrl && (
-                <p className="mt-1 break-all text-xs text-slate-500">{botBaseUrl}</p>
+                <p className="mt-1 break-all text-xs text-slate-700">{botBaseUrl}</p>
               )}
             </div>
           </div>
@@ -587,6 +588,8 @@ export function ManhiaBotDashboard({
             </div>
           )}
         </section>
+
+        <ManhiaConversationsPanel botConfigured={botConfigured} />
 
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <section className="space-y-6">
@@ -678,7 +681,7 @@ export function ManhiaBotDashboard({
               </CardHeader>
               <CardContent className="space-y-4">
                 {instances.length === 0 ? (
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-700">
                     Nenhuma instância cadastrada ainda.
                   </p>
                 ) : (
@@ -702,21 +705,21 @@ export function ManhiaBotDashboard({
                               {getStatusInfo(instance.status).hint}
                             </p>
                           )}
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-slate-700">
                             ID: <span className="font-mono text-xs">{instance.id}</span>
                           </p>
                           {instance.phoneNumber && (
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-slate-700">
                               Número: {instance.phoneNumber}
                             </p>
                           )}
                           {instance.webhookUrl && (
-                            <p className="break-all text-sm text-slate-500">
+                            <p className="break-all text-sm text-slate-700">
                               Webhook: {instance.webhookUrl}
                             </p>
                           )}
                           {instance.lastConnectedAt && (
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-600">
                               Última conexão:{" "}
                               {new Date(instance.lastConnectedAt).toLocaleString("pt-BR")}
                             </p>
@@ -962,7 +965,7 @@ export function ManhiaBotDashboard({
               </CardHeader>
               <CardContent className="space-y-4">
                 {flows.length === 0 ? (
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-700">
                     Nenhum fluxo cadastrado ainda.
                   </p>
                 ) : (
@@ -992,10 +995,10 @@ export function ManhiaBotDashboard({
                               </Badge>
                             </div>
                             {flow.descricao && (
-                              <p className="text-sm text-slate-500">{flow.descricao}</p>
+                              <p className="text-sm text-slate-700">{flow.descricao}</p>
                             )}
                           </div>
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-slate-600">
                             {flow.instanceId ? `Instância ${flow.instanceId}` : "Global"}
                           </div>
                         </div>
@@ -1074,7 +1077,7 @@ export function ManhiaBotDashboard({
             {qrStatus === "loading" && !qrDataUrl ? (
               <div className="flex min-h-80 flex-col items-center justify-center gap-3 rounded-3xl border border-pink-100 bg-pink-50/70">
                 <LoaderCircle className="h-8 w-8 animate-spin text-pink-500" />
-                <p className="text-sm text-slate-500">Buscando QR...</p>
+                <p className="text-sm text-slate-700">Buscando QR...</p>
               </div>
             ) : qrDataUrl ? (
               <div className="space-y-4">
@@ -1087,7 +1090,7 @@ export function ManhiaBotDashboard({
                     className="object-contain p-4"
                   />
                 </div>
-                <p className="text-center text-sm text-slate-500">
+                <p className="text-center text-sm text-slate-700">
                   Escaneie com o WhatsApp e mantenha esta janela aberta até a conexão abrir.
                 </p>
               </div>
@@ -1103,6 +1106,6 @@ export function ManhiaBotDashboard({
           </div>
         </DialogContent>
       </Dialog>
-    </main>
+    </div>
   );
 }

@@ -87,31 +87,31 @@ export default function PagamentoPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-pink-50 to-white px-4">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-pink-50 to-white px-4">
         <Card className="border-pink-200 bg-white/95 px-8 py-6 shadow-md">
           <CardContent className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin text-pink-600" />
             <p className="text-sm text-slate-700">Carregando informações do pagamento...</p>
           </CardContent>
         </Card>
-      </main>
+      </div>
     );
   }
 
   if (error || !encomenda) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-pink-50 to-white px-4">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-pink-50 to-white px-4">
         <Card className="border-red-200 bg-white/95 px-8 py-6 shadow-md">
           <CardContent>
             <p className="text-sm text-red-600">{error || "Pedido não encontrado."}</p>
           </CardContent>
         </Card>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-pink-50 via-pink-50 to-white px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 via-pink-50 to-white px-4 py-8">
       <div className="mx-auto max-w-5xl space-y-4">
         <div>
           <h1 className="text-xl font-semibold text-pink-700">
@@ -162,6 +162,6 @@ export default function PagamentoPage() {
 
         <PixPayment amount={amount} orderId={encomenda.txid} pixPayload={pixPayload} />
       </div>
-    </main>
+    </div>
   );
 }

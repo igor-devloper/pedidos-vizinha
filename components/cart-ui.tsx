@@ -3,8 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { MetodoPagamento } from "@prisma/client";
-import { CalendarDays, ChevronLeft, ChevronRight, LoaderCircle, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, LoaderCircle, MessageCircle, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
+import { getWhatsAppOrderUrl } from "@/lib/whatsapp-link";
 import type { CartAudience } from "@/lib/cart";
 import { getAllowedSalgadoTypes, validateCartItemQuantities } from "@/lib/cart-quantity";
 
@@ -193,36 +193,6 @@ function formatDateLabel(value: string) {
   }).format(new Date(`${value}T12:00:00`));
 }
 
-function startOfMonth(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), 1);
-}
-
-function addMonths(value: Date, amount: number) {
-  return new Date(value.getFullYear(), value.getMonth() + amount, 1);
-}
-
-function getCalendarDays(month: Date) {
-  const firstDay = startOfMonth(month);
-  const startWeekday = firstDay.getDay();
-  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  const cells: Array<{ date: Date; currentMonth: boolean }> = [];
-
-  for (let index = startWeekday - 1; index >= 0; index -= 1) {
-    cells.push({ date: new Date(month.getFullYear(), month.getMonth(), -index), currentMonth: false });
-  }
-
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push({ date: new Date(month.getFullYear(), month.getMonth(), day), currentMonth: true });
-  }
-
-  while (cells.length % 7 !== 0) {
-    const nextDay = cells.length - (startWeekday + daysInMonth) + 1;
-    cells.push({ date: new Date(month.getFullYear(), month.getMonth() + 1, nextDay), currentMonth: false });
-  }
-
-  return cells;
-}
-
 function buildDeliveryDateTime(date: string, time: string) {
   // Horário escolhido na loja em America/Sao_Paulo.
   // Enviar com offset evita o bug de selecionar 10:00 e salvar 07:00 no servidor em UTC.
@@ -268,6 +238,26 @@ function getTimeSlots(
   return slots;
 }
 
+function formatShortDay(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(`${value}T12:00:00`));
+}
+
+/** Próximos dias com atendimento e horário livre, para escolher com um toque. */
+function getUpcomingOpenDays(minDate: Date, operationSchedule: BusinessScheduleByWeekday, count: number) {
+  const days: string[] = [];
+  for (let offset = 0; offset < 30 && days.length < count; offset += 1) {
+    const date = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate() + offset);
+    const key = formatDateInputValue(date);
+    if (getTimeSlots(key, minDate, operationSchedule).length > 0) days.push(key);
+  }
+  return days;
+}
+
 async function readCart(audience: CartAudience = "VIZINHA") {
   const response = await fetch(`/api/cart?audience=${audience}`, { cache: "no-store" });
   if (!response.ok) {
@@ -281,11 +271,12 @@ function getCartThemeStyle(siteTheme: StoreSiteTheme) {
   const isDefaultTheme = siteTheme === "PADRAO";
 
   return {
-    "--cart-accent": isDefaultTheme ? "#e000cf" : "#176c2a",
-    "--cart-accent-hover": isDefaultTheme ? "#b800aa" : "#125621",
-    "--cart-dark": isDefaultTheme ? "#641052" : "#0b3d18",
-    "--cart-muted": isDefaultTheme ? "#72506b" : "#405348",
-    "--cart-border": isDefaultTheme ? "#f4a8eb" : "#b8ca7e",
+    // Contraste de pelo menos 7:1 para texto e 3:1 para bordas de campos e botões.
+    "--cart-accent": isDefaultTheme ? "#8a0f78" : "#146b2e",
+    "--cart-accent-hover": isDefaultTheme ? "#6b0f5c" : "#0f5223",
+    "--cart-dark": isDefaultTheme ? "#4a0a3f" : "#0b3d18",
+    "--cart-muted": isDefaultTheme ? "#5a3a54" : "#30443a",
+    "--cart-border": isDefaultTheme ? "#c25bb4" : "#7f9f4a",
     "--cart-surface": isDefaultTheme ? "#fff0fc" : "#f7fde3",
     "--cart-badge": isDefaultTheme ? "#bff2ec" : "#f4d330",
   } as CSSProperties;
@@ -293,46 +284,70 @@ function getCartThemeStyle(siteTheme: StoreSiteTheme) {
 
 export function AddToCartControls({
   productId,
+  productName,
   siteTheme,
   minimumQuantity,
   usesMinimumQuantity = false,
   audience = "VIZINHA",
 }: {
   productId: string;
+  productName: string;
   siteTheme: StoreSiteTheme;
   minimumQuantity?: number | null;
   usesMinimumQuantity?: boolean;
   audience?: CartAudience;
 }) {
-  const [quantity, setQuantity] = useState(String(usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1));
+  const requiredMinimum = usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1;
+  const step = usesMinimumQuantity ? 10 : 1;
+  const [quantity, setQuantity] = useState(String(requiredMinimum));
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [addedMessage, setAddedMessage] = useState<string | null>(null);
+  const inputId = `quantidade-${productId}`;
+  const hintId = `dica-${productId}`;
+
+  const currentQuantity = Math.floor(Number(quantity)) || 0;
+  const changeBy = (delta: number) => {
+    setErrorMessage(null);
+    setAddedMessage(null);
+    setQuantity(String(Math.max(requiredMinimum, (currentQuantity || requiredMinimum) + delta)));
+  };
 
   const addToCart = async () => {
     try {
       setErrorMessage(null);
+      setAddedMessage(null);
       const parsedQuantity = Math.floor(Number(quantity));
-      const requiredMinimum = usesMinimumQuantity ? Math.max(1, minimumQuantity || 1) : 1;
       if (!Number.isInteger(parsedQuantity) || parsedQuantity < requiredMinimum) {
-        setErrorMessage(usesMinimumQuantity ? `Informe pelo menos ${requiredMinimum} unidades.` : "Informe uma quantidade válida.");
+        setErrorMessage(
+          usesMinimumQuantity
+            ? `O pedido mínimo é de ${requiredMinimum} salgados. Aumente a quantidade para continuar.`
+            : "Digite uma quantidade a partir de 1.",
+        );
         return;
       }
       setLoading(true);
       const response = await fetch("/api/cart/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(usesMinimumQuantity ? { productId, requestedUnits: parsedQuantity, audience } : { productId, quantity: parsedQuantity, audience }),
+        body: JSON.stringify(
+          usesMinimumQuantity
+            ? { productId, requestedUnits: parsedQuantity, audience }
+            : { productId, quantity: parsedQuantity, audience },
+        ),
       });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
 
       if (!response.ok) {
-        throw new Error(data?.error || "Não foi possível adicionar ao carrinho.");
+        throw new Error(data?.error || "Não foi possível adicionar ao pedido.");
       }
 
-      toast.success("Produto adicionado ao carrinho.");
+      setAddedMessage(
+        `Adicionado ao pedido ✓ ${usesMinimumQuantity ? `${parsedQuantity} salgados de ${productName}` : `${parsedQuantity} × ${productName}`}. Você pode escolher mais produtos ou tocar em “Ver meu pedido”.`,
+      );
       notifyCartChanged?.();
     } catch (error) {
-      setErrorMessage(getSimpleCartError(error, "Não foi possível adicionar ao carrinho."));
+      setErrorMessage(getSimpleCartError(error, "Não foi possível adicionar ao pedido."));
     } finally {
       setLoading(false);
     }
@@ -340,24 +355,94 @@ export function AddToCartControls({
 
   return (
     <div style={getCartThemeStyle(siteTheme)} className="mt-auto flex flex-col gap-3">
-      <div className="space-y-1">
-        <label className="text-sm font-bold text-[var(--cart-dark)]">{usesMinimumQuantity ? "Quantidade de unidades" : "Quantidade"}</label>
-        <Input type="number" inputMode="numeric" min={usesMinimumQuantity ? minimumQuantity || 1 : 1} step="1" value={quantity} onChange={(event) => { setQuantity(event.target.value); setErrorMessage(null); }} className="h-14 rounded-full border-[var(--cart-border)] bg-white px-5 text-center text-lg font-black text-[var(--cart-dark)]" />
-        {usesMinimumQuantity ? <p className="text-xs text-[var(--cart-muted)]">Mínimo de {minimumQuantity} unidades; você pode informar qualquer quantidade inteira maior.</p> : null}
+      <div className="space-y-2">
+        <label htmlFor={inputId} className="block text-lg font-bold text-[var(--cart-dark)]">
+          {usesMinimumQuantity ? "Quantos salgados você quer?" : "Quantas unidades você quer?"}
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            disabled={currentQuantity <= requiredMinimum}
+            onClick={() => changeBy(-step)}
+            className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+            aria-label={`Diminuir a quantidade de ${productName}`}
+          >
+            <Minus className="h-6 w-6" aria-hidden="true" />
+          </Button>
+          <Input
+            id={inputId}
+            type="number"
+            inputMode="numeric"
+            min={requiredMinimum}
+            step="1"
+            value={quantity}
+            aria-describedby={hintId}
+            onChange={(event) => {
+              setQuantity(event.target.value);
+              setErrorMessage(null);
+              setAddedMessage(null);
+            }}
+            className="h-14 min-w-[6rem] flex-1 rounded-full border-2 border-[var(--cart-border)] bg-white px-3 text-center text-2xl font-extrabold text-[var(--cart-dark)]"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => changeBy(step)}
+            className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+            aria-label={`Aumentar a quantidade de ${productName}`}
+          >
+            <Plus className="h-6 w-6" aria-hidden="true" />
+          </Button>
+        </div>
+
+        {usesMinimumQuantity ? (
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Somar de uma vez">
+            {[50, 100].map((amount) => (
+              <Button
+                key={amount}
+                type="button"
+                variant="outline"
+                onClick={() => changeBy(amount)}
+                className="h-12 rounded-full border-2 border-[var(--cart-border)] px-5 text-base font-bold text-[var(--cart-dark)]"
+              >
+                + {amount}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+
+        <p id={hintId} className="text-base text-[var(--cart-muted)]">
+          {usesMinimumQuantity
+            ? `Mínimo de ${requiredMinimum} salgados. Os botões − e + mudam de 10 em 10; você também pode digitar o número.`
+            : "Use os botões − e + ou digite o número."}
+        </p>
       </div>
 
       <Button
         type="button"
         disabled={loading}
         onClick={() => void addToCart()}
-        className="min-h-12 rounded-full bg-[var(--cart-accent)] text-base font-bold text-white hover:bg-[var(--cart-accent-hover)]"
+        className="h-auto min-h-14 w-full whitespace-normal rounded-full bg-[var(--cart-accent)] py-3 text-lg font-extrabold text-white hover:bg-[var(--cart-accent-hover)]"
       >
-        {loading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShoppingCart className="mr-2 h-4 w-4" />}
-        Adicionar
+        {loading ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" /> : <ShoppingCart className="mr-2 h-5 w-5" aria-hidden="true" />}
+        {loading ? "Adicionando..." : "Adicionar ao pedido"}
       </Button>
-      {errorMessage ? (
-        <p role="alert" className="text-sm font-semibold text-red-700">{errorMessage}</p>
-      ) : null}
+
+      <div aria-live="polite" className="min-h-0">
+        {addedMessage ? (
+          <p role="status" className="rounded-2xl border-2 border-[#0b6b3a] bg-[#e8f7ee] p-3 text-base font-semibold text-[#07391f]">
+            {addedMessage}
+          </p>
+        ) : null}
+        {errorMessage ? (
+          <p role="alert" className="rounded-2xl border-2 border-[#b91c1c] bg-[#fdeaea] p-3 text-base font-semibold text-[#7f1111]">
+            {errorMessage}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -366,10 +451,12 @@ export function FloatingCart({
   businessStatus,
   siteTheme,
   audience = "VIZINHA",
+  whatsappUrl = getWhatsAppOrderUrl(),
 }: {
   businessStatus: CartBusinessStatusData;
   siteTheme: StoreSiteTheme;
   audience?: CartAudience;
+  whatsappUrl?: string;
 }) {
   const [cart, setCart] = useState<CartData>(EMPTY_CART);
   const [open, setOpen] = useState(false);
@@ -381,6 +468,9 @@ export function FloatingCart({
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const [checkoutSession, setCheckoutSession] = useState<CartCheckoutSession | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<"FORM" | "REVIEW">("FORM");
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [touched, setTouched] = useState(false);
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const [checkoutPaid, setCheckoutPaid] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -404,8 +494,6 @@ export function FloatingCart({
   const minDeliveryDateKey = useMemo(() => formatDateInputValue(minDeliveryDate), [minDeliveryDate]);
   const [deliveryDate, setDeliveryDate] = useState(formatDateInputValue(minDeliveryDate));
   const [deliveryTime, setDeliveryTime] = useState(formatTimeInputValue(minDeliveryDate));
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(minDeliveryDate));
   const cartThemeStyle = getCartThemeStyle(siteTheme);
   const cartSaveChain = useRef<Promise<void>>(Promise.resolve());
   const latestCartSaveError = useRef<Error | null>(null);
@@ -434,8 +522,24 @@ export function FloatingCart({
     }
     setActionError(null);
     setCheckoutStep("REVIEW");
-    window.setTimeout(() => cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }), 0);
   };
+
+  const goToStep = (step: 1 | 2 | 3 | 4) => {
+    setCheckoutStep("FORM");
+    setWizardStep(step);
+    setTouched(false);
+    setActionError(null);
+  };
+
+  // A cada passo: volta ao topo e leva o foco ao título, para leitores de tela anunciarem a mudança.
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(() => {
+      cartScrollRef.current?.scrollTo({ top: 0 });
+      stepHeadingRef.current?.focus({ preventScroll: true });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [wizardStep, checkoutStep, open]);
 
   useEffect(() => { void preloadGoogleMaps().catch(() => undefined); }, []);
 
@@ -545,7 +649,6 @@ export function FloatingCart({
     }
   };
 
-  const calendarDays = useMemo(() => getCalendarDays(displayMonth), [displayMonth]);
   const timeSlots = useMemo(
     () => getTimeSlots(deliveryDate, minDeliveryDate, businessStatus.operationSchedule),
     [businessStatus.operationSchedule, deliveryDate, minDeliveryDate]
@@ -558,7 +661,6 @@ export function FloatingCart({
       const nextTime = nextSlots[0] || "";
       if (deliveryDate !== nextDate) {
         setDeliveryDate(nextDate);
-        setDisplayMonth(startOfMonth(minDeliveryDate));
       }
       if (deliveryTime !== nextTime) setDeliveryTime(nextTime);
     }
@@ -572,7 +674,6 @@ export function FloatingCart({
     setActionError(null);
     const nextSlots = getTimeSlots(nextDate, minDeliveryDate, businessStatus.operationSchedule);
     if (!nextSlots.includes(deliveryTime)) setDeliveryTime(nextSlots[0] || "");
-    setCalendarOpen(false);
   };
   const canCheckout = useMemo(
     () =>
@@ -597,7 +698,6 @@ export function FloatingCart({
     () => calculatePaymentAmounts(orderTotal, paymentPercentage, paymentMethod),
     [orderTotal, paymentPercentage, paymentMethod]
   );
-  const selectedPaymentMethod = SUPPORTED_PAYMENT_METHODS.find((method) => method.id === paymentMethod);
   const cartValidation = useMemo(() => {
     for (const item of cart.items) {
       if (item.usesMinimumQuantity && item.id in quantityDrafts) {
@@ -761,6 +861,35 @@ export function FloatingCart({
     updateSelectedItems(item, next);
   };
 
+  /** Muda a quantidade de um sabor da lista, respeitando o total de salgados e o limite de sabores. */
+  const setFlavorQuantity = (item: CartItem, sabor: string, value: number) => {
+    const maxTypes = item.usesMinimumQuantity
+      ? getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado, item.minimumQuantity)
+      : item.maxTiposSalgado * item.quantity;
+    const others = item.selectedItems.filter((entry) => entry.tipo !== sabor && entry.quantidade > 0);
+    const othersTotal = others.reduce((sum, entry) => sum + entry.quantidade, 0);
+    const wasSelected = item.selectedItems.some((entry) => entry.tipo === sabor && entry.quantidade > 0);
+    const wanted = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+    const next = Math.min(wanted, Math.max(0, item.requestedUnits - othersTotal));
+
+    if (next > 0 && !wasSelected && others.length >= maxTypes) {
+      setItemError({
+        id: item.id,
+        message: `Você já escolheu o máximo de ${maxTypes} sabores. Tire um sabor para poder escolher outro.`,
+      });
+      return;
+    }
+
+    setItemError(null);
+    const ordered = item.saboresSugeridos.flatMap((name) => {
+      if (name === sabor) return next > 0 ? [{ tipo: name, quantidade: next }] : [];
+      const found = others.find((entry) => entry.tipo === name);
+      return found ? [found] : [];
+    });
+    const outsideList = others.filter((entry) => !item.saboresSugeridos.includes(entry.tipo));
+    updateSelectedItems(item, [...ordered, ...outsideList]);
+  };
+
   const removeSelectedItem = (item: CartItem, index: number) => {
     const next = item.selectedItems.filter((_, entryIndex) => entryIndex !== index);
     updateSelectedItems(item, next.length > 0 ? next : [{ tipo: "", quantidade: 0 }]);
@@ -780,22 +909,107 @@ export function FloatingCart({
       )
     : "dia escolhido";
 
+  const nameValid = customerName.trim().length >= 2;
+  const phoneValid = customerPhone.replace(/\D/g, "").length >= 10;
+  const emailValid = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
+  const deliveryAddressMissing = fulfillmentType === "DELIVERY" && (!deliveryPlace.placeId || !deliveryPlace.neighborhood);
+  const deliveryReferenceMissing = fulfillmentType === "DELIVERY" && deliveryReference.trim().length < 3;
+  const stepErrors: Array<string | null> = [
+    cartValidation ? getSimpleCartError(new Error(cartValidation), cartValidation) : null,
+    !nameValid
+      ? "Falta o seu nome."
+      : !phoneValid
+        ? "Falta o seu WhatsApp, com DDD."
+        : !emailValid
+          ? "Falta um e-mail válido. Usamos só para o pagamento."
+          : null,
+    deliveryAddressMissing
+      ? "Falta escolher o endereço na lista de sugestões."
+      : deliveryReferenceMissing
+        ? "Falta o ponto de referência para o entregador."
+        : selectedDateHasNoSchedule
+          ? "Não atendemos nesse dia. Escolha outro dia."
+          : storeClosedBlocksSelectedDate
+            ? "Hoje a loja não está recebendo pedidos. Escolha outro dia."
+            : !deliveryTimeIsValid
+              ? "Falta escolher o horário."
+              : null,
+    null,
+  ];
+  const stepTitles = ["Meu pedido", "Seus dados", fulfillmentType === "DELIVERY" ? "Entrega e horário" : "Retirada e horário", "Pagamento"];
+  const inReview = checkoutStep === "REVIEW" && !checkoutSession;
+  const currentStepError = stepErrors[wizardStep - 1];
+  const upcomingDays = getUpcomingOpenDays(minDeliveryDate, businessStatus.operationSchedule, 7)
+    .filter((day) => businessStatus.isOpen || day !== getBusinessDateInputValue())
+    .slice(0, 5);
+  const bigButton = "h-auto min-h-14 min-w-0 whitespace-normal rounded-full px-4 py-3 text-lg font-extrabold sm:px-6";
+  const radioCard = (selected: boolean) =>
+    cn(
+      "flex cursor-pointer items-start gap-3 rounded-2xl border-2 bg-white p-4 text-lg",
+      selected ? "border-[var(--cart-accent)] bg-[var(--cart-surface)]" : "border-[var(--cart-border)]"
+    );
+
+  const continueStep = () => {
+    if (currentStepError) {
+      setTouched(true);
+      setActionError(currentStepError);
+      return;
+    }
+    setActionError(null);
+    setTouched(false);
+    if (wizardStep === 4) showReview();
+    else goToStep((wizardStep + 1) as 1 | 2 | 3 | 4);
+  };
+  const goBack = () => {
+    if (inReview) goToStep(4);
+    else if (wizardStep > 1) goToStep((wizardStep - 1) as 1 | 2 | 3 | 4);
+    else setOpen(false);
+  };
+
   return (
     <>
-      <button
-        type="button"
-        style={cartThemeStyle}
-        onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--cart-dark)] text-white shadow-[0_18px_50px_rgba(100,16,82,0.28)] transition hover:bg-[var(--cart-accent-hover)]"
-        aria-label="Abrir carrinho"
-      >
-        <ShoppingCart className="h-6 w-6" />
-        {cart.itemCount > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-[var(--cart-badge)] px-1 text-xs font-black text-[var(--cart-dark)]">
-            {cart.itemCount}
-          </span>
-        ) : null}
-      </button>
+      {!open ? (
+        <div
+          style={cartThemeStyle}
+          className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-[var(--cart-border)] bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.14)]"
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            {cart.itemCount > 0 ? (
+              <>
+                <p className="flex-1 text-lg font-extrabold text-[var(--cart-dark)]" aria-live="polite">
+                  Meu pedido: {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"} · {formatCurrency(cart.totalAmount)}
+                </p>
+                <Button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className={cn(bigButton, "w-full bg-[var(--cart-accent)] text-white hover:bg-[var(--cart-accent-hover)] sm:w-auto")}
+                >
+                  <ShoppingCart className="mr-2 h-5 w-5" aria-hidden="true" />
+                  Ver meu pedido
+                </Button>
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-12 items-center justify-center text-base font-bold text-[#07391f] underline underline-offset-4"
+                >
+                  Prefiro pedir pelo WhatsApp
+                </a>
+              </>
+            ) : (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#0b6b3a] px-6 text-lg font-extrabold text-white hover:bg-[#095a30]"
+              >
+                <MessageCircle className="h-6 w-6" aria-hidden="true" />
+                Pedir pelo WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <CartRoot
         modal={false}
@@ -806,529 +1020,503 @@ export function FloatingCart({
           if (!nextOpen && checkoutPaid) {
             setCheckoutSession(null);
             setCheckoutPaid(false);
+            setWizardStep(1);
           }
         }}
       >
         <CartContent
           style={cartThemeStyle}
           className={cn(
-            "grid grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden bg-white p-0",
+            "grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-white p-0",
             isDesktop
-              ? "h-[min(90vh,56rem)] w-[94vw] max-w-none rounded-2xl sm:w-[94vw] sm:max-w-none md:w-[92vw] md:max-w-5xl lg:w-[88vw] lg:max-w-6xl xl:w-[80vw] [&>[data-slot=dialog-close]]:hidden"
-              : "rounded-t-3xl border-x-0 border-b-0 [&>[data-slot=drawer-header]]:pt-2"
+              ? "h-[min(90vh,56rem)] w-[94vw] max-w-none rounded-2xl sm:w-[94vw] sm:max-w-none md:w-[92vw] md:max-w-4xl lg:w-[80vw] lg:max-w-4xl [&>[data-slot=dialog-close]]:hidden"
+              : "max-h-[94vh] rounded-t-3xl border-x-0 border-b-0 [&>[data-slot=drawer-header]]:pt-2"
           )}
         >
-          <DialogHeader className={cn(
-            "flex-row items-center justify-between border-b border-[var(--cart-border)] bg-white px-4 py-3 text-left sm:px-6",
-            !isDesktop && "pt-6"
-          )}>
-            <div>
+          <DialogHeader className={cn("gap-2 border-b-2 border-[var(--cart-border)] bg-white px-4 py-3 text-left sm:px-6", !isDesktop && "pt-6")}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                {isDesktop ? (
+                  <DialogTitle className="text-2xl font-extrabold text-[var(--cart-dark)]">
+                    {checkoutSession ? "Pagamento" : inReview ? "Confira e pague" : "Meu pedido"}
+                  </DialogTitle>
+                ) : (
+                  <DrawerTitle className="text-2xl font-extrabold text-[var(--cart-dark)]">
+                    {checkoutSession ? "Pagamento" : inReview ? "Confira e pague" : "Meu pedido"}
+                  </DrawerTitle>
+                )}
+                {!checkoutSession && cart.items.length > 0 ? (
+                  <p className="mt-1 text-lg font-bold text-[var(--cart-muted)]">
+                    {inReview ? "Último passo" : `Passo ${wizardStep} de 4: ${stepTitles[wizardStep - 1]}`}
+                  </p>
+                ) : null}
+              </div>
               {isDesktop ? (
-                <DialogTitle className="text-xl font-black text-[var(--cart-dark)] sm:text-2xl">{checkoutStep === "REVIEW" && !checkoutSession ? "Revise seu pedido" : "Seu carrinho"}</DialogTitle>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" className="h-12 shrink-0 rounded-full border-2 border-[var(--cart-border)] px-4 text-[var(--cart-dark)]">
+                    <X className="mr-1 h-5 w-5" aria-hidden="true" /> Fechar
+                  </Button>
+                </DialogClose>
               ) : (
-                <DrawerTitle className="text-xl font-black text-[var(--cart-dark)]">{checkoutStep === "REVIEW" && !checkoutSession ? "Revise seu pedido" : "Seu carrinho"}</DrawerTitle>
+                <DrawerClose asChild>
+                  <Button type="button" variant="outline" className="h-12 shrink-0 rounded-full border-2 border-[var(--cart-border)] px-4 text-[var(--cart-dark)]">
+                    <X className="mr-1 h-5 w-5" aria-hidden="true" /> Fechar
+                  </Button>
+                </DrawerClose>
               )}
-              <p className="mt-1 text-sm font-medium text-[var(--cart-muted)]">
-                {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"}
-              </p>
-              {!checkoutSession && (actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)) ? (
-                <p role="alert" className="mt-1 max-w-xl text-sm font-bold text-red-700">
-                  {actionError || (checkoutStep === "FORM" ? checkoutGuidance : null)}
-                </p>
-              ) : null}
             </div>
-            {isDesktop ? <DialogClose asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-11 w-11 shrink-0 rounded-full border-[var(--cart-border)] text-[var(--cart-accent)]"
-                aria-label="Fechar carrinho"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </DialogClose> : <DrawerClose asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-11 w-11 shrink-0 rounded-full border-[var(--cart-border)] text-[var(--cart-accent)]"
-                aria-label="Fechar carrinho"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </DrawerClose>}
+            {!checkoutSession && cart.items.length > 0 ? (
+              <div className="flex gap-2" role="img" aria-label={inReview ? "Último passo" : `Passo ${wizardStep} de 4`}>
+                {[1, 2, 3, 4].map((n) => (
+                  <span key={n} className={cn("h-2 flex-1 rounded-full", inReview || n <= wizardStep ? "bg-[var(--cart-accent)]" : "bg-[var(--cart-border)]")} />
+                ))}
+              </div>
+            ) : null}
           </DialogHeader>
 
-          <div ref={cartScrollRef} className="min-h-0 scroll-pb-32 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
-          {checkoutSession ? (
-            <CartTransparentPayment
-              session={checkoutSession}
-              customerEmail={customerEmail}
-              onPaid={() => {
-                setCheckoutPaid(true);
-                void loadCart();
-              }}
-            />
-          ) : cart.items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--cart-border)] bg-white p-8 text-center text-base font-medium text-[var(--cart-muted)]">
-              Seu carrinho está vazio.
-            </div>
-          ) : checkoutStep === "REVIEW" ? (
-            <div className="mx-auto max-w-2xl space-y-4">
-              <div className="rounded-2xl border border-[var(--cart-border)] bg-white p-5">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--cart-muted)]">Confira antes de pagar</p>
-                <h2 className="mt-1 text-2xl font-black text-[var(--cart-dark)]">Resumo do pedido</h2>
-                <div className="mt-4 space-y-3">
-                  {cart.items.map((item) => (
-                    <div key={item.id} className="border-b border-[var(--cart-border)] pb-3 last:border-0 last:pb-0">
-                      <div className="flex justify-between gap-4 font-bold text-[var(--cart-dark)]">
-                        <span>{item.usesMinimumQuantity ? `${item.requestedUnits} un de ${item.name}` : `${item.quantity}x ${item.name}`}</span>
-                        <span>{formatCurrency(item.subtotal)}</span>
-                      </div>
-                      <p className="mt-1 text-sm text-[var(--cart-muted)]">{item.selectedItems.filter((entry) => entry.quantidade > 0).map((entry) => `${entry.tipo}: ${entry.quantidade}`).join(" • ")}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[var(--cart-border)] bg-white p-5 text-sm text-[var(--cart-muted)]">
-                <h3 className="text-lg font-black text-[var(--cart-dark)]">Dados e recebimento</h3>
-                <p className="mt-3"><strong className="text-[var(--cart-dark)]">Cliente:</strong> {customerName}</p>
-                <p><strong className="text-[var(--cart-dark)]">WhatsApp:</strong> {customerPhone}</p>
-                <p><strong className="text-[var(--cart-dark)]">Modalidade:</strong> {fulfillmentType === "DELIVERY" ? "Entrega" : "Retirada"}</p>
-                {fulfillmentType === "DELIVERY" ? <><p><strong className="text-[var(--cart-dark)]">Endereço:</strong> {deliveryAddress}</p><p><strong className="text-[var(--cart-dark)]">Referência:</strong> {deliveryReference}</p></> : null}
-                <p><strong className="text-[var(--cart-dark)]">Data e horário:</strong> {formatDateLabel(deliveryDate)} às {deliveryTime}</p>
-              </div>
-
-              <div className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-5">
-                <h3 className="text-lg font-black text-[var(--cart-dark)]">Valores</h3>
-                <div className="mt-4 space-y-2 text-sm text-[var(--cart-muted)]">
-                  <div className="flex justify-between gap-4"><span>Produtos</span><span>{formatCurrency(cart.totalAmount)}</span></div>
-                  <div className="flex justify-between gap-4"><span>Entrega</span><span>{fulfillmentType === "DELIVERY" ? (deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "A combinar") : "Grátis"}</span></div>
-                  <div className="flex justify-between gap-4 border-t border-[var(--cart-border)] pt-2 font-bold text-[var(--cart-dark)]"><span>Total do pedido</span><span>{formatCurrency(orderTotal)}</span></div>
-                  <div className="flex justify-between gap-4"><span>Pagamento agora ({paymentPercentage}%)</span><span>{formatCurrency(paymentPreview.baseAmount)}</span></div>
-                  {paymentPreview.feeAmount > 0 ? <div className="flex justify-between gap-4"><span>Taxa da forma de pagamento</span><span>{formatCurrency(paymentPreview.feeAmount)}</span></div> : null}
-                  <div className="mt-3 flex justify-between gap-4 rounded-xl bg-[var(--cart-surface)] p-3 text-lg font-black text-[var(--cart-dark)]"><span>Total a pagar agora</span><span>{formatCurrency(paymentPreview.totalToCharge)}</span></div>
-                  {paymentPercentage === 50 ? <p className="pt-1 text-xs">Restante do pedido: {formatCurrency(orderTotal - paymentPreview.baseAmount)}.</p> : null}
-                </div>
-              </div>
-              <div className="grid grid-cols-[auto_1fr] gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                <Button type="button" variant="outline" disabled={checkingOut} onClick={() => { setCheckoutStep("FORM"); setActionError(null); window.setTimeout(() => cartScrollRef.current?.scrollTo({ top: 0 }), 0); }} className="min-h-12 rounded-full border-[var(--cart-border)] px-5 font-bold text-[var(--cart-dark)]">Voltar</Button>
-                <Button type="button" disabled={checkingOut} onClick={() => void checkout()} className="min-h-12 rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]">
-                  {checkingOut ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> : null}
-                  {checkingOut ? "Preparando pagamento..." : `Pagar ${formatCurrency(paymentPreview.totalToCharge)}`}
+          <div ref={cartScrollRef} className="min-h-0 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
+            {checkoutSession ? (
+              <CartTransparentPayment
+                session={checkoutSession}
+                customerEmail={customerEmail}
+                onPaid={() => {
+                  setCheckoutPaid(true);
+                  void loadCart();
+                }}
+              />
+            ) : cart.items.length === 0 ? (
+              <div className="rounded-2xl border-2 border-dashed border-[var(--cart-border)] bg-white p-8 text-center">
+                <p className="text-xl font-bold text-[var(--cart-dark)]">Seu pedido está vazio.</p>
+                <p className="mt-2 text-lg text-[var(--cart-muted)]">Escolha um salgado no cardápio e toque em “Adicionar ao pedido”.</p>
+                <Button type="button" onClick={() => setOpen(false)} className={cn(bigButton, "mt-4 bg-[var(--cart-accent)] text-white")}>
+                  Ver os salgados
                 </Button>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {cart.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid gap-4 rounded-2xl border border-[var(--cart-border)] bg-[var(--cart-surface)] p-4 md:grid-cols-[88px_minmax(0,1fr)_auto] lg:gap-6 lg:p-5"
-                >
-                  <div className="relative h-20 overflow-hidden rounded-xl bg-white sm:h-16">
-                    <Image src={item.image} alt={item.name} fill unoptimized className="object-cover" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-black leading-snug text-[var(--cart-dark)]">{item.name}</p>
-                    <p className="text-base text-[var(--cart-muted)]">{item.type}</p>
-                    <p className="mt-1 text-lg font-bold text-[var(--cart-accent)]">
-                      {formatCurrency(item.subtotal)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 sm:justify-end">
-                    {!item.usesMinimumQuantity ? <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      disabled={loadingId === item.id}
-                      onClick={() => void setItemQuantity(item, item.quantity - 1)}
-                      className="h-11 w-11 rounded-full border-[var(--cart-border)]"
-                      aria-label={`Diminuir quantidade de ${item.name}`}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button> : null}
-                    {item.usesMinimumQuantity ? <Input type="number" inputMode="numeric" min={item.minimumQuantity} step="1" value={quantityDrafts[item.id] ?? String(item.requestedUnits)} onChange={(event) => { setQuantityDrafts((current) => ({ ...current, [item.id]: event.target.value })); setItemError(null); }} onBlur={() => commitRequestedUnits(item)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className="h-11 w-28 text-center font-black" /> : <span className="w-8 text-center text-lg font-black text-[#17251a]">{item.quantity}</span>}
-                    {!item.usesMinimumQuantity ? <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      disabled={loadingId === item.id}
-                      onClick={() => void setItemQuantity(item, item.quantity + 1)}
-                      className="h-11 w-11 rounded-full border-[var(--cart-border)]"
-                      aria-label={`Aumentar quantidade de ${item.name}`}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button> : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      disabled={loadingId === item.id}
-                      onClick={() => void removeItem(item)}
-                      className="ml-auto h-11 w-11 rounded-full border-red-300 text-red-700 hover:bg-red-50 sm:ml-0"
-                      aria-label={`Remover ${item.name} do carrinho`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {itemError?.id === item.id ? (
-                    <p role="alert" className="text-sm font-semibold text-red-700 md:col-span-3">
-                      {itemError.message}
-                    </p>
-                  ) : null}
-                  {item.precisaSelecaoDeTipos ? <div className="space-y-3 md:col-span-3">
-                    <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[var(--cart-border)] bg-white p-3 sm:p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-base font-bold text-[var(--cart-dark)]">Sabores do pedido</p>
-                        <p className="text-sm font-semibold text-[var(--cart-muted)]">
-                          {item.selectedItems.reduce((sum, entry) => sum + Number(entry.quantidade || 0), 0)}
-                          /{item.requestedUnits} un
+            ) : inReview ? (
+              <div className="mx-auto max-w-2xl space-y-4">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                  Confira tudo antes de pagar
+                </h2>
+                <div className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-5">
+                  <h3 className="text-xl font-extrabold text-[var(--cart-dark)]">O que você pediu</h3>
+                  <ul className="mt-4 space-y-3">
+                    {cart.items.map((item) => (
+                      <li key={item.id} className="border-b border-[var(--cart-border)] pb-3 last:border-0 last:pb-0">
+                        <div className="flex justify-between gap-4 text-lg font-bold text-[var(--cart-dark)]">
+                          <span>{item.usesMinimumQuantity ? `${item.requestedUnits} salgados de ${item.name}` : `${item.quantity} × ${item.name}`}</span>
+                          <span>{formatCurrency(item.subtotal)}</span>
+                        </div>
+                        <p className="mt-1 text-base text-[var(--cart-muted)]">
+                          {item.selectedItems.filter((entry) => entry.quantidade > 0).map((entry) => `${entry.quantidade} ${entry.tipo}`).join(" · ")}
                         </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        {(item.selectedItems.length > 0 ? item.selectedItems : [{ tipo: "", quantidade: 0 }]).map(
-                          (entry, index) => (
-                            <div
-                              key={`${item.id}-${index}`}
-                              className="grid gap-3 rounded-[1.25rem] border border-[var(--cart-surface)] bg-[linear-gradient(180deg,var(--cart-surface),var(--cart-surface))] p-3 md:grid-cols-[minmax(220px,1fr)_140px_auto] lg:gap-4 lg:p-4"
-                            >
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-[#284a2e]">
-                                  {item.category === "COMBO"
-                                    ? `Item do combo ${index + 1}`
-                                    : `Tipo de salgado ${index + 1}`}
-                                </label>
-                                {item.category === "COMBO" ? (
-                                  <Input
-                                    value={entry.tipo}
-                                    disabled
-                                    className="h-11 border-[var(--cart-border)] bg-white"
-                                  />
-                                ) : item.saboresSugeridos.length > 0 ? (
-                                  <Select
-                                    value={entry.tipo}
-                                    onValueChange={(value) => patchSelectedItem(item, index, { tipo: value })}
-                                  >
-                                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
-                                      <SelectValue placeholder="Selecione o salgado" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {item.saboresSugeridos.map((sabor) => (
-                                        <SelectItem key={sabor} value={sabor}>
-                                          {sabor}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <Input
-                                    value={entry.tipo}
-                                    onChange={(event) =>
-                                      patchSelectedItem(item, index, { tipo: event.target.value })
-                                    }
-                                    placeholder="Ex: coxinha"
-                                    className="h-11 border-[var(--cart-border)] bg-white"
-                                  />
-                                )}
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-[#284a2e]">Quantidade</label>
-                                <Input
-                                  type="number"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                  min="0"
-                                  step="1"
-                                  disabled={item.category === "COMBO"}
-                                  value={entry.quantidade}
-                                  onChange={(event) =>
-                                    patchSelectedItem(item, index, {
-                                      quantidade: Math.max(
-                                        0,
-                                        Math.floor(Number(event.target.value || 0))
-                                      ),
-                                    })
-                                  }
-                                  className="h-11 border-[var(--cart-border)] bg-white"
-                                />
-                              </div>
-
-                              <div className="flex items-end">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  disabled={item.category === "COMBO" || item.selectedItems.length <= 1}
-                                  onClick={() => removeSelectedItem(item, index)}
-                                  className="h-11 w-full rounded-xl border-[var(--cart-border)] text-[var(--cart-accent)] hover:bg-[var(--cart-surface)] sm:w-auto"
-                                >
-                                  <Minus className="mr-2 h-4 w-4" />
-                                  Remover
-                                </Button>
-                              </div>
-                            </div>
-                          )
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm text-[var(--cart-muted)]">
-                          Mínimo de {item.minimumQuantity} unidades. Máximo de {getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado, item.minimumQuantity)} tipos ({item.maxTiposSalgado} por lote de {item.minimumQuantity} unidades).
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={
-                            item.category === "COMBO" ||
-                            item.selectedItems.length >= getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado, item.minimumQuantity)
-                          }
-                          onClick={() =>
-                            updateSelectedItems(item, [
-                              ...item.selectedItems,
-                              { tipo: "", quantidade: 0 },
-                            ])
-                          }
-                          className="min-h-11 rounded-xl border-[var(--cart-border)] text-base font-semibold text-[var(--cart-accent)]"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Tipo
-                        </Button>
-                      </div>
-                    </div>
-                  </div> : null}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              ))}
 
-              <div className="pt-2">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#52705a]">Finalização</p>
-                <h2 className="mt-1 text-xl font-black text-[var(--cart-dark)]">Complete os 3 passos</h2>
-                <p className="mt-1 text-sm text-[var(--cart-muted)]">Preencha de cima para baixo. Leva menos de um minuto.</p>
+                <div className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-5 text-lg text-[var(--cart-muted)]">
+                  <h3 className="text-xl font-extrabold text-[var(--cart-dark)]">Seus dados</h3>
+                  <p className="mt-3"><strong className="text-[var(--cart-dark)]">Nome:</strong> {customerName}</p>
+                  <p><strong className="text-[var(--cart-dark)]">WhatsApp:</strong> {customerPhone}</p>
+                  <p><strong className="text-[var(--cart-dark)]">Como vai receber:</strong> {fulfillmentType === "DELIVERY" ? "Entrega" : "Retirada"}</p>
+                  {fulfillmentType === "DELIVERY" ? (
+                    <>
+                      <p><strong className="text-[var(--cart-dark)]">Endereço:</strong> {deliveryAddress}</p>
+                      <p><strong className="text-[var(--cart-dark)]">Referência:</strong> {deliveryReference}</p>
+                    </>
+                  ) : null}
+                  <p><strong className="text-[var(--cart-dark)]">Dia e hora:</strong> {formatDateLabel(deliveryDate)} às {deliveryTime}</p>
+                </div>
+
+                <div className="rounded-2xl border-2 border-[var(--cart-accent)] bg-white p-5">
+                  <h3 className="text-xl font-extrabold text-[var(--cart-dark)]">Valores</h3>
+                  <div className="mt-4 space-y-2 text-lg text-[var(--cart-muted)]">
+                    <div className="flex justify-between gap-4"><span>Produtos</span><span>{formatCurrency(cart.totalAmount)}</span></div>
+                    <div className="flex justify-between gap-4"><span>Entrega</span><span>{fulfillmentType === "DELIVERY" ? (deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "A combinar") : "Grátis"}</span></div>
+                    <div className="flex justify-between gap-4 border-t border-[var(--cart-border)] pt-2 font-bold text-[var(--cart-dark)]"><span>Total do pedido</span><span>{formatCurrency(orderTotal)}</span></div>
+                    <div className="flex justify-between gap-4"><span>Pagando agora ({paymentPercentage}%)</span><span>{formatCurrency(paymentPreview.baseAmount)}</span></div>
+                    {paymentPreview.feeAmount > 0 ? <div className="flex justify-between gap-4"><span>Taxa da forma de pagamento</span><span>{formatCurrency(paymentPreview.feeAmount)}</span></div> : null}
+                    <div className="mt-3 flex justify-between gap-4 rounded-xl bg-[var(--cart-surface)] p-3 text-xl font-extrabold text-[var(--cart-dark)]"><span>Você paga agora</span><span>{formatCurrency(paymentPreview.totalToCharge)}</span></div>
+                    {paymentPercentage === 50 ? <p className="pt-1 text-base">O restante, {formatCurrency(orderTotal - paymentPreview.baseAmount)}, você paga depois.</p> : null}
+                  </div>
+                </div>
               </div>
+            ) : wizardStep === 1 ? (
+              <div className="mx-auto max-w-3xl space-y-5">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                  Confira o que você escolheu
+                </h2>
+                <ul className="space-y-5">
+                  {cart.items.map((item) => {
+                    const selectedTotal = item.selectedItems.reduce((sum, entry) => sum + Number(entry.quantidade || 0), 0);
+                    const missing = Math.max(0, item.requestedUnits - selectedTotal);
+                    const maxTypes = item.usesMinimumQuantity
+                      ? getAllowedSalgadoTypes(item.requestedUnits, item.maxTiposSalgado, item.minimumQuantity)
+                      : item.maxTiposSalgado * item.quantity;
+                    const chosenCount = item.selectedItems.filter((entry) => entry.quantidade > 0).length;
+                    const draftUnits = Math.floor(Number(quantityDrafts[item.id] ?? item.requestedUnits)) || item.requestedUnits;
+                    const busy = loadingId === item.id;
+                    return (
+                      <li key={item.id} className="rounded-3xl border-2 border-[var(--cart-border)] bg-white p-4 sm:p-5">
+                        <div className="flex gap-4">
+                          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                            <Image src={item.image} alt={`Foto de ${item.name}`} fill unoptimized className="object-cover" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-xl font-extrabold leading-snug text-[var(--cart-dark)]">{item.name}</h3>
+                            <p className="text-lg font-bold text-[var(--cart-accent)]">{formatCurrency(item.subtotal)}</p>
+                          </div>
+                        </div>
 
-              <section className="rounded-2xl border border-[var(--cart-border)] bg-white p-4" aria-labelledby="cart-step-customer">
-                <div className="mb-4 flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cart-accent)] text-base font-black text-white">1</span>
-                  <div>
-                    <h3 id="cart-step-customer" className="text-lg font-black text-[var(--cart-dark)]">Seus dados</h3>
-                    <p className="text-sm text-[var(--cart-muted)]">Usaremos o WhatsApp para confirmar o pedido.</p>
+                        <div className="mt-4 space-y-2">
+                          <label htmlFor={`qtd-${item.id}`} className="block text-lg font-bold text-[var(--cart-dark)]">
+                            {item.usesMinimumQuantity ? "Quantidade de salgados" : "Quantidade"}
+                          </label>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={busy || (item.usesMinimumQuantity ? draftUnits - 10 < item.minimumQuantity : item.quantity <= 1)}
+                              onClick={() => void setItemQuantity(item, item.usesMinimumQuantity ? Math.max(item.minimumQuantity, draftUnits - 10) : item.quantity - 1)}
+                              className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+                              aria-label={`Diminuir a quantidade de ${item.name}`}
+                            >
+                              <Minus className="h-6 w-6" aria-hidden="true" />
+                            </Button>
+                            {item.usesMinimumQuantity ? (
+                              <Input
+                                id={`qtd-${item.id}`}
+                                type="number"
+                                inputMode="numeric"
+                                min={item.minimumQuantity}
+                                step="1"
+                                value={quantityDrafts[item.id] ?? String(item.requestedUnits)}
+                                onChange={(event) => { setQuantityDrafts((current) => ({ ...current, [item.id]: event.target.value })); setItemError(null); }}
+                                onBlur={() => commitRequestedUnits(item)}
+                                onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                                className="h-14 min-w-[6rem] flex-1 rounded-full border-2 border-[var(--cart-border)] text-center text-2xl font-extrabold"
+                              />
+                            ) : (
+                              <output id={`qtd-${item.id}`} className="flex h-14 min-w-[6rem] flex-1 items-center justify-center rounded-full border-2 border-[var(--cart-border)] text-2xl font-extrabold text-[var(--cart-dark)]">
+                                {item.quantity}
+                              </output>
+                            )}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={busy}
+                              onClick={() => void setItemQuantity(item, item.usesMinimumQuantity ? draftUnits + 10 : item.quantity + 1)}
+                              className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+                              aria-label={`Aumentar a quantidade de ${item.name}`}
+                            >
+                              <Plus className="h-6 w-6" aria-hidden="true" />
+                            </Button>
+                          </div>
+                          {item.usesMinimumQuantity ? (
+                            <div className="flex flex-wrap gap-2" role="group" aria-label="Somar de uma vez">
+                              {[50, 100].map((amount) => (
+                                <Button key={amount} type="button" variant="outline" disabled={busy} onClick={() => void setItemQuantity(item, draftUnits + amount)} className="h-12 rounded-full border-2 border-[var(--cart-border)] px-5 font-bold text-[var(--cart-dark)]">
+                                  + {amount}
+                                </Button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {itemError?.id === item.id ? (
+                          <p role="alert" className="mt-3 rounded-2xl border-2 border-[#b91c1c] bg-[#fdeaea] p-3 text-base font-semibold text-[#7f1111]">{itemError.message}</p>
+                        ) : null}
+
+                        {item.precisaSelecaoDeTipos ? (
+                          <fieldset className="mt-5 space-y-3 rounded-2xl bg-[var(--cart-surface)] p-3 sm:p-4">
+                            <legend className="px-1 text-xl font-extrabold text-[var(--cart-dark)]">
+                              {item.category === "COMBO" ? "O que vem no combo" : "Escolha os sabores"}
+                            </legend>
+
+                            {item.category === "COMBO" ? (
+                              <ul className="space-y-1 text-lg text-[var(--cart-dark)]">
+                                {item.selectedItems.map((entry) => (
+                                  <li key={entry.tipo}>{entry.quantidade} {entry.tipo}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <>
+                                <div aria-live="polite" className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-3 text-lg">
+                                  <p className={cn("font-extrabold", missing === 0 && selectedTotal === item.requestedUnits ? "text-[#07391f]" : "text-[var(--cart-dark)]")}>
+                                    Você escolheu {selectedTotal} de {item.requestedUnits} salgados.{" "}
+                                    {selectedTotal > item.requestedUnits
+                                      ? `Passou ${selectedTotal - item.requestedUnits}: tire alguns.`
+                                      : missing > 0
+                                        ? `Faltam ${missing}.`
+                                        : "Tudo certo ✓"}
+                                  </p>
+                                  <p className="text-[var(--cart-muted)]">
+                                    Sabores escolhidos: {chosenCount} de {maxTypes} (é o máximo para essa quantidade).
+                                  </p>
+                                  {chosenCount >= maxTypes ? (
+                                    <p className="mt-1 font-semibold text-[var(--cart-dark)]">
+                                      Você já escolheu o máximo de sabores. Para escolher outro, tire um sabor ou peça mais salgados.
+                                    </p>
+                                  ) : null}
+                                </div>
+
+                                {item.saboresSugeridos.length > 0 ? (
+                                  <ul className="space-y-2">
+                                    {item.saboresSugeridos.map((sabor) => {
+                                      const current = item.selectedItems.find((entry) => entry.tipo === sabor)?.quantidade ?? 0;
+                                      const blockedByLimit = current === 0 && chosenCount >= maxTypes;
+                                      const rowId = `sabor-${item.id}-${sabor.replace(/\W+/g, "-")}`;
+                                      return (
+                                        <li key={sabor} className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-3">
+                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <label htmlFor={rowId} className="text-lg font-bold text-[var(--cart-dark)]">{sabor}</label>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <Button type="button" variant="outline" size="icon" disabled={current === 0} onClick={() => setFlavorQuantity(item, sabor, current - 1)} className="h-12 w-12 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]" aria-label={`Tirar um ${sabor}`}>
+                                                <Minus className="h-5 w-5" aria-hidden="true" />
+                                              </Button>
+                                              <Input id={rowId} type="number" inputMode="numeric" min="0" step="1" value={current} onChange={(event) => setFlavorQuantity(item, sabor, Math.floor(Number(event.target.value || 0)))} className="h-12 w-20 rounded-full border-2 border-[var(--cart-border)] px-1 text-center text-xl font-extrabold" />
+                                              <Button type="button" variant="outline" size="icon" disabled={blockedByLimit || missing === 0} onClick={() => setFlavorQuantity(item, sabor, current + 1)} className="h-12 w-12 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]" aria-label={`Colocar mais um ${sabor}`}>
+                                                <Plus className="h-5 w-5" aria-hidden="true" />
+                                              </Button>
+                                              <Button type="button" variant="outline" disabled={blockedByLimit || missing === 0} onClick={() => setFlavorQuantity(item, sabor, current + Math.min(10, missing))} className="h-12 rounded-full border-2 border-[var(--cart-border)] px-4 font-bold text-[var(--cart-dark)]" aria-label={`Colocar mais 10 de ${sabor}`}>
+                                                + 10
+                                              </Button>
+                                            </div>
+                                          </div>
+                                          {blockedByLimit ? <p className="mt-2 text-base text-[var(--cart-muted)]">Limite de sabores atingido.</p> : null}
+                                          {missing > 0 && !blockedByLimit ? (
+                                            <button type="button" onClick={() => setFlavorQuantity(item, sabor, current + missing)} className="mt-2 min-h-12 text-base font-bold text-[var(--cart-accent)] underline underline-offset-4">
+                                              Colocar os {missing} que faltam em {sabor}
+                                            </button>
+                                          ) : null}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                ) : (
+                                  <div className="space-y-3">
+                                    {(item.selectedItems.length > 0 ? item.selectedItems : [{ tipo: "", quantidade: 0 }]).map((entry, index) => (
+                                      <div key={`${item.id}-${index}`} className="grid gap-3 rounded-2xl border-2 border-[var(--cart-border)] bg-white p-3 sm:grid-cols-[1fr_8rem_auto]">
+                                        <div className="space-y-1">
+                                          <label htmlFor={`livre-${item.id}-${index}`} className="text-base font-bold text-[var(--cart-dark)]">Sabor {index + 1}</label>
+                                          <Input id={`livre-${item.id}-${index}`} value={entry.tipo} onChange={(event) => patchSelectedItem(item, index, { tipo: event.target.value })} placeholder="Ex.: coxinha" />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label htmlFor={`livre-q-${item.id}-${index}`} className="text-base font-bold text-[var(--cart-dark)]">Quantos</label>
+                                          <Input id={`livre-q-${item.id}-${index}`} type="number" inputMode="numeric" min="0" step="1" value={entry.quantidade} onChange={(event) => patchSelectedItem(item, index, { quantidade: Math.max(0, Math.floor(Number(event.target.value || 0))) })} />
+                                        </div>
+                                        <div className="flex items-end">
+                                          <Button type="button" variant="outline" disabled={item.selectedItems.length <= 1} onClick={() => removeSelectedItem(item, index)} className="w-full border-2 border-[var(--cart-border)] text-[var(--cart-accent)] sm:w-auto">
+                                            Tirar
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    <Button type="button" variant="outline" disabled={item.selectedItems.length >= maxTypes} onClick={() => updateSelectedItems(item, [...item.selectedItems, { tipo: "", quantidade: 0 }])} className="border-2 border-[var(--cart-border)] font-bold text-[var(--cart-accent)]">
+                                      <Plus className="mr-2 h-5 w-5" aria-hidden="true" /> Adicionar outro sabor
+                                    </Button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </fieldset>
+                        ) : null}
+
+                        <div className="mt-4 flex justify-end">
+                          <Button type="button" variant="outline" disabled={busy} onClick={() => void removeItem(item)} className="h-12 rounded-full border-2 border-[#b91c1c] px-5 font-bold text-[#7f1111] hover:bg-[#fdeaea]">
+                            <Trash2 className="mr-2 h-5 w-5" aria-hidden="true" /> Tirar este item do pedido
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-center text-base font-bold text-[#07391f] underline underline-offset-4">
+                  Prefiro pedir pelo WhatsApp
+                </a>
+              </div>
+            ) : wizardStep === 2 ? (
+              <div className="mx-auto max-w-2xl space-y-5">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                  Quem está fazendo o pedido?
+                </h2>
+                <div className="space-y-5 rounded-2xl border-2 border-[var(--cart-border)] bg-white p-4 sm:p-5">
+                  <div className="space-y-2">
+                    <label htmlFor="cart-customer-name" className="block text-lg font-bold text-[var(--cart-dark)]">Seu nome</label>
+                    <Input id="cart-customer-name" autoComplete="name" value={customerName} onChange={(event) => { setCustomerName(event.target.value); setActionError(null); }} aria-invalid={!nameValid && (touched || customerName.length > 0)} aria-describedby="erro-nome" className="h-14 text-lg" />
+                    {!nameValid && (touched || customerName.length > 0) ? <p id="erro-nome" role="alert" className="text-base font-bold text-[#7f1111]">Falta o seu nome.</p> : null}
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="cart-customer-phone" className="block text-lg font-bold text-[var(--cart-dark)]">Seu WhatsApp (com DDD)</label>
+                    <Input id="cart-customer-phone" type="tel" inputMode="tel" autoComplete="tel" value={customerPhone} onChange={(event) => { setCustomerPhone(formatWhatsAppInput(event.target.value)); setActionError(null); }} aria-invalid={!phoneValid && (touched || customerPhone.length > 0)} aria-describedby="dica-whats erro-whats" className="h-14 text-lg" />
+                    <p id="dica-whats" className="text-base text-[var(--cart-muted)]">Exemplo: (83) 99999-9999. Falamos com você por aqui para confirmar o pedido.</p>
+                    {!phoneValid && (touched || customerPhone.length > 0) ? <p id="erro-whats" role="alert" className="text-base font-bold text-[#7f1111]">Falta o número completo, com DDD.</p> : null}
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="cart-customer-email" className="block text-lg font-bold text-[var(--cart-dark)]">Seu e-mail</label>
+                    <Input id="cart-customer-email" type="email" inputMode="email" autoComplete="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setActionError(null); }} aria-invalid={!emailValid && (touched || customerEmail.length > 0)} aria-describedby="dica-email erro-email" className="h-14 text-lg" />
+                    <p id="dica-email" className="text-base text-[var(--cart-muted)]">Usamos só para o pagamento. Exemplo: maria@email.com</p>
+                    {!emailValid && (touched || customerEmail.length > 0) ? <p id="erro-email" role="alert" className="text-base font-bold text-[#7f1111]">Falta um e-mail válido, com @.</p> : null}
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label htmlFor="cart-customer-name" className="text-base font-bold text-[var(--cart-dark)]">Seu nome</label>
-                  <Input id="cart-customer-name" value={customerName} onChange={(event) => { setCustomerName(event.target.value); setActionError(null); }} placeholder="Digite seu nome" required className="h-12 text-base" aria-invalid={customerName.length > 0 && customerName.trim().length < 2} />
-                  {customerName.length > 0 && customerName.trim().length < 2 ? (
-                    <p role="alert" className="text-sm font-semibold text-red-700">Informe o nome para finalizar o pedido.</p>
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="cart-customer-phone" className="text-base font-bold text-[var(--cart-dark)]">Seu WhatsApp</label>
-                  <Input id="cart-customer-phone" type="tel" inputMode="tel" value={customerPhone} onChange={(event) => { setCustomerPhone(formatWhatsAppInput(event.target.value)); setActionError(null); }} placeholder="(00) 00000-0000" required className="h-12 text-base" aria-invalid={customerPhone.length > 0 && customerPhone.replace(/\D/g, "").length < 10} />
-                  {customerPhone.length > 0 && customerPhone.replace(/\D/g, "").length < 10 ? (
-                    <p role="alert" className="text-sm font-semibold text-red-700">Informe um WhatsApp válido para finalizar o pedido.</p>
-                  ) : null}
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <label htmlFor="cart-customer-email" className="text-base font-bold text-[var(--cart-dark)]">Seu e-mail</label>
-                  <Input id="cart-customer-email" type="email" inputMode="email" autoComplete="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setActionError(null); }} placeholder="email@exemplo.com" required className="h-12 text-base" aria-invalid={customerEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(customerEmail.trim())} />
-                  {/* <p className="text-sm text-[var(--cart-muted)]">O Mercado Pago usa o e-mail para processar Pix e cartão.</p> */}
-                  {customerEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(customerEmail.trim()) ? (
-                    <p role="alert" className="text-sm font-semibold text-red-700">Informe um e-mail válido para o pagamento.</p>
-                  ) : null}
-                </div>
-                </div>
-              </section>
+              </div>
+            ) : wizardStep === 3 ? (
+              <div className="mx-auto max-w-2xl space-y-5">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                  Como e quando você quer receber?
+                </h2>
 
-              <section className="rounded-2xl border border-[var(--cart-border)] bg-white p-4">
-                <h3 className="text-lg font-black text-[var(--cart-dark)]">Como você quer receber?</h3>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <Button type="button" variant={fulfillmentType === "PICKUP" ? "default" : "outline"} onClick={() => { setFulfillmentType("PICKUP"); setActionError(null); }} className="h-12">Retirada</Button>
-                  <Button type="button" variant={fulfillmentType === "DELIVERY" ? "default" : "outline"} onClick={() => { setFulfillmentType("DELIVERY"); setActionError(null); }} className="h-12">Entrega</Button>
-                </div>
+                <fieldset className="space-y-3">
+                  <legend className="mb-1 text-lg font-bold text-[var(--cart-dark)]">Como você quer receber?</legend>
+                  <label className={radioCard(fulfillmentType === "PICKUP")}>
+                    <input type="radio" name="recebimento" checked={fulfillmentType === "PICKUP"} onChange={() => { setFulfillmentType("PICKUP"); setActionError(null); }} className="mt-1 h-6 w-6 shrink-0 accent-[var(--cart-accent)]" />
+                    <span><strong className="block">Vou buscar</strong><span className="text-base text-[var(--cart-muted)]">Retirada na Vizinha, sem custo.</span></span>
+                  </label>
+                  <label className={radioCard(fulfillmentType === "DELIVERY")}>
+                    <input type="radio" name="recebimento" checked={fulfillmentType === "DELIVERY"} onChange={() => { setFulfillmentType("DELIVERY"); setActionError(null); }} className="mt-1 h-6 w-6 shrink-0 accent-[var(--cart-accent)]" />
+                    <span><strong className="block">Quero que entreguem</strong><span className="text-base text-[var(--cart-muted)]">A taxa depende do bairro.</span></span>
+                  </label>
+                </fieldset>
+
                 {fulfillmentType === "DELIVERY" ? (
-                  <div className="mt-4 space-y-2">
-                    <label htmlFor="cart-delivery-address" className="text-base font-bold text-[var(--cart-dark)]">Endereço de entrega</label>
-                    <Input ref={addressInputRef} id="cart-delivery-address" autoComplete="off" defaultValue={deliveryAddress} onInput={() => { if (deliveryPlace.placeId) { setDeliveryPlace({ placeId: "", neighborhood: "", city: "", latitude: 0, longitude: 0 }); setDeliveryAddress(""); } }} placeholder="Digite rua e número e escolha uma sugestão" className="h-12 text-base" />
-                    <label htmlFor="cart-delivery-reference" className="pt-2 text-base font-bold text-[var(--cart-dark)]">Ponto de referência</label>
-                    <Input id="cart-delivery-reference" value={deliveryReference} onChange={(event) => setDeliveryReference(event.target.value)} placeholder="Ex.: próximo à praça, portão azul" className="h-12 text-base" />
-                    {deliveryPlace.placeId ? <p className="text-sm font-bold text-[#284a2e]">{deliveryPlace.neighborhood}: {deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "taxa a combinar"}</p> : <p className="text-sm text-[var(--cart-muted)]">Selecione uma sugestão do Google para confirmar o local.</p>}
+                  <div className="space-y-4 rounded-2xl border-2 border-[var(--cart-border)] bg-white p-4 sm:p-5">
+                    <div className="space-y-2">
+                      <label htmlFor="cart-delivery-address" className="block text-lg font-bold text-[var(--cart-dark)]">Endereço de entrega</label>
+                      <Input ref={addressInputRef} id="cart-delivery-address" autoComplete="off" defaultValue={deliveryAddress} onInput={() => { if (deliveryPlace.placeId) { setDeliveryPlace({ placeId: "", neighborhood: "", city: "", latitude: 0, longitude: 0 }); setDeliveryAddress(""); } }} aria-describedby="dica-endereco" className="h-14 text-lg" />
+                      <p id="dica-endereco" className="text-base text-[var(--cart-muted)]">Digite a rua e o número e toque em uma das sugestões que aparecem.</p>
+                      {deliveryPlace.placeId ? (
+                        <p className="text-base font-bold text-[#07391f]">Bairro {deliveryPlace.neighborhood}: entrega {deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "com taxa a combinar"}.</p>
+                      ) : touched && deliveryAddressMissing ? (
+                        <p role="alert" className="text-base font-bold text-[#7f1111]">Falta escolher o endereço em uma das sugestões.</p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="cart-delivery-reference" className="block text-lg font-bold text-[var(--cart-dark)]">Ponto de referência</label>
+                      <Input id="cart-delivery-reference" value={deliveryReference} onChange={(event) => setDeliveryReference(event.target.value)} aria-describedby="dica-referencia" className="h-14 text-lg" />
+                      <p id="dica-referencia" className="text-base text-[var(--cart-muted)]">Exemplo: perto da praça, portão azul.</p>
+                      {touched && deliveryReferenceMissing ? <p role="alert" className="text-base font-bold text-[#7f1111]">Falta o ponto de referência.</p> : null}
+                    </div>
                   </div>
                 ) : null}
-              </section>
 
-              <section className="rounded-2xl border border-[var(--cart-border)] bg-[var(--cart-surface)] p-4" aria-labelledby="cart-step-schedule">
-                <div className="mb-3 flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cart-accent)] text-base font-black text-white">2</span>
-                  <div>
-                    <h3 id="cart-step-schedule" className="text-lg font-black text-[var(--cart-dark)]">Data e horário</h3>
-                    <p className="text-sm text-[var(--cart-muted)]">Escolha quando deseja {fulfillmentType === "DELIVERY" ? "receber" : "retirar"}.</p>
-                  </div>
-                </div>
-                <div className="mb-4 rounded-xl border border-[#c6d590] bg-white p-3 text-sm text-[#284a2e]">
-                  <p><strong>Antecedência mínima:</strong> {effectiveMinimumLeadHours} {effectiveMinimumLeadHours === 1 ? "hora" : "horas"}.</p>
-                  <p className="mt-1 capitalize">
-                    <strong>Funcionamento em {selectedWeekday}:</strong>{" "}
-                    {selectedSchedule ? `das ${selectedSchedule.openHour}h às ${selectedSchedule.closeHour}h` : "fechado"}.
+                <fieldset className="space-y-3 rounded-2xl border-2 border-[var(--cart-border)] bg-white p-4 sm:p-5">
+                  <legend className="px-1 text-lg font-bold text-[var(--cart-dark)]">Qual dia?</legend>
+                  <p className="text-base text-[var(--cart-muted)]">
+                    Precisamos de pelo menos {effectiveMinimumLeadHours} {effectiveMinimumLeadHours === 1 ? "hora" : "horas"} de antecedência.
                   </p>
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="relative">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setCalendarOpen((current) => !current)}
-                      className="h-11 w-full justify-between border-[var(--cart-border)] bg-white px-3 text-left text-[#284a2e] hover:bg-[var(--cart-surface)]"
-                    >
-                      <span className="truncate">{formatDateLabel(deliveryDate)}</span>
-                      <CalendarDays className="h-4 w-4 shrink-0" />
-                    </Button>
-
-                    {calendarOpen ? (
-                      <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full min-w-[18rem] rounded-2xl border border-[var(--cart-border)] bg-white p-4 shadow-[0_24px_60px_rgba(27,94,32,0.18)]">
-                        <div className="mb-4 flex items-center justify-between">
-                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, -1))} className="h-11 w-11 rounded-full text-[var(--cart-accent)] hover:bg-[var(--cart-surface)]">
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <p className="text-sm font-semibold capitalize text-[var(--cart-dark)]">
-                            {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(displayMonth)}
-                          </p>
-                          <Button type="button" variant="ghost" size="icon" onClick={() => setDisplayMonth((current) => addMonths(current, 1))} className="h-11 w-11 rounded-full text-[var(--cart-accent)] hover:bg-[var(--cart-surface)]">
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#6f8a55]">
-                          {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"].map((day) => (<span key={day} className="py-1">{day}</span>))}
-                        </div>
-
-                        <div className="grid grid-cols-7 gap-1">
-                          {calendarDays.map(({ date, currentMonth }) => {
-                            const dateKey = formatDateInputValue(date);
-                            const isSelected = dateKey === deliveryDate;
-                            const isDisabled = dateKey < minDeliveryDateKey;
-
-                            return (
-                              <button
-                                key={`${dateKey}-${currentMonth ? "current" : "other"}`}
-                                type="button"
-                                disabled={isDisabled}
-                                onClick={() => selectDeliveryDate(dateKey)}
-                                className={cn(
-                                  "h-11 rounded-xl text-sm transition",
-                                  isSelected ? "bg-[var(--cart-accent)] font-semibold text-white" : "text-[#284a2e] hover:bg-[var(--cart-surface)]",
-                                  !currentMonth && !isSelected && "text-[#9aad8a]",
-                                  isDisabled && "cursor-not-allowed opacity-35 hover:bg-transparent"
-                                )}
-                              >
-                                {date.getDate()}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {upcomingDays.map((day) => (
+                      <Button key={day} type="button" variant="outline" aria-pressed={deliveryDate === day} onClick={() => selectDeliveryDate(day)} className={cn("h-12 rounded-full border-2 px-4 text-base font-bold capitalize", deliveryDate === day ? "border-[var(--cart-accent)] bg-[var(--cart-accent)] text-white hover:bg-[var(--cart-accent-hover)] hover:text-white" : "border-[var(--cart-border)] text-[var(--cart-dark)]")}>
+                        {formatShortDay(day)}
+                      </Button>
+                    ))}
                   </div>
+                  <div className="space-y-2">
+                    <label htmlFor="cart-delivery-date" className="block text-base font-bold text-[var(--cart-dark)]">Ou escolha outro dia</label>
+                    <Input id="cart-delivery-date" type="date" min={minDeliveryDateKey} value={deliveryDate} onChange={(event) => selectDeliveryDate(event.target.value)} className="h-14 text-lg" />
+                  </div>
+                  <p className="text-lg font-bold capitalize text-[var(--cart-dark)]">
+                    Dia escolhido: {formatDateLabel(deliveryDate)}
+                  </p>
+                  <p className="text-base text-[var(--cart-muted)] capitalize">
+                    Funcionamento em {selectedWeekday}: {selectedSchedule ? `das ${selectedSchedule.openHour}h às ${selectedSchedule.closeHour}h` : "fechado"}.
+                  </p>
+                </fieldset>
 
+                <div className="space-y-2 rounded-2xl border-2 border-[var(--cart-border)] bg-white p-4 sm:p-5">
+                  <label htmlFor="cart-delivery-time" className="block text-lg font-bold text-[var(--cart-dark)]">
+                    Que horas você quer {fulfillmentType === "DELIVERY" ? "receber" : "retirar"}?
+                  </label>
                   <Select value={deliveryTime} onValueChange={(value) => { setDeliveryTime(value); setActionError(null); }}>
-                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
-                      <SelectValue placeholder="Selecione o horário" />
+                    <SelectTrigger id="cart-delivery-time" className="h-14 w-full border-2 border-[var(--cart-border)] bg-white text-lg">
+                      <SelectValue placeholder="Escolha o horário" />
                     </SelectTrigger>
                     <SelectContent>
                       {timeSlots.map((time) => (
-                        <SelectItem key={time} value={time}>
-                          {time}
-                        </SelectItem>
+                        <SelectItem key={time} value={time}>{time}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {selectedDateHasNoSchedule ? (
+                    <p role="alert" className="text-base font-bold text-[#7f1111]">Não atendemos nesse dia. Escolha um dos dias acima.</p>
+                  ) : storeClosedBlocksSelectedDate ? (
+                    <p role="alert" className="text-base font-bold text-[#7f1111]">Hoje a loja não está recebendo pedidos. Escolha outro dia.</p>
+                  ) : !deliveryTimeIsValid ? (
+                    <p role="alert" className="text-base font-bold text-[#7f1111]">Falta escolher o horário.</p>
+                  ) : (
+                    <p className="text-base text-[var(--cart-muted)]">Há 15 minutos de tolerância de atraso para os dois lados.</p>
+                  )}
                 </div>
-                {selectedDateHasNoSchedule ? (
-                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">Não atendemos nessa data. Escolha um dia com horário ativo na operação.</p>
-                ) : storeClosedBlocksSelectedDate ? (
-                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">A loja está fechada para pedidos de hoje. Escolha uma data futura para continuar.</p>
-                ) : !deliveryTimeIsValid ? (
-                  <p role="alert" className="mt-2 text-sm font-semibold text-red-700">Informe uma data e horário válidos.</p>
-                ) : (
-                  <p className="mt-2 text-sm text-[#48654f]">Esse horário é para a {fulfillmentType === "DELIVERY" ? "entrega" : "retirada"} do seu pedido.</p>
-                )}
-              </section>
+              </div>
+            ) : (
+              <div className="mx-auto max-w-2xl space-y-5">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                  Como você quer pagar?
+                </h2>
 
-              <section className="rounded-2xl border border-[var(--cart-border)] bg-white p-4" aria-labelledby="cart-step-payment">
-                <div className="mb-4 flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cart-accent)] text-base font-black text-white">3</span>
-                  <div>
-                    <h3 id="cart-step-payment" className="text-lg font-black text-[var(--cart-dark)]">Pagamento</h3>
-                    <p className="text-sm text-[var(--cart-muted)]">Confira quanto pagar agora e escolha a forma.</p>
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-base font-bold text-[var(--cart-dark)]">Quanto pagar agora</label>
-                  <Select
-                    value={String(paymentPercentage)}
-                    onValueChange={(value) => setPaymentPercentage(Number(value) as 50 | 100)}
-                  >
-                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
-                      <SelectValue placeholder="Percentual" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(allowsPartialPayment ? PAYMENT_PERCENTAGES : [100]).map((value) => (
-                        <SelectItem key={value} value={String(value)}>
-                          Pagar {value}% agora
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-[var(--cart-muted)]">
-                    Base: {formatCurrency(paymentPreview.baseAmount)}
-                  </p>
-                </div>
+                <fieldset className="space-y-3">
+                  <legend className="mb-1 text-lg font-bold text-[var(--cart-dark)]">Quanto pagar agora?</legend>
+                  {(allowsPartialPayment ? PAYMENT_PERCENTAGES : ([100] as const)).map((value) => {
+                    const preview = calculatePaymentAmounts(orderTotal, value, paymentMethod);
+                    return (
+                      <label key={value} className={radioCard(paymentPercentage === value)}>
+                        <input type="radio" name="percentual" checked={paymentPercentage === value} onChange={() => setPaymentPercentage(value)} className="mt-1 h-6 w-6 shrink-0 accent-[var(--cart-accent)]" />
+                        <span>
+                          <strong className="block">{value === 100 ? "Pagar tudo agora" : "Pagar metade agora (50%)"}</strong>
+                          <span className="text-base text-[var(--cart-muted)]">{formatCurrency(preview.baseAmount)}{value === 50 ? ", e o restante depois" : ""}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {!allowsPartialPayment ? <p className="text-base text-[var(--cart-muted)]">Algum item do pedido só pode ser pago por inteiro.</p> : null}
+                </fieldset>
 
-                <div className="space-y-2">
-                  <label className="text-base font-bold text-[var(--cart-dark)]">Forma de pagamento</label>
-                  <Select
-                    value={paymentMethod}
-                    onValueChange={(value) => setPaymentMethod(value as MetodoPagamento)}
-                  >
-                    <SelectTrigger className="h-11 w-full border-[var(--cart-border)] bg-white">
-                      <SelectValue placeholder="Método" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUPPORTED_PAYMENT_METHODS.filter((method) =>
-                        method.id === MetodoPagamento.PIX ||
-                        method.id === MetodoPagamento.CARTAO_CREDITO ||
-                        method.id === MetodoPagamento.CARTAO_DEBITO
-                      ).map((method) => (
-                        <SelectItem key={method.id} value={method.id}>
-                          {method.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-[var(--cart-muted)]">
-                    {selectedPaymentMethod?.description || "Escolha a forma de pagamento."}
-                  </p>
-                </div>
-                </div>
-              </section>
+                <fieldset className="space-y-3">
+                  <legend className="mb-1 text-lg font-bold text-[var(--cart-dark)]">Forma de pagamento</legend>
+                  {SUPPORTED_PAYMENT_METHODS.filter((method) => method.id === MetodoPagamento.PIX || method.id === MetodoPagamento.CARTAO_CREDITO || method.id === MetodoPagamento.CARTAO_DEBITO).map((method) => (
+                    <label key={method.id} className={radioCard(paymentMethod === method.id)}>
+                      <input type="radio" name="forma" checked={paymentMethod === method.id} onChange={() => setPaymentMethod(method.id)} className="mt-1 h-6 w-6 shrink-0 accent-[var(--cart-accent)]" />
+                      <span><strong className="block">{method.label}</strong><span className="text-base text-[var(--cart-muted)]">{method.description}</span></span>
+                    </label>
+                  ))}
+                </fieldset>
 
-              <Button
-                type="button"
-                disabled={checkingOut || !canCheckout || Boolean(cartValidation)}
-                onClick={showReview}
-                className="min-h-12 w-full rounded-full bg-[var(--cart-accent)] px-5 text-base font-black text-white hover:bg-[var(--cart-accent-hover)]"
-              >
-                Finalizar pedido
-              </Button>
-
-            </div>
-          )}
+                <p className="rounded-2xl border-2 border-[var(--cart-accent)] bg-white p-4 text-xl font-extrabold text-[var(--cart-dark)]" aria-live="polite">
+                  Você paga agora: {formatCurrency(paymentPreview.totalToCharge)}
+                  {paymentPreview.feeAmount > 0 ? <span className="block text-base font-medium text-[var(--cart-muted)]">Já inclui a taxa da forma de pagamento ({formatCurrency(paymentPreview.feeAmount)}).</span> : null}
+                </p>
+              </div>
+            )}
           </div>
 
+          {!checkoutSession && cart.items.length > 0 ? (
+            <div className="border-t-2 border-[var(--cart-border)] bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+              {actionError ? (
+                <p role="alert" className="mb-3 rounded-2xl border-2 border-[#b91c1c] bg-[#fdeaea] p-3 text-base font-bold text-[#7f1111]">{actionError}</p>
+              ) : null}
+              <div className="mx-auto flex max-w-2xl gap-2 sm:gap-3">
+                <Button type="button" variant="outline" disabled={checkingOut} onClick={goBack} className={cn(bigButton, "flex-1 border-2 border-[var(--cart-accent)] text-[var(--cart-accent)] sm:flex-none")}>
+                  <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
+                  {wizardStep === 1 && !inReview ? "Escolher mais" : "Voltar"}
+                </Button>
+                {inReview ? (
+                  <Button type="button" disabled={checkingOut} onClick={() => void checkout()} className={cn(bigButton, "flex-[2] bg-[var(--cart-accent)] text-white hover:bg-[var(--cart-accent-hover)]")}>
+                    {checkingOut ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" /> : null}
+                    {checkingOut ? "Preparando o pagamento..." : `Pagar ${formatCurrency(paymentPreview.totalToCharge)}`}
+                  </Button>
+                ) : (
+                  <Button type="button" disabled={checkingOut} onClick={continueStep} className={cn(bigButton, "flex-[2] bg-[var(--cart-accent)] text-white hover:bg-[var(--cart-accent-hover)]")}>
+                    {wizardStep === 4 ? "Revisar o pedido" : "Continuar"}
+                    <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div />
+          )}
         </CartContent>
       </CartRoot>
     </>

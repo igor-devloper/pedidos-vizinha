@@ -4,6 +4,11 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Texto mínimo de 16px: com a base de 18px, nenhum tamanho padrão fica abaixo disso. */
+  --text-xs: 0.9rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.95rem;
+  --text-sm--line-height: 1.55;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-montserrat);
@@ -116,9 +121,56 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* 18px: leitura confortável no celular. O zoom do navegador continua liberado. */
+    font-size: 112.5%;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+    line-height: 1.6;
   }
+  /* Palavras compridas nunca estouram a tela, nem com zoom de 200%. */
+  h1, h2, h3, h4, p, li, label, legend, dt, dd {
+    overflow-wrap: anywhere;
+  }
+  /* Foco sempre visível, também sobre fundos escuros e coloridos. */
+  :focus-visible {
+    outline: 3px solid #0b57d0;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px #ffffff;
+  }
+  /* Títulos que recebem foco por código (troca de passo) não precisam de moldura. */
+  [tabindex="-1"]:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+  /* Sem movimento para quem pede isso no aparelho. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 100;
+  border-radius: 0.75rem;
+  background: #1a1a1a;
+  padding: 0.75rem 1.25rem;
+  font-weight: 700;
+  color: #fff;
+}
+.skip-link:focus {
+  top: 1rem;
 }
 /* Sugestões de endereço do Google Places no carrinho. O container é criado
    diretamente no body pelo Google, portanto os seletores precisam ser globais. */

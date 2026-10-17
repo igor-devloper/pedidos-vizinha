@@ -6,7 +6,7 @@ import { LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 export function ManhiaLoginForm({ isConfigured }: { isConfigured: boolean }) {
@@ -53,38 +53,36 @@ export function ManhiaLoginForm({ isConfigured }: { isConfigured: boolean }) {
   };
 
   return (
-    <main className="px-4 py-8 sm:px-6 lg:px-8">
+    <div className="px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-md">
-        <Card className="border-pink-200 bg-white/95 shadow-xl shadow-pink-100/50">
+        <Card className="border-2 border-[#c25bb4] bg-white shadow-xl">
           <CardHeader className="space-y-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-100 text-pink-700">
-              <LockKeyhole className="h-5 w-5" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-100 text-[#6b0f5c]">
+              <LockKeyhole className="h-6 w-6" aria-hidden="true" />
             </div>
-            <CardTitle className="text-2xl text-pink-800">
-              Painel do cardápio
-            </CardTitle>
-            <p className="text-sm leading-6 text-slate-500">
-              Área protegida para a Manhia cadastrar produtos, imagens, valores e
-              descrições.
+            <h1 className="text-3xl font-extrabold text-[#4a0a3f]">Painel da Vizinha</h1>
+            <p className="text-lg leading-relaxed text-slate-800">
+              Área protegida para cuidar dos pedidos, do cardápio e do WhatsApp.
             </p>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">
+                <label htmlFor="manhia-senha" className="block text-lg font-bold text-slate-900">
                   Senha de acesso
                 </label>
                 <Input
+                  id="manhia-senha"
                   type="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Digite a senha"
-                  className="border-pink-100 bg-white focus-visible:ring-pink-400"
+                  className="h-14 border-2 border-[#c25bb4] bg-white text-lg"
                 />
               </div>
 
               {!isConfigured && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <p role="alert" className="rounded-xl border-2 border-amber-700 bg-amber-50 px-3 py-2 text-base font-semibold text-amber-950">
                   O painel ainda não tem senha configurada no ambiente.
                 </p>
               )}
@@ -92,7 +90,7 @@ export function ManhiaLoginForm({ isConfigured }: { isConfigured: boolean }) {
               <Button
                 type="submit"
                 disabled={loading || !password}
-                className="w-full rounded-full bg-pink-600 text-white hover:bg-pink-700"
+                className="h-14 w-full rounded-full bg-[#8a0f78] text-lg font-extrabold text-white hover:bg-[#6b0f5c]"
               >
                 {loading ? "Entrando..." : "Entrar no painel"}
               </Button>
@@ -100,6 +98,6 @@ export function ManhiaLoginForm({ isConfigured }: { isConfigured: boolean }) {
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

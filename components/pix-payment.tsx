@@ -170,12 +170,12 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
           <CardTitle className="text-2xl font-bold text-pink-700">
             Pagamento via PIX
           </CardTitle>
-          <p className="text-sm text-slate-500">Pedido #{orderId}</p>
+          <p className="text-sm text-slate-700">Pedido #{orderId}</p>
         </CardHeader>
 
         <CardContent className="space-y-6">
           <div className="text-center">
-            <p className="mb-1 text-sm text-slate-500">Valor a pagar agora</p>
+            <p className="mb-1 text-sm text-slate-700">Valor a pagar agora</p>
             <p className="text-4xl font-bold text-pink-700">R$ {amount.toFixed(2)}</p>
             <p className="mt-2 text-xs font-medium text-pink-700">
               A encomenda só é confirmada mediante pagamento mínimo de 50% do valor.
@@ -188,17 +188,17 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
             <h3 className="text-base font-semibold text-slate-800">Dados bancários</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-pink-100 bg-pink-50 p-3">
-                <Label className="text-xs text-slate-500">Banco</Label>
+                <Label className="text-xs text-slate-700">Banco</Label>
                 <p className="font-medium text-slate-900">{BANK_NAME}</p>
               </div>
 
               <div className="rounded-lg border border-pink-100 bg-pink-50 p-3">
-                <Label className="text-xs text-slate-500">Titular</Label>
+                <Label className="text-xs text-slate-700">Titular</Label>
                 <p className="font-medium text-slate-900">{ACCOUNT_HOLDER}</p>
               </div>
 
               <div className="rounded-lg border border-pink-100 bg-pink-50 p-3 sm:col-span-2">
-                <Label className="text-xs text-slate-500">Chave PIX</Label>
+                <Label className="text-xs text-slate-700">Chave PIX</Label>
                 <div className="mt-1 flex items-center gap-2">
                   <p className="flex-1 break-all font-medium text-slate-900">{PIX_KEY}</p>
                   <Button
@@ -224,7 +224,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
             <h3 className="text-base font-semibold text-slate-800">PIX</h3>
             <div className="flex flex-col gap-6 sm:flex-row">
               <div className="flex-1 space-y-2">
-                <Label className="text-xs text-slate-500">Copia e cola</Label>
+                <Label className="text-xs text-slate-700">Copia e cola</Label>
                 <div className="rounded-lg border border-pink-100 bg-pink-50 p-3">
                   <div className="flex items-start gap-2">
                     <p className="flex-1 break-all font-mono text-xs text-slate-800">
@@ -272,7 +272,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
           <Separator className="bg-pink-100" />
 
           <div className="space-y-3">
-            <Label className="text-xs text-slate-500">
+            <Label className="text-xs text-slate-700">
               Comprovante de pagamento (obrigatório)
             </Label>
 
@@ -302,7 +302,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
                   <p className="text-sm font-medium text-slate-800">
                     Arraste e solte o arquivo aqui ou clique para selecionar
                   </p>
-                  <p className="text-xs text-slate-500">PNG, JPG ou PDF - até cerca de 10 MB</p>
+                  <p className="text-xs text-slate-700">PNG, JPG ou PDF - até cerca de 10 MB</p>
                 </div>
               </div>
 
@@ -333,7 +333,7 @@ export function PixPayment({ amount, orderId, pixPayload }: PixPaymentProps) {
 
                     <div className="min-w-0">
                       <p className="truncate text-sm text-slate-800">{proofFile.name}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-700">
                         {(proofFile.size / 1024 / 1024).toFixed(2)} MB
                       </p>
                     </div>

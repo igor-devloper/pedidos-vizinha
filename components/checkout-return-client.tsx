@@ -94,19 +94,19 @@ export function CheckoutReturnClient({
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-4">
+      <div className="flex min-h-screen items-center justify-center px-4">
         <Card className="border-pink-200 bg-white/95 px-8 py-6 shadow-md">
           <CardContent className="flex items-center gap-2">
             <LoaderCircle className="h-4 w-4 animate-spin text-pink-600" />
             <p className="text-sm text-slate-700">Conferindo o retorno do pagamento...</p>
           </CardContent>
         </Card>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen px-4 py-8">
+    <div className="min-h-screen px-4 py-8">
       <div className="mx-auto flex max-w-2xl flex-col gap-4">
         <Card className="border-pink-200 bg-white/95 shadow-lg shadow-pink-100/30">
           <CardContent className="space-y-5 p-8 text-center">
@@ -121,7 +121,7 @@ export function CheckoutReturnClient({
               <h1 className="text-3xl font-black tracking-tight text-slate-900">
                 {isConfirmed ? "Pedido confirmado" : "Pedido em processamento"}
               </h1>
-              <p className="mt-3 text-sm leading-6 text-slate-500">
+              <p className="mt-3 text-sm leading-6 text-slate-700">
                 {isConfirmed
                   ? "Seu pagamento já foi validado. A confirmação do pedido também segue para o WhatsApp."
                   : "Estamos acompanhando a validação do pagamento. Assim que a confirmação cair, esta tela atualiza sozinha."}
@@ -169,6 +169,6 @@ export function CheckoutReturnClient({
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }
