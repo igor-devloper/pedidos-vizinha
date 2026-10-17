@@ -190,6 +190,8 @@ model WhatsappOrderDraft {
   orderId               String?   @unique
   lastCustomerMessageAt DateTime?
   lastBotMessageAt      DateTime?
+  summarySentAt         DateTime?
+  orderSeq              Int       @default(0)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -545,4 +547,41 @@ model WaLock {
   expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
 
   @@map("wa_lock")
+}
+
+/// Conversas do WhatsApp: pausa do bot (atendimento humano).
+model WaConversation {
+  instanceId  String    @map("instance_id")
+  remoteJid   String    @map("remote_jid")
+  pausedUntil DateTime? @map("paused_until") @db.Timestamptz(6)
+  pauseReason String?   @map("pause_reason")
+  pausedBy    String?   @map("paused_by")
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([instanceId, remoteJid])
+  @@map("wa_conversation")
+}
+
+/// Histórico das conversas e das chamadas de ferramenta do agente (para depuração no painel).
+model WaMessageLog {
+  id         BigInt   @id @default(autoincrement())
+  instanceId String   @map("instance_id")
+  remoteJid  String   @map("remote_jid")
+  kind       String
+  content    String
+  meta       Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([instanceId, remoteJid, id])
+  @@map("wa_message_log")
+}
+
+/// Mensagens já recebidas (idempotência entre reinícios).
+model WaInboundSeen {
+  instanceId String   @map("instance_id")
+  messageId  String   @map("message_id")
+  seenAt     DateTime @default(now()) @map("seen_at") @db.Timestamptz(6)
+
+  @@id([instanceId, messageId])
+  @@map("wa_inbound_seen")
 }

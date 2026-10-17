@@ -15,6 +15,11 @@ function readOptional(key: string, fallback: string) {
   return process.env[key]?.trim() || fallback;
 }
 
+function readNumber(key: string, fallback: number) {
+  const parsed = Number(process.env[key]);
+  return Number.isFinite(parsed) && parsed >= 0 && process.env[key]?.trim() ? parsed : fallback;
+}
+
 export const config = {
   port: Number(process.env.PORT || 8787),
   nodeEnv: readOptional("NODE_ENV", "development"),
@@ -31,7 +36,7 @@ export const config = {
   businessName: readOptional("BUSINESS_NAME", "Vizinha Salgateria"),
   cardapioUrl: readOptional(
     "CARDAPIO_URL",
-    "https://pedido.anota.ai/loja/dawn-burguer?f=msa&utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAdGRleAR9Z0xleHRuA2FlbQIxMQBzcnRjBmFwcF9pZA8xMjQwMjQ1NzQyODc0MTQAAadlHk_f5xmXN_jqFpVlKU1kY21iVXdzAtA3L1-A42MSXG8VLgZvNhGmIUk3gQ_aem_YWdncwD7MYUn2JV_NcjJwnL5KUsm&brid=YWdncwFkmaDBiRdwHoyXfL5BI4PY&utm_id=97760_v0_s00_e0_tv3"
+    `${(process.env.APP_URL?.trim() || "https://www.vizinhasalgateria.site").replace(/\/$/, "")}/cardapio`
   ),
   pixKey: readOptional("PIX_KEY", "00980322405"),
   botPhoneNumber: readOptional("BOT_PHONE_NUMBER", "5583993760485"),
@@ -51,5 +56,13 @@ export const config = {
     .map((item) => item.trim())
     .filter(Boolean),
   qrTtlSeconds: Number(process.env.QR_TTL_SECONDS || 60),
+  // "tools" = agente com ferramentas validadas em código; "legacy" = fluxo antigo (volta rápida se algo falhar).
+  agentMode: readOptional("WHATSAPP_AGENT_MODE", "tools") === "legacy" ? ("legacy" as const) : ("tools" as const),
+  batchQuietMs: readNumber("BATCH_QUIET_MS", 6_000),
+  batchMaxWaitMs: readNumber("BATCH_MAX_WAIT_MS", 20_000),
+  handoffPauseHours: readNumber("HANDOFF_PAUSE_HOURS", 6),
+  draftTtlHours: readNumber("DRAFT_TTL_HOURS", 24),
+  maxInboundAgeSeconds: readNumber("MAX_INBOUND_AGE_SECONDS", 600),
+  agentHistoryLimit: readNumber("AGENT_HISTORY_LIMIT", 30),
   railwayPublicDomain: process.env.RAILWAY_PUBLIC_DOMAIN?.trim() || undefined,
 };

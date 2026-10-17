@@ -12,13 +12,14 @@ export type WhatsappDraft = {
   whatsappOfferDueAt: string | null; whatsappOfferSentAt: string | null;
   siteOrderDetectedAt: string | null; orderId: string | null;
   lastCustomerMessageAt: string | null; lastBotMessageAt: string | null;
+  summarySentAt: string | null; orderSeq: number; updatedAt: string;
 };
 
 const ALLOWED_COLUMNS = new Set([
   "customerName", "customerEmail", "phone", "stage", "status", "fulfillmentType", "scheduledAt",
   "deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryReference",
   "paymentMethod", "paymentPercentage", "items", "siteLinkSentAt", "whatsappOfferDueAt",
-  "whatsappOfferSentAt", "siteOrderDetectedAt", "orderId", "lastCustomerMessageAt", "lastBotMessageAt",
+  "whatsappOfferSentAt", "siteOrderDetectedAt", "orderId", "lastCustomerMessageAt", "lastBotMessageAt", "summarySentAt", "orderSeq",
 ]);
 
 export async function getOrCreateDraft(instanceId: string, remoteJid: string, knownPhone?: string) {
@@ -95,4 +96,44 @@ export async function findDraftsForPanel(limit = 100) {
     `SELECT * FROM "WhatsappOrderDraft" ORDER BY "updatedAt" DESC LIMIT $1`, [limit],
   );
   return result.rows;
+}
+
+/** Campos que voltam ao estado inicial quando um rascunho expira ou um novo pedido começa. */
+const RESET_PATCH = {
+  customerName: null, customerEmail: null, stage: "COLLECTING", status: "ACTIVE",
+  fulfillmentType: null, scheduledAt: null, deliveryStreet: null, deliveryNumber: null,
+  deliveryNeighborhood: null, deliveryReference: null, paymentMethod: null, paymentPercentage: null,
+  items: [], whatsappOfferDueAt: null, summarySentAt: null,
+} as const;
+
+export function draftHasProgress(draft: WhatsappDraft) {
+  return (Array.isArray(draft.items) && draft.items.length > 0)
+    || Boolean(draft.fulfillmentType || draft.scheduledAt || draft.deliveryStreet || draft.paymentMethod
+      || draft.paymentPercentage || draft.customerName);
+}
+
+/**
+ * Começa um rascunho limpo. Se o anterior já virou pedido, solta o vínculo e avança `orderSeq`
+ * para que o novo pedido tenha outra chave de idempotência (o telefone reaproveita o mesmo rascunho).
+ */
+export async function resetDraft(draft: WhatsappDraft) {
+  const patch: Record<string, unknown> = { ...RESET_PATCH };
+  if (draft.orderId) {
+    patch.orderId = null;
+    patch.orderSeq = (draft.orderSeq ?? 0) + 1;
+  }
+  return patchDraft(draft.id, patch);
+}
+
+/** Rascunho parado há mais que o prazo vira vazio; pedido já criado também recomeça do zero. */
+export async function expireDraftIfStale(draft: WhatsappDraft, ttlHours: number, now = new Date()) {
+  const idleMs = now.getTime() - new Date(draft.updatedAt).getTime();
+  const stale = idleMs > ttlHours * 3_600_000;
+  if (draft.orderId && stale) {
+    return { draft: (await resetDraft(draft)) ?? draft, expired: true };
+  }
+  if (!draft.orderId && stale && draftHasProgress(draft)) {
+    return { draft: (await resetDraft(draft)) ?? draft, expired: true };
+  }
+  return { draft, expired: false };
 }

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getFullStoreStatus } from "@/lib/business-hours";
 import { DELIVERY_FEES } from "@/lib/delivery";
 import { hasValidInternalAuthorization } from "@/lib/internal-auth";
-import { buildStoreInfo } from "@/lib/whatsapp-schedule";
+import { buildStoreInfo, describeWeeklyHours } from "@/lib/whatsapp-schedule";
 
 // Horários e regras de funcionamento da loja: fonte única para o bot do WhatsApp.
 export async function GET(request: Request) {
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
       storeOpenManually: !settings.closedByOwner,
     }),
     allowMultipleOrdersPerSlot: settings.allowMultipleOrdersPerSlot,
-    deliveryFees: DELIVERY_FEES.map(({ label, fee }) => ({ area: label, fee })),
+    weekly: describeWeeklyHours(settings.operationSchedule),
+    deliveryFees: DELIVERY_FEES.map(({ label, fee, neighborhoods }) => ({ area: label, fee, neighborhoods })),
   });
 }
