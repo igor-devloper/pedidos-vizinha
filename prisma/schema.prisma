@@ -518,3 +518,31 @@ enum OrderEventSource {
   MERCADO_PAGO
   SYSTEM
 }
+
+/// Sessão do WhatsApp (Baileys), gerida pelo serviço services/whatsapp-bot.
+model WaAuth {
+  instanceId String   @map("instance_id")
+  key        String
+  value      String
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([instanceId, key])
+  @@map("wa_auth")
+}
+
+model WaInstance {
+  id        String   @id
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("wa_instance")
+}
+
+model WaLock {
+  instanceId String   @id @map("instance_id")
+  owner      String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@map("wa_lock")
+}
