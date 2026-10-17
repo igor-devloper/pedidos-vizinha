@@ -1,6 +1,8 @@
 export type InstanceStatus =
   | "idle"
   | "connecting"
+  | "reconnecting"
+  | "standby"
   | "qr"
   | "connected"
   | "disconnected"
@@ -18,6 +20,8 @@ export type InstanceRecord = {
   updatedAt: string;
   lastConnectedAt?: string;
   lastDisconnectReason?: string;
+  /** Subir sozinho depois de um deploy/reinício. Só um "parar" manual desliga. */
+  autoStart?: boolean;
 };
 
 export type QrSnapshot = {
