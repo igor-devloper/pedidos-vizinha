@@ -326,7 +326,7 @@ const KANBAN_COLUMNS = [
     status: "PAGO",
     title: "Aceitos",
     description: "Pedidos pagos para preparar.",
-    accent: "border-[#b7d78a] bg-[#f7fde7]",
+    accent: "border-[#b7d78a] bg-[#fdf1fb]",
     badge: "border-[#8fbd55] bg-[#e9f7cc] text-[#1f6b2c]",
   },
   {
@@ -1946,12 +1946,12 @@ export function ManhiaAdminDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7fde7,#fffaf3_42%,#eef8db)] px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fdf1fb,#fffaf3_42%,#eef8db)] px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <header className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
+        <header className="overflow-hidden rounded-[1.4rem] border border-[#e6c3e0] bg-white shadow-sm">
           <div className="grid gap-0 lg:grid-cols-[280px_1fr]">
-            <div className="bg-[#0b3d18] p-5 text-white">
-              <Badge className="border-[#f4d330] bg-[#f4d330] text-[#0b3d18]">
+            <div className="bg-[#4a0a3f] p-5 text-white">
+              <Badge className="border-[#f4d330] bg-[#f4d330] text-[#4a0a3f]">
                 Painel da vizinha
               </Badge>
               <h1 className="mt-3 text-2xl font-bold tracking-normal">
@@ -1967,7 +1967,7 @@ export function ManhiaAdminDashboard({
                 type="button"
                 variant="outline"
                 onClick={() => void openMessageDialog()}
-                className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
               >
                 <MessageCircle className="mr-2 h-4 w-4" />
                 Enviar mensagem
@@ -1982,7 +1982,7 @@ export function ManhiaAdminDashboard({
                   "rounded-full px-5 text-white",
                   settings.isOpen
                     ? "bg-rose-600 hover:bg-rose-700"
-                    : "bg-[#1b7f31] hover:bg-[#156326]",
+                    : "bg-[#8a0f78] hover:bg-[#6b0f5c]",
                 )}
               >
                 {settings.isOpen ? "Fechar loja" : "Abrir loja"}
@@ -1991,7 +1991,7 @@ export function ManhiaAdminDashboard({
                 type="button"
                 variant="outline"
                 onClick={handleLogout}
-                className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Sair
@@ -1999,7 +1999,7 @@ export function ManhiaAdminDashboard({
             </div>
           </div>
 
-          <nav className="grid grid-cols-3 border-t border-[#e4edc9] bg-white sm:grid-cols-7">
+          <nav className="grid grid-cols-3 border-t border-[#f3dff0] bg-white sm:grid-cols-7">
             {[
               { id: "analise" as const, label: "Análise", icon: ChartNoAxesCombined },
               { id: "pedidos" as const, label: "Pedidos", icon: ShoppingBag },
@@ -2023,10 +2023,10 @@ export function ManhiaAdminDashboard({
                     setActiveTab(item.id);
                   }}
                   className={cn(
-                    "flex h-14 items-center justify-center gap-1.5 border-b border-r border-[#e4edc9] px-2 text-xs font-bold uppercase tracking-wide transition sm:gap-2 sm:border-b-0 sm:text-sm",
+                    "flex h-14 items-center justify-center gap-1.5 border-b border-r border-[#f3dff0] px-2 text-xs font-bold uppercase tracking-wide transition sm:gap-2 sm:border-b-0 sm:text-sm",
                     activeTab === item.id
-                      ? "bg-[#fff3a8] text-[#0b3d18]"
-                      : "bg-white text-[#48654f] hover:bg-[#f7fde7]",
+                      ? "bg-[#fff3a8] text-[#4a0a3f]"
+                      : "bg-white text-[#5a3a54] hover:bg-[#fdf1fb]",
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -2039,15 +2039,15 @@ export function ManhiaAdminDashboard({
 
         {activeTab === "analise" ? (
           <section className="space-y-4">
-            <div className="rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5">
-              <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">Visão geral</p>
-              <h2 className="mt-2 text-3xl font-bold text-[#0b3d18]">Análise da operação</h2>
-              <p className="mt-2 text-sm text-[#48654f]">Indicadores consolidados dos pedidos e da loja.</p>
+            <div className="rounded-[2rem] border border-[#e6c3e0] bg-white/95 p-5 shadow-lg shadow-green-900/5">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">Visão geral</p>
+              <h2 className="mt-2 text-3xl font-bold text-[#4a0a3f]">Análise da operação</h2>
+              <p className="mt-2 text-sm text-[#5a3a54]">Indicadores consolidados dos pedidos e da loja.</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div><label className="text-xs font-bold uppercase text-[#618038]">Data inicial</label><Input type="date" value={analyticsStartDate} onChange={(event) => setAnalyticsStartDate(event.target.value)} className="mt-1 border-[#d6e7a2] bg-white" /></div>
-                <div><label className="text-xs font-bold uppercase text-[#618038]">Data final</label><Input type="date" value={analyticsEndDate} onChange={(event) => setAnalyticsEndDate(event.target.value)} className="mt-1 border-[#d6e7a2] bg-white" /></div>
-                <div><label className="text-xs font-bold uppercase text-[#618038]">Status</label><Select value={analyticsStatus} onValueChange={setAnalyticsStatus}><SelectTrigger className="mt-1 w-full border-[#d6e7a2] bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="TODOS">Todos</SelectItem>{PEDIDO_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{getPedidoStatusMeta(status).label}</SelectItem>)}</SelectContent></Select></div>
-                <div><label className="text-xs font-bold uppercase text-[#618038]">Produto</label><Select value={analyticsProduct} onValueChange={setAnalyticsProduct}><SelectTrigger className="mt-1 w-full border-[#d6e7a2] bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="TODOS">Todos</SelectItem>{Array.from(new Set(produtos.map((produto) => produto.nome))).map((nome) => <SelectItem key={nome} value={nome}>{nome}</SelectItem>)}</SelectContent></Select></div>
+                <div><label className="text-xs font-bold uppercase text-[#5a3a54]">Data inicial</label><Input type="date" value={analyticsStartDate} onChange={(event) => setAnalyticsStartDate(event.target.value)} className="mt-1 border-[#e6c3e0] bg-white" /></div>
+                <div><label className="text-xs font-bold uppercase text-[#5a3a54]">Data final</label><Input type="date" value={analyticsEndDate} onChange={(event) => setAnalyticsEndDate(event.target.value)} className="mt-1 border-[#e6c3e0] bg-white" /></div>
+                <div><label className="text-xs font-bold uppercase text-[#5a3a54]">Status</label><Select value={analyticsStatus} onValueChange={setAnalyticsStatus}><SelectTrigger className="mt-1 w-full border-[#e6c3e0] bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="TODOS">Todos</SelectItem>{PEDIDO_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{getPedidoStatusMeta(status).label}</SelectItem>)}</SelectContent></Select></div>
+                <div><label className="text-xs font-bold uppercase text-[#5a3a54]">Produto</label><Select value={analyticsProduct} onValueChange={setAnalyticsProduct}><SelectTrigger className="mt-1 w-full border-[#e6c3e0] bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="TODOS">Todos</SelectItem>{Array.from(new Set(produtos.map((produto) => produto.nome))).map((nome) => <SelectItem key={nome} value={nome}>{nome}</SelectItem>)}</SelectContent></Select></div>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -2059,22 +2059,22 @@ export function ManhiaAdminDashboard({
                 { label: "Provisão pendente", value: formatCurrency(analytics.provision) },
                 { label: "Taxa de cancelamento", value: `${analytics.cancellationRate.toFixed(1)}%` },
               ].map((item) => (
-                <Card key={item.label} className="border-[#d6e7a2] bg-[#fbfff0] shadow-sm">
-                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wide text-[#618038]">{item.label}</CardTitle></CardHeader>
-                  <CardContent><p className="text-2xl font-bold text-[#0b3d18]">{item.value}</p></CardContent>
+                <Card key={item.label} className="border-[#e6c3e0] bg-[#fff7fc] shadow-sm">
+                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">{item.label}</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-bold text-[#4a0a3f]">{item.value}</p></CardContent>
                 </Card>
               ))}
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Pedidos por status</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">{PEDIDO_STATUS_OPTIONS.map((status) => <div key={status} className="rounded-xl bg-[#f7fde7] p-3"><p className="text-xs font-bold uppercase text-[#618038]">{getPedidoStatusMeta(status).label}</p><p className="mt-1 text-2xl font-bold text-[#0b3d18]">{analytics.statusCounts[status]}</p></div>)}</CardContent></Card>
-              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Ticket por pagamento</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.paymentAverages.length ? analytics.paymentAverages.map((item) => <div key={item.label} className="flex justify-between rounded-xl bg-[#f7fde7] p-3"><span className="text-[#48654f]">{item.label}</span><strong className="text-[#0b3d18]">{formatCurrency(item.average)}</strong></div>) : <p className="text-sm text-slate-700">Nenhum pedido no período.</p>}</CardContent></Card>
-              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Top 5 por quantidade</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topQuantity.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#e4edc9] pb-2"><span className="text-[#48654f]">{index + 1}. {item.name}</span><strong className="text-[#0b3d18]">{item.quantity} un</strong></div>)}</CardContent></Card>
-              <Card className="border-[#d6e7a2]"><CardHeader><CardTitle className="text-[#0b3d18]">Top 5 por receita</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topRevenue.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#e4edc9] pb-2"><span className="text-[#48654f]">{index + 1}. {item.name}</span><strong className="text-[#0b3d18]">{formatCurrency(item.revenue)}</strong></div>)}</CardContent></Card>
+              <Card className="border-[#e6c3e0]"><CardHeader><CardTitle className="text-[#4a0a3f]">Pedidos por status</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">{PEDIDO_STATUS_OPTIONS.map((status) => <div key={status} className="rounded-xl bg-[#fdf1fb] p-3"><p className="text-xs font-bold uppercase text-[#5a3a54]">{getPedidoStatusMeta(status).label}</p><p className="mt-1 text-2xl font-bold text-[#4a0a3f]">{analytics.statusCounts[status]}</p></div>)}</CardContent></Card>
+              <Card className="border-[#e6c3e0]"><CardHeader><CardTitle className="text-[#4a0a3f]">Ticket por pagamento</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.paymentAverages.length ? analytics.paymentAverages.map((item) => <div key={item.label} className="flex justify-between rounded-xl bg-[#fdf1fb] p-3"><span className="text-[#5a3a54]">{item.label}</span><strong className="text-[#4a0a3f]">{formatCurrency(item.average)}</strong></div>) : <p className="text-sm text-slate-700">Nenhum pedido no período.</p>}</CardContent></Card>
+              <Card className="border-[#e6c3e0]"><CardHeader><CardTitle className="text-[#4a0a3f]">Top 5 por quantidade</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topQuantity.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#f3dff0] pb-2"><span className="text-[#5a3a54]">{index + 1}. {item.name}</span><strong className="text-[#4a0a3f]">{item.quantity} un</strong></div>)}</CardContent></Card>
+              <Card className="border-[#e6c3e0]"><CardHeader><CardTitle className="text-[#4a0a3f]">Top 5 por receita</CardTitle></CardHeader><CardContent className="space-y-3">{analytics.topRevenue.map((item, index) => <div key={item.name} className="flex justify-between border-b border-[#f3dff0] pb-2"><span className="text-[#5a3a54]">{index + 1}. {item.name}</span><strong className="text-[#4a0a3f]">{formatCurrency(item.revenue)}</strong></div>)}</CardContent></Card>
             </div>
           </section>
         ) : activeTab === "pedidos" ? (
           <section className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#e6c3e0] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">
                   Fila de pedidos
@@ -2086,14 +2086,14 @@ export function ManhiaAdminDashboard({
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Badge className="border-[#d6e7a2] bg-[#f7fde7] px-4 py-2 text-[#284a2e]">
+                <Badge className="border-[#e6c3e0] bg-[#fdf1fb] px-4 py-2 text-[#3d2a39]">
                   Impressão automatica via serviço
                 </Badge>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => void refreshPedidos()}
-                  className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                  className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                 >
                   <RefreshCcw
                     className={cn(
@@ -2108,7 +2108,7 @@ export function ManhiaAdminDashboard({
 
             <ManhiaWhatsappStatus />
 
-            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 border-[#7f9f4a] bg-white p-3 text-lg font-semibold text-[#0b3d18]">
+            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 border-[#b24aa3] bg-white p-3 text-lg font-semibold text-[#4a0a3f]">
               <input
                 type="checkbox"
                 checked={soundEnabled}
@@ -2121,7 +2121,7 @@ export function ManhiaAdminDashboard({
                   }
                   if (event.target.checked) playNewOrderSound();
                 }}
-                className="h-6 w-6 accent-[#146b2e]"
+                className="h-6 w-6 accent-[#8a0f78]"
               />
               Tocar um som quando chegar pedido novo
             </label>
@@ -2155,7 +2155,7 @@ export function ManhiaAdminDashboard({
             ) : null}
 
             {simpleOrdersPendentes.length > 0 ? (
-              <section className="rounded-[1.6rem] border border-[#d6e7a2] bg-white/95 p-4 shadow-sm">
+              <section className="rounded-[1.6rem] border border-[#e6c3e0] bg-white/95 p-4 shadow-sm">
                 <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="font-semibold text-slate-900">
@@ -2175,7 +2175,7 @@ export function ManhiaAdminDashboard({
                   {simpleOrdersPendentes.map((order) => (
                     <article
                       key={order.id}
-                      className="rounded-2xl border border-[#e4edc9] bg-[#fbfff0] p-4"
+                      className="rounded-2xl border border-[#f3dff0] bg-[#fff7fc] p-4"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
@@ -2199,7 +2199,7 @@ export function ManhiaAdminDashboard({
                             </p>
                           ) : null}
                         </div>
-                        <p className="text-xl font-bold text-[#0b3d18]">
+                        <p className="text-xl font-bold text-[#4a0a3f]">
                           {formatCurrency(
                             Number(order.chargedAmount || order.totalAmount),
                           )}
@@ -2233,7 +2233,7 @@ export function ManhiaAdminDashboard({
                             onClick={() =>
                               void handleConfirmSimpleOrderManualPayment(order)
                             }
-                            className="rounded-full bg-[#188038] text-white hover:bg-[#12642c]"
+                            className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                           >
                             <CheckCheck className="mr-2 h-4 w-4" />
                             {statusLoadingId === order.id
@@ -2255,7 +2255,7 @@ export function ManhiaAdminDashboard({
             ) : null}
 
             {pedidos.length === 0 && simpleOrders.length === 0 ? (
-              <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
+              <Card className="border-[#e6c3e0] bg-white/95 shadow-lg shadow-green-900/5">
                 <CardContent className="py-10 text-center text-sm text-slate-700">
                   Nenhum pedido recebido ainda.
                 </CardContent>
@@ -2310,7 +2310,7 @@ export function ManhiaAdminDashboard({
                             </div>
                             <div className="text-left sm:text-right">
                               <p className="text-sm text-slate-600">Valor</p>
-                              <p className="text-xl font-bold text-[#0b3d18]">
+                              <p className="text-xl font-bold text-[#4a0a3f]">
                                 {formatCurrency(Number(pedido.totalCobrado))}
                               </p>
                             </div>
@@ -2341,7 +2341,7 @@ export function ManhiaAdminDashboard({
                               onClick={() =>
                                 void handleConfirmManualPayment(pedido)
                               }
-                              className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                              className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                             >
                               <CheckCheck className="mr-2 h-4 w-4" />
                               {statusLoadingId === pedido.id
@@ -2414,7 +2414,7 @@ export function ManhiaAdminDashboard({
                             return (
                               <article
                                 key={`mobile:pedido:${pedido.id}`}
-                                className="rounded-2xl border border-[#d6e7a2] bg-white p-4 shadow-sm"
+                                className="rounded-2xl border border-[#e6c3e0] bg-white p-4 shadow-sm"
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
@@ -2430,7 +2430,7 @@ export function ManhiaAdminDashboard({
                                       {pedido.clienteNome}
                                     </p>
                                   </div>
-                                  <p className="shrink-0 font-bold text-[#0b3d18]">
+                                  <p className="shrink-0 font-bold text-[#4a0a3f]">
                                     {formatCurrency(Number(pedido.subtotal))}
                                   </p>
                                 </div>
@@ -2448,7 +2448,7 @@ export function ManhiaAdminDashboard({
                                     variant="outline"
                                     disabled={printingPedidoId === pedido.id}
                                     onClick={() => void handlePrint(pedido.id)}
-                                    className="rounded-full border-[#d6e7a2] text-[#1b5e20]"
+                                    className="rounded-full border-[#e6c3e0] text-[#6b0f5c]"
                                   >
                                     <Printer className="mr-2 h-4 w-4" />
                                     Imprimir
@@ -2461,7 +2461,7 @@ export function ManhiaAdminDashboard({
                                         ? void handleUpdatePedidoStatus(pedido.id, nextStatus)
                                         : undefined
                                     }
-                                    className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                                    className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                                   >
                                     {advanceLabel(nextStatus)}
                                   </Button>
@@ -2476,7 +2476,7 @@ export function ManhiaAdminDashboard({
                           return (
                             <article
                               key={`mobile:cart:${order.id}`}
-                              className="rounded-2xl border border-[#d6e7a2] bg-white p-4 shadow-sm"
+                              className="rounded-2xl border border-[#e6c3e0] bg-white p-4 shadow-sm"
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
@@ -2490,7 +2490,7 @@ export function ManhiaAdminDashboard({
                                     {order.customerName || "Cliente não informado"}
                                   </p>
                                 </div>
-                                <p className="shrink-0 font-bold text-[#0b3d18]">
+                                <p className="shrink-0 font-bold text-[#4a0a3f]">
                                   {formatCurrency(Number(order.totalAmount))}
                                 </p>
                               </div>
@@ -2506,7 +2506,7 @@ export function ManhiaAdminDashboard({
                                   variant="outline"
                                   disabled={printingPedidoId === order.id}
                                   onClick={() => void handlePrintSimpleOrder(order.id)}
-                                  className="rounded-full border-[#d6e7a2] text-[#1b5e20]"
+                                  className="rounded-full border-[#e6c3e0] text-[#6b0f5c]"
                                 >
                                   <Printer className="mr-2 h-4 w-4" />
                                   Imprimir
@@ -2519,7 +2519,7 @@ export function ManhiaAdminDashboard({
                                       ? void handleUpdateSimpleOrderStatus(order.id, nextStatus)
                                       : undefined
                                   }
-                                  className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                                  className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                                 >
                                   {advanceLabel(nextStatus)}
                                 </Button>
@@ -2529,7 +2529,7 @@ export function ManhiaAdminDashboard({
                         })}
 
                         {kanbanPedidosPorStatus[column.status].length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-[#b8ca91] bg-white/50 p-5 text-center text-sm text-slate-700">
+                          <p className="rounded-2xl border border-dashed border-[#c25bb4] bg-white/50 p-5 text-center text-sm text-slate-700">
                             Sem pedidos nesta etapa.
                           </p>
                         ) : null}
@@ -2590,7 +2590,7 @@ export function ManhiaAdminDashboard({
                             }}
                             onClick={() => setSelectedPedido(pedido)}
                             className={cn(
-                              "w-full cursor-grab rounded-2xl border border-[#d6e7a2] bg-[#fffaf3] p-3 text-left shadow-sm transition hover:border-[#f4d330] active:cursor-grabbing",
+                              "w-full cursor-grab rounded-2xl border border-[#e6c3e0] bg-[#fffaf3] p-3 text-left shadow-sm transition hover:border-[#f4d330] active:cursor-grabbing",
                               draggedPedidoId === `pedido:${pedido.id}` &&
                                 "opacity-60",
                             )}
@@ -2599,7 +2599,7 @@ export function ManhiaAdminDashboard({
                               <span className="font-semibold text-slate-900">
                                 {pedido.codigo}
                               </span>
-                              <span className="text-sm font-bold text-[#f4d330]">
+                              <span className="text-sm font-bold text-[#8a0f78]">
                                 {formatCurrency(Number(pedido.subtotal))}
                               </span>
                             </div>
@@ -2632,7 +2632,7 @@ export function ManhiaAdminDashboard({
                               setDragOverStatus(null);
                             }}
                             className={cn(
-                              "w-full cursor-grab rounded-2xl border border-[#d6e7a2] bg-[#fffaf3] p-3 text-left shadow-sm transition hover:border-[#f4d330] active:cursor-grabbing",
+                              "w-full cursor-grab rounded-2xl border border-[#e6c3e0] bg-[#fffaf3] p-3 text-left shadow-sm transition hover:border-[#f4d330] active:cursor-grabbing",
                               draggedPedidoId === `cart:${order.id}` &&
                                 "opacity-60",
                             )}
@@ -2641,7 +2641,7 @@ export function ManhiaAdminDashboard({
                               <span className="font-semibold text-slate-900">
                                 {getSimpleOrderCode(order)}
                               </span>
-                              <span className="text-sm font-bold text-[#f4d330]">
+                              <span className="text-sm font-bold text-[#8a0f78]">
                                 {formatCurrency(
                                   Number(
                                     order.chargedAmount || order.totalAmount,
@@ -2673,7 +2673,7 @@ export function ManhiaAdminDashboard({
                         })}
 
                         {kanbanPedidosPorStatus[column.status].length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-[#d6e7a2] p-4 text-sm text-slate-700">
+                          <p className="rounded-2xl border border-dashed border-[#e6c3e0] p-4 text-sm text-slate-700">
                             Sem pedidos nesta etapa.
                           </p>
                         ) : null}
@@ -2699,7 +2699,7 @@ export function ManhiaAdminDashboard({
                                 Pedido {pedido.codigo}
                               </h3>
                               <Badge className={meta.tone}>{meta.label}</Badge>
-                              <Badge className="border border-[#d6e7a2] bg-[#f7fde7] text-[#1b5e20]">
+                              <Badge className="border border-[#e6c3e0] bg-[#fdf1fb] text-[#6b0f5c]">
                                 {pedido.metodoPagamentoLabel}
                               </Badge>
                             </div>
@@ -2715,7 +2715,7 @@ export function ManhiaAdminDashboard({
                             <p className="text-sm text-slate-600">
                               Total cobrado
                             </p>
-                            <p className="text-2xl font-bold text-[#f4d330]">
+                            <p className="text-2xl font-bold text-[#8a0f78]">
                               {formatCurrency(Number(pedido.totalCobrado))}
                             </p>
                             <p className="text-xs text-slate-700">
@@ -2724,9 +2724,9 @@ export function ManhiaAdminDashboard({
                           </div>
                         </div>
 
-                        <div className="grid gap-4 rounded-[1.5rem] border border-[#d6e7a2] bg-[#f7fde7] p-4 md:grid-cols-3">
+                        <div className="grid gap-4 rounded-[1.5rem] border border-[#e6c3e0] bg-[#fdf1fb] p-4 md:grid-cols-3">
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-[#1b7f31]">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-[#8a0f78]">
                               Produto
                             </p>
                             <p className="mt-2 text-sm text-slate-700">
@@ -2739,7 +2739,7 @@ export function ManhiaAdminDashboard({
                           </div>
 
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-[#1b7f31]">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-[#8a0f78]">
                               Itens
                             </p>
                             <div className="mt-2 flex flex-col gap-1 text-sm text-slate-700">
@@ -2752,7 +2752,7 @@ export function ManhiaAdminDashboard({
                           </div>
 
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-[#1b7f31]">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-[#8a0f78]">
                               Observações
                             </p>
                             <p className="mt-2 text-sm text-slate-700">
@@ -2772,7 +2772,7 @@ export function ManhiaAdminDashboard({
                               )
                             }
                           >
-                            <SelectTrigger className="h-11 w-full rounded-xl border-[#d6e7a2] bg-white text-sm text-slate-700 sm:w-[220px]">
+                            <SelectTrigger className="h-11 w-full rounded-xl border-[#e6c3e0] bg-white text-sm text-slate-700 sm:w-[220px]">
                               <SelectValue placeholder="Selecione o status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -2790,7 +2790,7 @@ export function ManhiaAdminDashboard({
                               variant="outline"
                               disabled={printingPedidoId === pedido.id}
                               onClick={() => void handlePrint(pedido.id)}
-                              className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                              className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                             >
                               <Printer
                                 className={cn(
@@ -2816,7 +2816,7 @@ export function ManhiaAdminDashboard({
                                     )
                                   : undefined
                               }
-                              className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                              className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                             >
                               {statusLoadingId === pedido.id
                                 ? "Salvando..."
@@ -2835,7 +2835,7 @@ export function ManhiaAdminDashboard({
           </section>
         ) : activeTab === "salgados" ? (
           <section className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#e6c3e0] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">
                   Salgados a produzir
@@ -2850,12 +2850,12 @@ export function ManhiaAdminDashboard({
             {salgadosTotaisPorTipo.length > 0 ? (
               <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                  <Card className="border-[#d6e7a2] bg-[#f7fde7] shadow-lg shadow-green-900/5">
+                  <Card className="border-[#e6c3e0] bg-[#fdf1fb] shadow-lg shadow-green-900/5">
                     <CardContent className="p-5">
-                      <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                      <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                         Total geral
                       </p>
-                      <p className="mt-2 text-4xl font-bold text-[#0b3d18]">
+                      <p className="mt-2 text-4xl font-bold text-[#4a0a3f]">
                         {totalSalgadosParaProduzir}
                       </p>
                       <p className="text-sm font-medium text-slate-700">
@@ -2863,12 +2863,12 @@ export function ManhiaAdminDashboard({
                       </p>
                     </CardContent>
                   </Card>
-                  <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
+                  <Card className="border-[#e6c3e0] bg-white/95 shadow-lg shadow-green-900/5">
                     <CardContent className="p-5">
-                      <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                      <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                         Tipos no preparo
                       </p>
-                      <p className="mt-2 text-4xl font-bold text-[#0b3d18]">
+                      <p className="mt-2 text-4xl font-bold text-[#4a0a3f]">
                         {salgadosTotaisPorTipo.length}
                       </p>
                       <p className="text-sm font-medium text-slate-700">
@@ -2878,13 +2878,13 @@ export function ManhiaAdminDashboard({
                   </Card>
                 </div>
 
-                <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
-                  <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0] pb-3 pt-4">
+                <Card className="border-[#e6c3e0] bg-white/95 shadow-lg shadow-green-900/5">
+                  <CardHeader className="border-b border-[#f3dff0] bg-[#fff7fc] pb-3 pt-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <CardTitle className="text-lg text-[#0b3d18]">
+                      <CardTitle className="text-lg text-[#4a0a3f]">
                         Total por tipo de salgado
                       </CardTitle>
-                      <Badge className="border border-[#d6e7a2] bg-[#fff3a8] text-[#0b3d18]">
+                      <Badge className="border border-[#e6c3e0] bg-[#fff3a8] text-[#4a0a3f]">
                         {totalSalgadosParaProduzir} un
                       </Badge>
                     </div>
@@ -2894,12 +2894,12 @@ export function ManhiaAdminDashboard({
                       {salgadosTotaisPorTipo.map(({ tipo, quantidade }) => (
                         <div
                           key={tipo}
-                          className="flex min-h-16 items-center justify-between gap-4 rounded-2xl border border-[#d6e7a2] bg-[#fbfff0] px-4 py-3"
+                          className="flex min-h-16 items-center justify-between gap-4 rounded-2xl border border-[#e6c3e0] bg-[#fff7fc] px-4 py-3"
                         >
                           <span className="text-sm font-semibold text-slate-700">
                             {tipo}
                           </span>
-                          <span className="shrink-0 text-lg font-bold text-[#1b7f31]">
+                          <span className="shrink-0 text-lg font-bold text-[#8a0f78]">
                             {quantidade} un
                           </span>
                         </div>
@@ -2911,7 +2911,7 @@ export function ManhiaAdminDashboard({
             ) : null}
 
             {salgadosPorDia.length === 0 ? (
-              <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5">
+              <Card className="border-[#e6c3e0] bg-white/95 shadow-lg shadow-green-900/5">
                 <CardContent className="py-10 text-center text-sm text-slate-700">
                   Nenhum pedido aceito com salgados ainda.
                 </CardContent>
@@ -2921,14 +2921,14 @@ export function ManhiaAdminDashboard({
                 {salgadosPorDia.map(({ dia, itens, total }) => (
                   <Card
                     key={dia}
-                    className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5"
+                    className="border-[#e6c3e0] bg-white/95 shadow-lg shadow-green-900/5"
                   >
-                    <CardHeader className="border-b border-[#e4edc9] bg-[#f7fde7] pb-3 pt-4">
+                    <CardHeader className="border-b border-[#f3dff0] bg-[#fdf1fb] pb-3 pt-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                        <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                           Entrega {dia}
                         </p>
-                        <Badge className="border border-[#d6e7a2] bg-[#fff3a8] text-[#0b3d18]">
+                        <Badge className="border border-[#e6c3e0] bg-[#fff3a8] text-[#4a0a3f]">
                           {total} un total
                         </Badge>
                       </div>
@@ -2938,12 +2938,12 @@ export function ManhiaAdminDashboard({
                         {itens.map(({ tipo, quantidade }) => (
                           <div
                             key={tipo}
-                            className="flex items-center justify-between rounded-xl border border-[#e4edc9] bg-[#fbfff0] px-4 py-2"
+                            className="flex items-center justify-between rounded-xl border border-[#f3dff0] bg-[#fff7fc] px-4 py-2"
                           >
                             <span className="text-sm font-medium text-slate-700">
                               {tipo}
                             </span>
-                            <span className="text-sm font-bold text-[#1b7f31]">
+                            <span className="text-sm font-bold text-[#8a0f78]">
                               {quantidade} un
                             </span>
                           </div>
@@ -2957,12 +2957,12 @@ export function ManhiaAdminDashboard({
           </section>
         ) : activeTab === "tipos" ? (
           <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
-            <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
-              <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+            <Card className="border-[#e6c3e0] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
+              <CardHeader className="border-b border-[#f3dff0] bg-[#fff7fc]">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                   Tipos de produto
                 </p>
-                <CardTitle className="text-[#0b3d18]">
+                <CardTitle className="text-[#4a0a3f]">
                   {editingProductTypeId ? "Editar tipo" : "Novo tipo"}
                 </CardTitle>
               </CardHeader>
@@ -3018,7 +3018,7 @@ export function ManhiaAdminDashboard({
                     />
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
+                  <div className="flex items-start gap-3 rounded-2xl border border-[#e6c3e0] bg-[#fdf1fb] px-4 py-3">
                     <Checkbox
                       id="product-type-allows-multiple"
                       checked={productTypeForm.allowsMultiple}
@@ -3041,7 +3041,7 @@ export function ManhiaAdminDashboard({
                     <Button
                       type="submit"
                       disabled={savingProductType}
-                      className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                      className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                     >
                       {savingProductType
                         ? "Salvando..."
@@ -3054,7 +3054,7 @@ export function ManhiaAdminDashboard({
                         type="button"
                         variant="outline"
                         onClick={resetProductTypeForm}
-                        className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                        className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                       >
                         Cancelar edição
                       </Button>
@@ -3064,15 +3064,15 @@ export function ManhiaAdminDashboard({
               </CardContent>
             </Card>
 
-            <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
-              <div className="flex flex-col gap-2 border-b border-[#e4edc9] bg-[#0b3d18] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
+            <section className="overflow-hidden rounded-[1.4rem] border border-[#e6c3e0] bg-white shadow-sm">
+              <div className="flex flex-col gap-2 border-b border-[#f3dff0] bg-[#4a0a3f] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#f4d330]">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#8a0f78]">
                     Catálogo
                   </p>
                   <h2 className="text-xl font-bold">Tipos cadastrados</h2>
                 </div>
-                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#0b3d18]">
+                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#4a0a3f]">
                   {productTypes.length} tipo(s)
                 </Badge>
               </div>
@@ -3082,18 +3082,18 @@ export function ManhiaAdminDashboard({
                   Nenhum tipo cadastrado ainda.
                 </div>
               ) : (
-                <div className="divide-y divide-[#e4edc9]">
+                <div className="divide-y divide-[#f3dff0]">
                   {productTypes.map((productType) => (
                     <article
                       key={productType.id}
-                      className="grid gap-4 p-4 transition hover:bg-[#fbfff0] md:grid-cols-[1fr_auto] md:items-center"
+                      className="grid gap-4 p-4 transition hover:bg-[#fff7fc] md:grid-cols-[1fr_auto] md:items-center"
                     >
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-bold text-[#0b3d18]">
+                          <h3 className="text-lg font-bold text-[#4a0a3f]">
                             {productType.name}
                           </h3>
-                          <Badge className="border border-[#d6e7a2] bg-[#f7fde7] text-[#1b5e20]">
+                          <Badge className="border border-[#e6c3e0] bg-[#fdf1fb] text-[#6b0f5c]">
                             {productType.minQuantity
                               ? `${productType.minQuantity} un`
                               : "Sem mínimo"}
@@ -3102,7 +3102,7 @@ export function ManhiaAdminDashboard({
                             {productType.productsCount} produto(s)
                           </Badge>
                         </div>
-                        <p className="text-sm text-[#48654f]">
+                        <p className="text-sm text-[#5a3a54]">
                           {productType.description || "Sem descrição."}
                         </p>
                         {productType.productsCount > 0 ? (
@@ -3119,7 +3119,7 @@ export function ManhiaAdminDashboard({
                           variant="outline"
                           size="sm"
                           onClick={() => handleEditProductType(productType)}
-                          className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                          className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                         >
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar
@@ -3151,12 +3151,12 @@ export function ManhiaAdminDashboard({
           </section>
         ) : activeTab === "cupons" ? (
           <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
-            <Card className="border-[#d6e7a2] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
-              <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+            <Card className="border-[#e6c3e0] bg-white/95 shadow-lg shadow-green-900/5 xl:sticky xl:top-6 xl:self-start">
+              <CardHeader className="border-b border-[#f3dff0] bg-[#fff7fc]">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                   Divulgação
                 </p>
-                <CardTitle className="text-[#0b3d18]">
+                <CardTitle className="text-[#4a0a3f]">
                   {editingCupomId ? "Editar cupom" : "Novo cupom"}
                 </CardTitle>
               </CardHeader>
@@ -3192,7 +3192,7 @@ export function ManhiaAdminDashboard({
                         }))
                       }
                     >
-                      <SelectTrigger className="h-10 w-full border-[#d6e7a2] bg-white text-sm text-slate-700">
+                      <SelectTrigger className="h-10 w-full border-[#e6c3e0] bg-white text-sm text-slate-700">
                         <SelectValue placeholder="Selecione o produto" />
                       </SelectTrigger>
                       <SelectContent>
@@ -3274,7 +3274,7 @@ export function ManhiaAdminDashboard({
                     />
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
+                  <div className="flex items-start gap-3 rounded-2xl border border-[#e6c3e0] bg-[#fdf1fb] px-4 py-3">
                     <Checkbox
                       id="cupom-ativo"
                       checked={cupomForm.ativo}
@@ -3297,7 +3297,7 @@ export function ManhiaAdminDashboard({
                     <Button
                       type="submit"
                       disabled={savingCupom}
-                      className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                      className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                     >
                       {savingCupom ? (
                         <>
@@ -3319,7 +3319,7 @@ export function ManhiaAdminDashboard({
                         type="button"
                         variant="outline"
                         onClick={resetCupomForm}
-                        className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                        className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                       >
                         Cancelar edição
                       </Button>
@@ -3329,15 +3329,15 @@ export function ManhiaAdminDashboard({
               </CardContent>
             </Card>
 
-            <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
-              <div className="flex flex-col gap-2 border-b border-[#e4edc9] bg-[#0b3d18] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
+            <section className="overflow-hidden rounded-[1.4rem] border border-[#e6c3e0] bg-white shadow-sm">
+              <div className="flex flex-col gap-2 border-b border-[#f3dff0] bg-[#4a0a3f] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#f4d330]">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#8a0f78]">
                     Cupons
                   </p>
                   <h2 className="text-xl font-bold">Cupons cadastrados</h2>
                 </div>
-                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#0b3d18]">
+                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#4a0a3f]">
                   {cupons.length} cupom(ns)
                 </Badge>
               </div>
@@ -3347,15 +3347,15 @@ export function ManhiaAdminDashboard({
                   Nenhum cupom cadastrado ainda.
                 </div>
               ) : (
-                <div className="divide-y divide-[#e4edc9]">
+                <div className="divide-y divide-[#f3dff0]">
                   {cupons.map((cupom) => (
                     <article
                       key={cupom.id}
-                      className="grid gap-4 p-4 transition hover:bg-[#fbfff0] md:grid-cols-[1fr_auto] md:items-center"
+                      className="grid gap-4 p-4 transition hover:bg-[#fff7fc] md:grid-cols-[1fr_auto] md:items-center"
                     >
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-mono text-lg font-bold text-[#0b3d18]">
+                          <h3 className="font-mono text-lg font-bold text-[#4a0a3f]">
                             {cupom.codigo}
                           </h3>
                           <Badge
@@ -3371,10 +3371,10 @@ export function ManhiaAdminDashboard({
                             {Number(cupom.descontoPercentual)}%
                           </Badge>
                         </div>
-                        <p className="text-sm text-[#48654f]">
+                        <p className="text-sm text-[#5a3a54]">
                           Produto: {cupom.produtoNome}
                         </p>
-                        <p className="text-sm text-[#48654f]">
+                        <p className="text-sm text-[#5a3a54]">
                           Divulgador: {cupom.divulgadorNome}
                           {cupom.divulgadorContato
                             ? ` - ${cupom.divulgadorContato}`
@@ -3393,7 +3393,7 @@ export function ManhiaAdminDashboard({
                           variant="outline"
                           size="sm"
                           onClick={() => void handleCopyCupom(cupom.codigo)}
-                          className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                          className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                         >
                           <Copy className="mr-2 h-4 w-4" />
                           Copiar
@@ -3403,7 +3403,7 @@ export function ManhiaAdminDashboard({
                           variant="outline"
                           size="sm"
                           onClick={() => handleEditCupom(cupom)}
-                          className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                          className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                         >
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar
@@ -3429,18 +3429,18 @@ export function ManhiaAdminDashboard({
             </section>
           </section>
         ) : activeTab === "configuracoes" ? (
-          <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
+          <section className="overflow-hidden rounded-[1.4rem] border border-[#e6c3e0] bg-white shadow-sm">
             <div className="grid lg:grid-cols-[1fr_340px]">
               <div className="space-y-6 p-5 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                       Controle de atendimento
                     </p>
-                    <h2 className="mt-2 text-3xl font-bold tracking-normal text-[#0b3d18]">
+                    <h2 className="mt-2 text-3xl font-bold tracking-normal text-[#4a0a3f]">
                       Loja {settings.isOpen ? "aberta" : "fechada"}
                     </h2>
-                    <p className="mt-2 max-w-xl text-sm leading-6 text-[#48654f]">
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-[#5a3a54]">
                       Esse controle muda o cardápio e impede novos pedidos
                       quando a loja está fechada.
                     </p>
@@ -3456,17 +3456,17 @@ export function ManhiaAdminDashboard({
                       "h-14 rounded-full px-8 text-base font-bold text-white",
                       settings.isOpen
                         ? "bg-rose-600 hover:bg-rose-700"
-                        : "bg-[#1b7f31] hover:bg-[#156326]",
+                        : "bg-[#8a0f78] hover:bg-[#6b0f5c]",
                     )}
                   >
                     {settings.isOpen ? "Fechar agora" : "Abrir agora"}
                   </Button>
                 </div>
 
-                <div className="rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                <div className="rounded-[1.2rem] border border-[#e6c3e0] bg-[#fff7fc] p-4">
                   <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-[#284a2e]">
+                      <label className="text-sm font-bold text-[#3d2a39]">
                         Antecedência mínima para pedido
                       </label>
                       <Input
@@ -3480,7 +3480,7 @@ export function ManhiaAdminDashboard({
                             minimumLeadHours: Number(event.target.value || 0),
                           }))
                         }
-                        className="h-12 max-w-30 mx-4 border-[#d6e7a2] bg-white text-lg font-bold text-[#0b3d18]"
+                        className="h-12 max-w-30 mx-4 border-[#e6c3e0] bg-white text-lg font-bold text-[#4a0a3f]"
                       />
                     </div>
                     <Button
@@ -3494,35 +3494,35 @@ export function ManhiaAdminDashboard({
                           ),
                         })
                       }
-                      className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]"
+                      className="h-12 rounded-full bg-[#8a0f78] px-6 font-bold text-white hover:bg-[#6b0f5c]"
                     >
                       {savingSettings ? "Salvando..." : "Salvar horário"}
                     </Button>
                   </div>
                 </div>
 
-                <div className="rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
-                  <p className="text-sm font-bold text-[#284a2e]">Provisão financeira (10%)</p>
-                  <p className="mt-1 text-sm text-[#48654f]">Valor reservado no controle interno e ainda pendente de transferência: <strong>{formatCurrency(totalProvisionPending)}</strong>.</p>
-                  <Button type="button" disabled={transferringProvision || totalProvisionPending <= 0} onClick={() => void handleProvisionTransferred()} className="mt-3 h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]">{transferringProvision ? "Registrando..." : "Marcar como transferido"}</Button>
+                <div className="rounded-[1.2rem] border border-[#e6c3e0] bg-[#fff7fc] p-4">
+                  <p className="text-sm font-bold text-[#3d2a39]">Provisão financeira (10%)</p>
+                  <p className="mt-1 text-sm text-[#5a3a54]">Valor reservado no controle interno e ainda pendente de transferência: <strong>{formatCurrency(totalProvisionPending)}</strong>.</p>
+                  <Button type="button" disabled={transferringProvision || totalProvisionPending <= 0} onClick={() => void handleProvisionTransferred()} className="mt-3 h-12 rounded-full bg-[#8a0f78] px-6 font-bold text-white hover:bg-[#6b0f5c]">{transferringProvision ? "Registrando..." : "Marcar como transferido"}</Button>
                 </div>
 
-                <div className="rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
-                  <label htmlFor="motorcycle-courier-phone" className="text-sm font-bold text-[#284a2e]">WhatsApp do motoboy</label>
-                  <p className="mt-1 text-sm text-[#48654f]">Contato usado pela equipe nos pedidos para entrega.</p>
+                <div className="rounded-[1.2rem] border border-[#e6c3e0] bg-[#fff7fc] p-4">
+                  <label htmlFor="motorcycle-courier-phone" className="text-sm font-bold text-[#3d2a39]">WhatsApp do motoboy</label>
+                  <p className="mt-1 text-sm text-[#5a3a54]">Contato usado pela equipe nos pedidos para entrega.</p>
                   <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                     <Input id="motorcycle-courier-phone" type="tel" value={settings.motorcycleCourierPhone || ""} onChange={(event) => setSettings((current) => ({ ...current, motorcycleCourierPhone: event.target.value }))} placeholder="(83) 99999-9999" className="h-12 bg-white" />
-                    <Button type="button" disabled={savingSettings} onClick={() => void handleSaveSettings({ motorcycleCourierPhone: settings.motorcycleCourierPhone })} className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]">Salvar motoboy</Button>
+                    <Button type="button" disabled={savingSettings} onClick={() => void handleSaveSettings({ motorcycleCourierPhone: settings.motorcycleCourierPhone })} className="h-12 rounded-full bg-[#8a0f78] px-6 font-bold text-white hover:bg-[#6b0f5c]">Salvar motoboy</Button>
                   </div>
                 </div>
 
-                <div className="space-y-4 rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                <div className="space-y-4 rounded-[1.2rem] border border-[#e6c3e0] bg-[#fff7fc] p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <p className="text-sm font-bold text-[#284a2e]">
+                      <p className="text-sm font-bold text-[#3d2a39]">
                         Horário da operação por dia
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-[#48654f]">
+                      <p className="mt-1 text-sm leading-6 text-[#5a3a54]">
                         Defina quais dias aceitam pedidos e o intervalo de
                         atendimento de cada um.
                       </p>
@@ -3535,7 +3535,7 @@ export function ManhiaAdminDashboard({
                           operationSchedule: settings.operationSchedule,
                         })
                       }
-                      className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]"
+                      className="h-12 rounded-full bg-[#8a0f78] px-6 font-bold text-white hover:bg-[#6b0f5c]"
                     >
                       {savingSettings ? "Salvando..." : "Salvar horários"}
                     </Button>
@@ -3548,9 +3548,9 @@ export function ManhiaAdminDashboard({
                       return (
                         <div
                           key={day.value}
-                          className="grid gap-3 rounded-[1rem] border border-[#d6e7a2] bg-white p-3 sm:grid-cols-[150px_1fr_1fr] sm:items-center"
+                          className="grid gap-3 rounded-[1rem] border border-[#e6c3e0] bg-white p-3 sm:grid-cols-[150px_1fr_1fr] sm:items-center"
                         >
-                          <label className="flex items-center gap-3 text-sm font-bold text-[#284a2e]">
+                          <label className="flex items-center gap-3 text-sm font-bold text-[#3d2a39]">
                             <Checkbox
                               checked={schedule.isOpen}
                               disabled={savingSettings}
@@ -3564,7 +3564,7 @@ export function ManhiaAdminDashboard({
                           </label>
 
                           <div className="space-y-1">
-                            <label className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                            <label className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                               Abre
                             </label>
                             <Input
@@ -3579,12 +3579,12 @@ export function ManhiaAdminDashboard({
                                   openHour: Number(event.target.value || 0),
                                 })
                               }
-                              className="h-11 border-[#d6e7a2] bg-white text-sm font-bold text-[#0b3d18]"
+                              className="h-11 border-[#e6c3e0] bg-white text-sm font-bold text-[#4a0a3f]"
                             />
                           </div>
 
                           <div className="space-y-1">
-                            <label className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                            <label className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                               Fecha
                             </label>
                             <Input
@@ -3599,7 +3599,7 @@ export function ManhiaAdminDashboard({
                                   closeHour: Number(event.target.value || 0),
                                 })
                               }
-                              className="h-11 border-[#d6e7a2] bg-white text-sm font-bold text-[#0b3d18]"
+                              className="h-11 border-[#e6c3e0] bg-white text-sm font-bold text-[#4a0a3f]"
                             />
                           </div>
                         </div>
@@ -3608,19 +3608,19 @@ export function ManhiaAdminDashboard({
                   </div>
                 </div>
 
-                <div className="rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                <div className="rounded-[1.2rem] border border-[#e6c3e0] bg-[#fff7fc] p-4">
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-sm font-bold text-[#284a2e]">
+                      <p className="text-sm font-bold text-[#3d2a39]">
                         Pedidos no mesmo horário
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-[#48654f]">
+                      <p className="mt-1 text-sm leading-6 text-[#5a3a54]">
                         Quando desligado, cada horário aceita apenas uma
                         encomenda ativa.
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold text-[#48654f]">
+                      <span className="text-sm font-semibold text-[#5a3a54]">
                         {settings.allowMultipleOrdersPerSlot
                           ? "Vários por horário"
                           : "Um por horário"}
@@ -3686,7 +3686,7 @@ export function ManhiaAdminDashboard({
                           "Aplica o visual verde e amarelo com combos especiais.",
                         icon: Trophy,
                         activeClass:
-                          "border-[#1b7f31] bg-[#f7fde7] text-[#0b3d18]",
+                          "border-[#8a0f78] bg-[#fdf1fb] text-[#4a0a3f]",
                       },
                       {
                         value: "SAO_JOAO" as const,
@@ -3734,8 +3734,8 @@ export function ManhiaAdminDashboard({
                   </div>
 
                   {settings.siteTheme === "PADRAO" ? (
-                    <div className="rounded-[1rem] border border-[#1b7f31] bg-white px-4 py-3 text-sm leading-6 text-[#284a2e]">
-                      <strong className="text-[#0b3d18]">No site:</strong>{" "}
+                    <div className="rounded-[1rem] border border-[#8a0f78] bg-white px-4 py-3 text-sm leading-6 text-[#3d2a39]">
+                      <strong className="text-[#4a0a3f]">No site:</strong>{" "}
                       a identidade da Vizinha aparece com mensagens atemporais
                       e as cores principais da marca.
                     </div>
@@ -3754,15 +3754,15 @@ export function ManhiaAdminDashboard({
                   ) : null}
                 </div>
 
-                <div className="space-y-4 rounded-[1.2rem] border border-[#d6e7a2] bg-[#fbfff0] p-4">
+                <div className="space-y-4 rounded-[1.2rem] border border-[#e6c3e0] bg-[#fff7fc] p-4">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                       Produto em destaque
                     </p>
-                    <h3 className="mt-1 text-xl font-bold text-[#0b3d18]">
+                    <h3 className="mt-1 text-xl font-bold text-[#4a0a3f]">
                       Escolha o produto principal do cardápio
                     </h3>
-                    <p className="mt-2 text-sm leading-6 text-[#48654f]">
+                    <p className="mt-2 text-sm leading-6 text-[#5a3a54]">
                       Esse produto aparece no bloco grande da vitrine. Produtos
                       ocultos não aparecem no cardápio público.
                     </p>
@@ -3770,7 +3770,7 @@ export function ManhiaAdminDashboard({
 
                   <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-[#284a2e]">
+                      <label className="text-sm font-bold text-[#3d2a39]">
                         Destaque atual
                       </label>
                       <Select
@@ -3782,7 +3782,7 @@ export function ManhiaAdminDashboard({
                           }))
                         }
                       >
-                        <SelectTrigger className="h-12 w-full border-[#d6e7a2] bg-white text-sm text-[#0b3d18]">
+                        <SelectTrigger className="h-12 w-full border-[#e6c3e0] bg-white text-sm text-[#4a0a3f]">
                           <SelectValue placeholder="Selecione um produto" />
                         </SelectTrigger>
                         <SelectContent>
@@ -3807,7 +3807,7 @@ export function ManhiaAdminDashboard({
                           featuredProductId: settings.featuredProductId,
                         })
                       }
-                      className="h-12 rounded-full bg-[#1b7f31] px-6 font-bold text-white hover:bg-[#156326]"
+                      className="h-12 rounded-full bg-[#8a0f78] px-6 font-bold text-white hover:bg-[#6b0f5c]"
                     >
                       {savingSettings ? "Salvando..." : "Salvar destaque"}
                     </Button>
@@ -3815,7 +3815,7 @@ export function ManhiaAdminDashboard({
                 </div>
               </div>
 
-              <aside className="grid border-t border-[#e4edc9] bg-[#0b3d18] text-white lg:border-l lg:border-t-0">
+              <aside className="grid border-t border-[#f3dff0] bg-[#4a0a3f] text-white lg:border-l lg:border-t-0">
                 {[
                   {
                     label: "Pedidos no painel",
@@ -3874,7 +3874,7 @@ export function ManhiaAdminDashboard({
                       key={item.label}
                       className="border-b border-white/10 p-5 last:border-b-0"
                     >
-                      <Icon className="h-5 w-5 text-[#f4d330]" />
+                      <Icon className="h-5 w-5 text-[#8a0f78]" />
                       <p className="mt-3 text-2xl font-bold">{item.value}</p>
                       <p className="mt-1 text-sm text-white/70">{item.label}</p>
                     </div>
@@ -3885,19 +3885,19 @@ export function ManhiaAdminDashboard({
           </section>
         ) : activeTab === "produtos" ? (
           <section className="space-y-5">
-            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#d6e7a2] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="text-xs font-bold uppercase tracking-wide text-[#618038]">Cardápio</p><h2 className="mt-1 text-2xl font-bold text-[#0b3d18]">Gerenciar produtos</h2></div>
-              <Button type="button" onClick={() => { resetForm(); setProductDialogOpen(true); }} className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"><Plus className="mr-2 h-4 w-4" />Novo produto</Button>
+            <div className="flex flex-col gap-3 rounded-[2rem] border border-[#e6c3e0] bg-white/95 p-5 shadow-lg shadow-green-900/5 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">Cardápio</p><h2 className="mt-1 text-2xl font-bold text-[#4a0a3f]">Gerenciar produtos</h2></div>
+              <Button type="button" onClick={() => { resetForm(); setProductDialogOpen(true); }} className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"><Plus className="mr-2 h-4 w-4" />Novo produto</Button>
             </div>
             <Dialog open={productDialogOpen} onOpenChange={(open) => { setProductDialogOpen(open); if (!open && !saving) resetForm(); }}>
-              <DialogContent className="max-h-[90vh] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl">
-                <DialogHeader><DialogTitle className="text-[#0b3d18]">{editingId ? "Editar produto" : "Novo produto"}</DialogTitle><DialogDescription>Preencha os dados que serão exibidos no cardápio.</DialogDescription></DialogHeader>
+              <DialogContent className="max-h-[90vh] overflow-y-auto border-[#e6c3e0] sm:max-w-2xl">
+                <DialogHeader><DialogTitle className="text-[#4a0a3f]">{editingId ? "Editar produto" : "Novo produto"}</DialogTitle><DialogDescription>Preencha os dados que serão exibidos no cardápio.</DialogDescription></DialogHeader>
             <Card className="border-0 bg-white shadow-none">
-              <CardHeader className="border-b border-[#e4edc9] bg-[#fbfff0]">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+              <CardHeader className="border-b border-[#f3dff0] bg-[#fff7fc]">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                   Editor
                 </p>
-                <CardTitle className="text-[#0b3d18]">
+                <CardTitle className="text-[#4a0a3f]">
                   {editingId ? "Editar produto" : "Novo produto"}
                 </CardTitle>
               </CardHeader>
@@ -3982,7 +3982,7 @@ export function ManhiaAdminDashboard({
                           }));
                         }}
                       >
-                        <SelectTrigger className="h-10 w-full border-[#d6e7a2] bg-white text-sm text-slate-700">
+                        <SelectTrigger className="h-10 w-full border-[#e6c3e0] bg-white text-sm text-slate-700">
                           <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
                         <SelectContent>
@@ -4011,7 +4011,7 @@ export function ManhiaAdminDashboard({
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3 sm:col-span-2">
+                    <div className="flex items-start gap-3 rounded-2xl border border-[#e6c3e0] bg-[#fdf1fb] px-4 py-3 sm:col-span-2">
                       <Checkbox id="produto-selecao-tipos" checked={form.precisaSelecaoDeTipos} onCheckedChange={(checked) => setForm((current) => ({ ...current, precisaSelecaoDeTipos: Boolean(checked) }))} />
                       <label htmlFor="produto-selecao-tipos" className="text-sm leading-6 text-slate-600">Este produto exige seleção de tipos/sabores.</label>
                     </div>
@@ -4062,7 +4062,7 @@ export function ManhiaAdminDashboard({
                         <label className="text-sm font-medium text-slate-700">
                           Itens fixos do combo
                         </label>
-                        <div className="space-y-3 rounded-[1.4rem] border border-[#d6e7a2] bg-[#f7fde7] p-4">
+                        <div className="space-y-3 rounded-[1.4rem] border border-[#e6c3e0] bg-[#fdf1fb] p-4">
                           {form.comboItens.map((item, index) => (
                             <div
                               key={`combo-${index}`}
@@ -4076,7 +4076,7 @@ export function ManhiaAdminDashboard({
                                   })
                                 }
                                 placeholder={`Ex: item ${index + 1}`}
-                                className="border-[#d6e7a2] bg-white"
+                                className="border-[#e6c3e0] bg-white"
                               />
                               <Input
                                 type="number"
@@ -4088,13 +4088,13 @@ export function ManhiaAdminDashboard({
                                     quantidade: event.target.value,
                                   })
                                 }
-                                className="border-[#d6e7a2] bg-white"
+                                className="border-[#e6c3e0] bg-white"
                               />
                               <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => removeComboItem(index)}
-                                className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                                className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Remover
@@ -4106,7 +4106,7 @@ export function ManhiaAdminDashboard({
                             type="button"
                             variant="outline"
                             onClick={addComboItem}
-                            className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                            className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                           >
                             <Plus className="mr-2 h-4 w-4" />
                             Adicionar item fixo
@@ -4124,7 +4124,7 @@ export function ManhiaAdminDashboard({
                         <label className="text-sm font-medium text-slate-700">
                           Sabores sugeridos
                         </label>
-                        <div className="space-y-3 rounded-[1.4rem] border border-[#d6e7a2] bg-[#f7fde7] p-4">
+                        <div className="space-y-3 rounded-[1.4rem] border border-[#e6c3e0] bg-[#fdf1fb] p-4">
                           {form.saboresSugeridos.map((sabor, index) => (
                             <div
                               key={`sabor-${index}`}
@@ -4136,13 +4136,13 @@ export function ManhiaAdminDashboard({
                                   updateSabor(index, event.target.value)
                                 }
                                 placeholder={`Ex: sabor ${index + 1}`}
-                                className="flex-1 border-[#d6e7a2] bg-white"
+                                className="flex-1 border-[#e6c3e0] bg-white"
                               />
                               <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => removeSabor(index)}
-                                className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                                className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Remover
@@ -4154,7 +4154,7 @@ export function ManhiaAdminDashboard({
                             type="button"
                             variant="outline"
                             onClick={addSabor}
-                            className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                            className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                           >
                             <Plus className="mr-2 h-4 w-4" />
                             Adicionar sabor
@@ -4177,7 +4177,7 @@ export function ManhiaAdminDashboard({
                       <label className="text-sm font-medium text-slate-700">
                         Foto do produto
                       </label>
-                      <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-[#d6e7a2] bg-[#f7fde7] text-sm font-medium text-[#1b5e20] transition hover:bg-pink-100">
+                      <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-[#e6c3e0] bg-[#fdf1fb] text-sm font-medium text-[#6b0f5c] transition hover:bg-pink-100">
                         {uploading ? (
                           <LoaderCircle className="h-4 w-4 animate-spin" />
                         ) : (
@@ -4197,7 +4197,7 @@ export function ManhiaAdminDashboard({
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
+                    <div className="flex items-start gap-3 rounded-2xl border border-[#e6c3e0] bg-[#fdf1fb] px-4 py-3">
                       <Checkbox
                         id="produto-parcial"
                         checked={form.permitePagamentoParcial}
@@ -4216,7 +4216,7 @@ export function ManhiaAdminDashboard({
                       </label>
                     </div>
 
-                    <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
+                    <div className="flex items-start gap-3 rounded-2xl border border-[#e6c3e0] bg-[#fdf1fb] px-4 py-3">
                       <Checkbox
                         id="produto-promocao"
                         checked={form.emPromocao}
@@ -4236,7 +4236,7 @@ export function ManhiaAdminDashboard({
                         </label>
                         {form.emPromocao ? (
                           <div className="grid gap-2 sm:max-w-48">
-                            <label className="text-xs font-bold uppercase tracking-wide text-[#618038]">
+                            <label className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">
                               Desconto (%)
                             </label>
                             <Input
@@ -4251,14 +4251,14 @@ export function ManhiaAdminDashboard({
                                   descontoPercentual: event.target.value,
                                 }))
                               }
-                              className="border-[#d6e7a2] bg-white"
+                              className="border-[#e6c3e0] bg-white"
                             />
                           </div>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-3 rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] px-4 py-3">
+                    <div className="flex items-start gap-3 rounded-2xl border border-[#e6c3e0] bg-[#fdf1fb] px-4 py-3">
                       <Checkbox
                         id="produto-ativo"
                         checked={form.ativo}
@@ -4279,7 +4279,7 @@ export function ManhiaAdminDashboard({
                   </div>
 
                   {form.imagemBase64 && (
-                    <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-[#d6e7a2] bg-[#f7fde7]">
+                    <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-[#e6c3e0] bg-[#fdf1fb]">
                       <Image
                         src={form.imagemBase64}
                         alt={form.nome || "Prévia do produto"}
@@ -4294,7 +4294,7 @@ export function ManhiaAdminDashboard({
                     <Button
                       type="submit"
                       disabled={saving}
-                      className="rounded-full bg-[#1b7f31] text-white hover:bg-[#156326]"
+                      className="rounded-full bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                     >
                       {saving ? (
                         <>
@@ -4316,7 +4316,7 @@ export function ManhiaAdminDashboard({
                         type="button"
                         variant="outline"
                         onClick={() => { resetForm(); setProductDialogOpen(false); }}
-                        className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                        className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                       >
                         Cancelar edição
                       </Button>
@@ -4328,15 +4328,15 @@ export function ManhiaAdminDashboard({
               </DialogContent>
             </Dialog>
 
-            <section className="overflow-hidden rounded-[1.4rem] border border-[#d6e7a2] bg-white shadow-sm">
-              <div className="flex flex-col gap-2 border-b border-[#e4edc9] bg-[#0b3d18] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
+            <section className="overflow-hidden rounded-[1.4rem] border border-[#e6c3e0] bg-white shadow-sm">
+              <div className="flex flex-col gap-2 border-b border-[#f3dff0] bg-[#4a0a3f] p-4 text-white sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#f4d330]">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#8a0f78]">
                     Cardápio
                   </p>
                   <h2 className="text-xl font-bold">Produtos cadastrados</h2>
                 </div>
-                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#0b3d18]">
+                <Badge className="w-fit border-[#f4d330] bg-[#f4d330] text-[#4a0a3f]">
                   {produtos.length} item(ns)
                 </Badge>
               </div>
@@ -4346,13 +4346,13 @@ export function ManhiaAdminDashboard({
                   Nenhum produto cadastrado ainda.
                 </div>
               ) : (
-                <div className="divide-y divide-[#e4edc9]">
+                <div className="divide-y divide-[#f3dff0]">
                   {produtos.map((produto) => (
                     <article
                       key={produto.id}
-                      className="grid gap-4 p-4 transition hover:bg-[#fbfff0] md:grid-cols-[72px_1fr_auto] md:items-center"
+                      className="grid gap-4 p-4 transition hover:bg-[#fff7fc] md:grid-cols-[72px_1fr_auto] md:items-center"
                     >
-                      <div className="relative h-20 overflow-hidden rounded-xl border border-[#d6e7a2] bg-[#f7fde7] md:h-16">
+                      <div className="relative h-20 overflow-hidden rounded-xl border border-[#e6c3e0] bg-[#fdf1fb] md:h-16">
                         <Image
                           src={produto.imagemBase64}
                           alt={produto.nome}
@@ -4364,7 +4364,7 @@ export function ManhiaAdminDashboard({
 
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-lg font-bold text-[#0b3d18]">
+                          <h3 className="truncate text-lg font-bold text-[#4a0a3f]">
                             {produto.nome}
                           </h3>
                           <Badge
@@ -4383,10 +4383,10 @@ export function ManhiaAdminDashboard({
                             </Badge>
                           ) : null}
                         </div>
-                        <p className="line-clamp-2 text-sm leading-6 text-[#48654f]">
+                        <p className="line-clamp-2 text-sm leading-6 text-[#5a3a54]">
                           {produto.descricao}
                         </p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[#618038]">
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[#5a3a54]">
                           <span>
                             {produto.productTypeName || produto.categoria}
                           </span>
@@ -4408,7 +4408,7 @@ export function ManhiaAdminDashboard({
                             <p className="text-sm text-slate-600 line-through">
                               {formatCurrency(Number(produto.preco))}
                             </p>
-                            <p className="text-xl font-bold text-[#0b3d18]">
+                            <p className="text-xl font-bold text-[#4a0a3f]">
                               {formatCurrency(
                                 Number(produto.preco) *
                                   (1 -
@@ -4418,7 +4418,7 @@ export function ManhiaAdminDashboard({
                             </p>
                           </div>
                         ) : (
-                          <p className="text-xl font-bold text-[#0b3d18]">
+                          <p className="text-xl font-bold text-[#4a0a3f]">
                             {formatCurrency(Number(produto.preco))}
                           </p>
                         )}
@@ -4428,7 +4428,7 @@ export function ManhiaAdminDashboard({
                             variant="outline"
                             size="sm"
                             onClick={() => handleEdit(produto)}
-                            className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                            className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                           >
                             <Pencil className="mr-2 h-4 w-4" />
                             Editar
@@ -4441,7 +4441,7 @@ export function ManhiaAdminDashboard({
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="rounded-full border-[#d6e7a2] text-[#1b5e20] hover:bg-[#f7fde7]"
+                            className="rounded-full border-[#e6c3e0] text-[#6b0f5c] hover:bg-[#fdf1fb]"
                           >
                             <Link href={`/pedido/${produto.slug}`}>Ver</Link>
                           </Button>
@@ -4475,9 +4475,9 @@ export function ManhiaAdminDashboard({
           if (!sendingMessages) setMessageDialogOpen(open);
         }}
       >
-        <DialogContent className="border-[#d6e7a2] sm:max-w-xl">
+        <DialogContent className="border-[#e6c3e0] sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle className="text-[#0b3d18]">Mensagem para clientes</DialogTitle>
+            <DialogTitle className="text-[#4a0a3f]">Mensagem para clientes</DialogTitle>
             <DialogDescription>
               Envia uma mensagem individual para cada telefone único de pedidos não cancelados.
               {customerCount === null ? " Carregando contatos..." : ` ${customerCount} cliente(s) serão incluídos.`}
@@ -4515,7 +4515,7 @@ export function ManhiaAdminDashboard({
             </div>
 
             {sendingMessages || messageProgress.processed > 0 ? (
-              <div className="rounded-xl bg-[#f7fde7] p-3 text-sm text-[#284a2e]">
+              <div className="rounded-xl bg-[#fdf1fb] p-3 text-sm text-[#3d2a39]">
                 Processados: {messageProgress.processed}/{customerCount ?? "…"} · Enviados: {messageProgress.sent} · Falhas: {messageProgress.failed}
               </div>
             ) : null}
@@ -4534,7 +4534,7 @@ export function ManhiaAdminDashboard({
               type="button"
               disabled={sendingMessages || customerCount === null || customerCount === 0 || !bulkMessage.trim()}
               onClick={() => void sendBulkMessage()}
-              className="bg-[#1b7f31] text-white hover:bg-[#156326]"
+              className="bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
             >
               {sendingMessages ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
               {sendingMessages ? "Enviando..." : "Enviar para todos"}
@@ -4550,7 +4550,7 @@ export function ManhiaAdminDashboard({
         }}
       >
         <DialogContent
-          className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl"
+          className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#e6c3e0] sm:max-w-2xl"
           onInteractOutside={(event) => {
             if ((event.target as HTMLElement).closest(".pac-container")) event.preventDefault();
           }}
@@ -4558,7 +4558,7 @@ export function ManhiaAdminDashboard({
           {selectedPedido ? (
             <>
               <DialogHeader>
-                <DialogTitle className="text-[#0b3d18]">
+                <DialogTitle className="text-[#4a0a3f]">
                   Pedido {selectedPedido.codigo}
                 </DialogTitle>
                 <DialogDescription>
@@ -4567,24 +4567,24 @@ export function ManhiaAdminDashboard({
               </DialogHeader>
 
               <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-xl bg-[#f7fde7] p-3">
-                  <p className="font-semibold text-[#1b5e20]">Entrega</p>
+                <div className="rounded-xl bg-[#fdf1fb] p-3">
+                  <p className="font-semibold text-[#6b0f5c]">Entrega</p>
                   <p className="mt-1 text-slate-700">{formatDateTime(selectedPedido.dataEntrega)}</p>
                 </div>
-                <div className="rounded-xl bg-[#f7fde7] p-3">
-                  <p className="font-semibold text-[#1b5e20]">Pagamento</p>
+                <div className="rounded-xl bg-[#fdf1fb] p-3">
+                  <p className="font-semibold text-[#6b0f5c]">Pagamento</p>
                   <p className="mt-1 text-slate-700">{selectedPedido.metodoPagamentoLabel} • {selectedPedido.percentualPagamento}% agora</p>
-                  <p className="font-bold text-[#0b3d18]">{formatCurrency(Number(selectedPedido.totalCobrado))}</p>
+                  <p className="font-bold text-[#4a0a3f]">{formatCurrency(Number(selectedPedido.totalCobrado))}</p>
                 </div>
-                <div className="rounded-xl bg-[#f7fde7] p-3 sm:col-span-2">
-                  <p className="font-semibold text-[#1b5e20]">Produto e itens</p>
+                <div className="rounded-xl bg-[#fdf1fb] p-3 sm:col-span-2">
+                  <p className="font-semibold text-[#6b0f5c]">Produto e itens</p>
                   <p className="mt-1 text-slate-700">{selectedPedido.produtoNomeSnapshot} • {selectedPedido.totalUnidades} unidades • {selectedPedido.totalTipos} tipos</p>
                   <ul className="mt-2 space-y-1 text-slate-700">
                     {selectedPedido.itens.map((item) => <li key={item.id}>{item.tipo}: {item.quantidade} un</li>)}
                   </ul>
                 </div>
-                <div className="rounded-xl bg-[#f7fde7] p-3 sm:col-span-2">
-                  <p className="font-semibold text-[#1b5e20]">Observações</p>
+                <div className="rounded-xl bg-[#fdf1fb] p-3 sm:col-span-2">
+                  <p className="font-semibold text-[#6b0f5c]">Observações</p>
                   <p className="mt-1 whitespace-pre-wrap text-slate-700">{selectedPedido.observacoes || "Sem observações."}</p>
                 </div>
               </div>
@@ -4595,7 +4595,7 @@ export function ManhiaAdminDashboard({
                   type="button"
                   disabled={printingPedidoId === selectedPedido.id}
                   onClick={() => void handlePrint(selectedPedido.id)}
-                  className="bg-[#1b7f31] text-white hover:bg-[#156326]"
+                  className="bg-[#8a0f78] text-white hover:bg-[#6b0f5c]"
                 >
                   <Printer className="mr-2 h-4 w-4" />
                   {printingPedidoId === selectedPedido.id ? "Enviando..." : "Imprimir"}
@@ -4612,11 +4612,11 @@ export function ManhiaAdminDashboard({
           if (!open) setSelectedSimpleOrder(null);
         }}
       >
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl">
+        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#e6c3e0] sm:max-w-2xl">
           {selectedSimpleOrder ? (
             <>
               <DialogHeader>
-                <DialogTitle className="text-[#0b3d18]">Pedido {getSimpleOrderCode(selectedSimpleOrder)}{selectedSimpleOrder.isConfeiteira ? " • Confeiteira" : ""}</DialogTitle>
+                <DialogTitle className="text-[#4a0a3f]">Pedido {getSimpleOrderCode(selectedSimpleOrder)}{selectedSimpleOrder.isConfeiteira ? " • Confeiteira" : ""}</DialogTitle>
                 <DialogDescription>{selectedSimpleOrder.customerName || "Cliente não informado"}{selectedSimpleOrder.customerPhone ? ` • ${selectedSimpleOrder.customerPhone}` : ""}</DialogDescription>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <OrderStatusBadge status={selectedSimpleOrder.status} />
@@ -4625,19 +4625,19 @@ export function ManhiaAdminDashboard({
               </DialogHeader>
 
               <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-xl bg-[#f7fde7] p-3">
-                  <p className="font-semibold text-[#1b5e20]">Entrega/retirada</p>
+                <div className="rounded-xl bg-[#fdf1fb] p-3">
+                  <p className="font-semibold text-[#6b0f5c]">Entrega/retirada</p>
                   <p className="mt-1 text-slate-700">{formatDateTime(getSimpleOrderDate(selectedSimpleOrder))}</p>
                   <p className="mt-1 text-slate-700">{selectedSimpleOrder.fulfillmentType === "DELIVERY" ? selectedSimpleOrder.deliveryAddress || "Entrega" : "Retirada"}</p>
                   {selectedSimpleOrder.deliveryReference ? <p className="mt-1 text-slate-700">Referência: {selectedSimpleOrder.deliveryReference}</p> : null}
                 </div>
-                <div className="rounded-xl bg-[#f7fde7] p-3">
-                  <p className="font-semibold text-[#1b5e20]">Pagamento</p>
+                <div className="rounded-xl bg-[#fdf1fb] p-3">
+                  <p className="font-semibold text-[#6b0f5c]">Pagamento</p>
                   <p className="mt-1 text-slate-700">{selectedSimpleOrder.paymentMethodLabel} • {selectedSimpleOrder.paymentPercentage}% agora</p>
-                  <p className="font-bold text-[#0b3d18]">{formatCurrency(Number(selectedSimpleOrder.chargedAmount || selectedSimpleOrder.totalAmount))}</p>
+                  <p className="font-bold text-[#4a0a3f]">{formatCurrency(Number(selectedSimpleOrder.chargedAmount || selectedSimpleOrder.totalAmount))}</p>
                 </div>
-                <div className="rounded-xl bg-[#f7fde7] p-3 sm:col-span-2">
-                  <p className="font-semibold text-[#1b5e20]">Itens</p>
+                <div className="rounded-xl bg-[#fdf1fb] p-3 sm:col-span-2">
+                  <p className="font-semibold text-[#6b0f5c]">Itens</p>
                   <ul className="mt-2 space-y-1 text-slate-700">
                     {selectedSimpleOrder.items.map((item) => <li key={item.id}>{item.productName} ({item.productType}) — {item.quantity} x {formatCurrency(Number(item.unitPrice))}</li>)}
                   </ul>
@@ -4658,7 +4658,7 @@ export function ManhiaAdminDashboard({
                     {advanceLabel(getNextSimpleOrderStatus(selectedSimpleOrder.status))}
                   </Button>
                 ) : null}
-                <Button type="button" disabled={printingPedidoId === selectedSimpleOrder.id} onClick={() => void handlePrintSimpleOrder(selectedSimpleOrder.id)} className="bg-[#1b7f31] text-white hover:bg-[#156326]">
+                <Button type="button" disabled={printingPedidoId === selectedSimpleOrder.id} onClick={() => void handlePrintSimpleOrder(selectedSimpleOrder.id)} className="bg-[#8a0f78] text-white hover:bg-[#6b0f5c]">
                   <Printer className="mr-2 h-4 w-4" />
                   {printingPedidoId === selectedSimpleOrder.id ? "Enviando..." : "Imprimir"}
                 </Button>
@@ -4669,40 +4669,40 @@ export function ManhiaAdminDashboard({
       </Dialog>
 
       <Dialog open={editingSimpleOrder !== null} onOpenChange={(open) => { if (!open && !savingOrderEdit) setEditingSimpleOrder(null); }}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#d6e7a2] sm:max-w-2xl" onInteractOutside={(event) => { if ((event.target as HTMLElement).closest(".pac-container")) event.preventDefault(); }}>
+        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-[#e6c3e0] sm:max-w-2xl" onInteractOutside={(event) => { if ((event.target as HTMLElement).closest(".pac-container")) event.preventDefault(); }}>
           <DialogHeader>
-            <DialogTitle className="text-[#0b3d18]">Alterar pedido</DialogTitle>
+            <DialogTitle className="text-[#4a0a3f]">Alterar pedido</DialogTitle>
             <DialogDescription>O cliente receberá uma confirmação da alteração. O saldo será cobrado pelo checkout seguro quando o pedido estiver pronto.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid gap-3 rounded-xl bg-[#f7fde7] p-3 sm:grid-cols-2">
-              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Data e hora da retirada/entrega</label><Input type="datetime-local" value={orderEditScheduledAt} onChange={(event) => setOrderEditScheduledAt(event.target.value)} /></div>
-              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Valor já pago (R$)</label><Input type="number" min="0" step="0.01" value={orderEditPaidAmount} onChange={(event) => setOrderEditPaidAmount(event.target.value)} /><p className="text-xs text-slate-700">Informe o valor efetivamente recebido. O saldo será recalculado.</p></div>
+            <div className="grid gap-3 rounded-xl bg-[#fdf1fb] p-3 sm:grid-cols-2">
+              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">Data e hora da retirada/entrega</label><Input type="datetime-local" value={orderEditScheduledAt} onChange={(event) => setOrderEditScheduledAt(event.target.value)} /></div>
+              <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">Valor já pago (R$)</label><Input type="number" min="0" step="0.01" value={orderEditPaidAmount} onChange={(event) => setOrderEditPaidAmount(event.target.value)} /><p className="text-xs text-slate-700">Informe o valor efetivamente recebido. O saldo será recalculado.</p></div>
             </div>
             <div className="space-y-3">
-              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#618038]">Produtos e quantidades</p><p className="mt-1 text-sm text-slate-700">Ajuste cada produto e a composição dos sabores, como no carrinho.</p></div>
+              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#5a3a54]">Produtos e quantidades</p><p className="mt-1 text-sm text-slate-700">Ajuste cada produto e a composição dos sabores, como no carrinho.</p></div>
               {orderEditItems.map((item, index) => (
-                <div key={`${item.productId}-${index}`} className="rounded-2xl border border-[#d6e7a2] bg-[#f7fde7] p-3 shadow-sm">
+                <div key={`${item.productId}-${index}`} className="rounded-2xl border border-[#e6c3e0] bg-[#fdf1fb] p-3 shadow-sm">
                   <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_110px_auto]">
-                    <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Produto</label><Select value={item.productId} onValueChange={(value) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, productId: value, selectedItems: [{ tipo: "", quantidade: "0" }] } : entry))}>
+                    <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">Produto</label><Select value={item.productId} onValueChange={(value) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, productId: value, selectedItems: [{ tipo: "", quantidade: "0" }] } : entry))}>
                     <SelectTrigger className="bg-white"><SelectValue placeholder="Produto" /></SelectTrigger>
                     <SelectContent>{produtos.filter((product) => product.ativo && (!editingSimpleOrder?.isConfeiteira || product.ativoConfeiteira)).map((product) => <SelectItem key={product.id} value={product.id}>{product.nome}</SelectItem>)}</SelectContent>
                     </Select></div>
-                    <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#52705a]">Quantidade</label><Input className="bg-white text-center font-bold" type="number" min="1" value={item.quantity} onChange={(event) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, quantity: event.target.value } : entry))} /></div>
+                    <div className="space-y-1"><label className="text-xs font-bold uppercase tracking-wide text-[#5a3a54]">Quantidade</label><Input className="bg-white text-center font-bold" type="number" min="1" value={item.quantity} onChange={(event) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, quantity: event.target.value } : entry))} /></div>
                     <Button type="button" variant="outline" className="self-end border-red-200 text-red-700 hover:bg-red-50" disabled={orderEditItems.length === 1} onClick={() => setOrderEditItems((current) => current.filter((_, entryIndex) => entryIndex !== index))}>Remover</Button>
                   </div>
                   {(() => { const product = produtos.find((candidate) => candidate.id === item.productId); return product?.precisaSelecaoDeTipos ? <OrderEditFlavorPicker product={product} flavors={item.selectedItems} onChange={(selectedItems) => setOrderEditItems((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, selectedItems } : entry))} /> : null; })()}
                 </div>
               ))}
-              <Button type="button" variant="outline" className="w-full border-dashed border-[#91b34a] text-[#1b5e20] hover:bg-[#f7fde7]" onClick={() => setOrderEditItems((current) => [...current, { productId: produtos.find((product) => product.ativo && (!editingSimpleOrder?.isConfeiteira || product.ativoConfeiteira))?.id || "", quantity: "1", selectedItems: [{ tipo: "", quantidade: "0" }] }])}>+ Adicionar produto</Button>
+              <Button type="button" variant="outline" className="w-full border-dashed border-[#b24aa3] text-[#6b0f5c] hover:bg-[#fdf1fb]" onClick={() => setOrderEditItems((current) => [...current, { productId: produtos.find((product) => product.ativo && (!editingSimpleOrder?.isConfeiteira || product.ativoConfeiteira))?.id || "", quantity: "1", selectedItems: [{ tipo: "", quantidade: "0" }] }])}>+ Adicionar produto</Button>
             </div>
-            <div className="space-y-2 rounded-xl bg-[#f7fde7] p-3">
-              <p className="text-sm font-semibold text-[#1b5e20]">Entrega</p>
+            <div className="space-y-2 rounded-xl bg-[#fdf1fb] p-3">
+              <p className="text-sm font-semibold text-[#6b0f5c]">Entrega</p>
               <Select value={orderEditFulfillment} onValueChange={(value) => setOrderEditFulfillment(value as "PICKUP" | "DELIVERY")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PICKUP">Retirada</SelectItem><SelectItem value="DELIVERY">Entrega</SelectItem></SelectContent></Select>
               {orderEditFulfillment === "DELIVERY" ? <div className="grid gap-2 sm:grid-cols-3"><Input ref={orderEditAddressRef} value={orderEditAddress} onChange={(event) => setOrderEditAddress(event.target.value)} placeholder="Endereço (selecione no Google Maps)" /><Input value={orderEditNeighborhood} onChange={(event) => setOrderEditNeighborhood(event.target.value)} placeholder="Bairro" /><Input value={orderEditReference} onChange={(event) => setOrderEditReference(event.target.value)} placeholder="Referência" /></div> : null}
             </div>
           </div>
-          <DialogFooter><Button type="button" variant="outline" disabled={savingOrderEdit} onClick={() => setEditingSimpleOrder(null)}>Cancelar</Button><Button type="button" disabled={savingOrderEdit} onClick={() => void saveSimpleOrderEdit()} className="bg-[#1b7f31] text-white hover:bg-[#156326]">{savingOrderEdit ? "Salvando..." : "Salvar alteração"}</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" disabled={savingOrderEdit} onClick={() => setEditingSimpleOrder(null)}>Cancelar</Button><Button type="button" disabled={savingOrderEdit} onClick={() => void saveSimpleOrderEdit()} className="bg-[#8a0f78] text-white hover:bg-[#6b0f5c]">{savingOrderEdit ? "Salvando..." : "Salvar alteração"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

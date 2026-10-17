@@ -3,12 +3,43 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
-  /* Texto mínimo de 16px: com a base de 18px, nenhum tamanho padrão fica abaixo disso. */
+/* Texto mínimo de 16px. No celular a base é 18px (0,9rem = 16,2px); no computador a base é
+   16px e os tamanhos pequenos sobem para 1rem. (Bloco sem "inline" para a media query poder trocar.) */
+@theme {
   --text-xs: 0.9rem;
   --text-xs--line-height: 1.5;
   --text-sm: 0.95rem;
   --text-sm--line-height: 1.55;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --text-xs: 1rem;
+    --text-sm: 1rem;
+  }
+}
+
+@theme inline {
+  /* Identidade da Vizinha: magenta do logo + menta de apoio. Todos os pares de texto/fundo usados
+     passam de 7:1 (ver docs/identidade-visual.md). */
+  --color-brand: #8a0f78;
+  --color-brand-dark: #6b0f5c;
+  --color-brand-end: #9e1089;
+  --color-brand-vivid: #e000cf;
+  --color-brand-soft: #fdebfa;
+  --color-brand-line: #b24aa3;
+  --color-mint: #e3f8f5;
+  --color-mint-dark: #08534d;
+  --color-cream: #fff7fc;
+  --color-ink: #2b0a26;
+  --color-ink-muted: #5a3a54;
+  --color-open: #095a30;
+  --color-open-soft: #e5f6ec;
+  --color-closed: #8f1111;
+  --color-closed-soft: #fdeaea;
+  --color-notice: #ffe08a;
+  --color-notice-ink: #3b2a00;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-montserrat);
@@ -50,24 +81,24 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.13 0.028 261.692);
+  --background: #fff7fc;
+  --foreground: #2b0a26;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.13 0.028 261.692);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.13 0.028 261.692);
-  --primary: oklch(0.21 0.034 264.665);
-  --primary-foreground: oklch(0.985 0.002 247.839);
+  --primary: #8a0f78;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.967 0.003 264.542);
   --secondary-foreground: oklch(0.21 0.034 264.665);
   --muted: oklch(0.967 0.003 264.542);
-  --muted-foreground: oklch(0.551 0.027 264.364);
+  --muted-foreground: #5a3a54;
   --accent: oklch(0.967 0.003 264.542);
   --accent-foreground: oklch(0.21 0.034 264.665);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.928 0.006 264.531);
-  --input: oklch(0.928 0.006 264.531);
-  --ring: oklch(0.707 0.022 261.325);
+  --border: #e6cde1;
+  --input: #b24aa3;
+  --ring: #8a0f78;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -122,9 +153,14 @@
     @apply border-border outline-ring/50;
   }
   html {
-    /* 18px: leitura confortável no celular. O zoom do navegador continua liberado. */
+    /* 18px no celular (leitura confortável); 16px no computador. O zoom do navegador continua liberado. */
     font-size: 112.5%;
     -webkit-text-size-adjust: 100%;
+  }
+  @media (min-width: 768px) {
+    html {
+      font-size: 100%;
+    }
   }
   body {
     @apply bg-background text-foreground;
@@ -204,3 +240,57 @@
 .pac-item:hover, .pac-item-selected { background: #fff0fc !important; }
 .pac-item-query { color: #641052 !important; font-size: 14px !important; font-weight: 700 !important; }
 .pac-icon { margin-top: 7px !important; }
+
+/* Faixas em degradê da marca (texto branco: 7,3:1 no ponto mais claro). No computador, um brilho
+   rosa no canto direito (onde ficam o botão e os enfeites, nunca o texto). */
+.vz-gradient {
+  background-image: linear-gradient(135deg, #6b0f5c 0%, #8a0f78 55%, #9e1089 100%);
+}
+@media (min-width: 900px) {
+  .vz-gradient {
+    background-image:
+      radial-gradient(26% 110% at 100% 0%, rgba(255, 140, 242, 0.55) 0%, rgba(255, 140, 242, 0) 100%),
+      linear-gradient(135deg, #6b0f5c 0%, #8a0f78 55%, #9e1089 100%);
+  }
+}
+
+/* Fundo da página: rosa claro no alto, esfumando para o creme. */
+.vz-page-bg {
+  background-color: #fff7fc;
+  background-image: linear-gradient(180deg, #ffe6f9 0, #fff7fc 720px);
+  background-repeat: no-repeat;
+}
+
+/* Topo: no celular o texto fica no alto (tons claros) e a cor viva desce para a foto; no computador o
+   texto fica à esquerda sobre tons claros e a cor viva fica atrás da foto, à direita. */
+.vz-hero-bg {
+  background-image: linear-gradient(180deg, #fff7fc 0%, #ffe3fa 55%, #ffc4f6 100%);
+}
+@media (min-width: 1024px) {
+  .vz-hero-bg {
+    background-image:
+      radial-gradient(42% 85% at 90% 30%, rgba(255, 120, 240, 0.6) 0%, rgba(255, 120, 240, 0) 100%),
+      linear-gradient(100deg, #fff7fc 0%, #ffe9fb 52%, #ffc4f6 100%);
+  }
+}
+
+/* Cartões e seções com degradê suave (mesmo papel dos cartões alaranjados da referência). */
+.vz-card {
+  background-image: linear-gradient(180deg, #ffffff 0%, #fff0fc 100%);
+}
+.vz-card-mint {
+  background-image: linear-gradient(180deg, #ffffff 0%, #e3f8f5 100%);
+}
+.vz-section-soft {
+  background-image: linear-gradient(180deg, #fff7fc 0%, #ffe6f9 100%);
+}
+.vz-section-mint {
+  background-image: linear-gradient(135deg, #e3f8f5 0%, #fdebfa 100%);
+}
+
+/* Bolinhas decorativas do topo. São só enfeite: ficam atrás, sem animação e escondidas de leitores de tela. */
+.vz-dot {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+}

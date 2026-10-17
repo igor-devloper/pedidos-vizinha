@@ -34,6 +34,8 @@ Este servico cria uma base de bot WhatsApp no estilo "instancia + QR + webhook",
   por `POST /instances/:id/logout` (botao "Desconectar WhatsApp" do painel).
 - Instancias com `autoStart` sobem sozinhas no boot; so "Parar" no painel desliga isso.
 - O start command e `node dist/server.js` (sem npm) para o app receber o SIGTERM.
+- O `nixpacks.toml` instala com `npm install --include=dev`: o build usa `tsc` (devDependency) e, com
+  `NODE_ENV=production`, o npm normalmente pularia as devDependencies (erro `tsc: not found`).
 
 ## Observacoes importantes
 

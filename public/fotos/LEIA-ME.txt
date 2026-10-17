@@ -1,0 +1,11 @@
+Fotos da Vizinha — coloque os arquivos AQUI com estes nomes exatos (formato .jpg).
+Quando o arquivo existir, a foto aparece no site sozinha; enquanto não existir, o site mostra um quadro colorido no lugar.
+
+  vizinha-cozinha.jpg        A Vizinha na cozinha (seção "Feito pela Vizinha")
+  coxinha-de-frango.jpg      Cada sabor do cardápio, com o nome do sabor em minúsculas,
+  coxinha.jpg                sem acento e com hífen no lugar do espaço.
+  bolinha-de-queijo.jpg      Exemplos: pastel-frito.jpg, pastel-frito-acucarado.jpg,
+  churros.jpg                risole-misto.jpg, pastel-de-carne.jpg, pastel-de-carne-acucarado.jpg
+
+Veja a lista completa e as dicas de enquadramento em docs/fotos-para-tirar.md.
+Tamanho: até 1600 px de largura e menos de 400 KB cada (use squoosh.app para reduzir).

@@ -229,13 +229,13 @@ export function PedidoCheckout({
   const isSaoJoaoTheme = siteTheme === "SAO_JOAO";
   const isDefaultTheme = siteTheme === "PADRAO";
   const themeStyle = {
-    "--theme-accent": isDefaultTheme ? "#e000cf" : "#1b7f31",
-    "--theme-accent-hover": isDefaultTheme ? "#b800aa" : "#156326",
+    "--theme-accent": isDefaultTheme ? "#e000cf" : "#8a0f78",
+    "--theme-accent-hover": isDefaultTheme ? "#b800aa" : "#6b0f5c",
     "--theme-accent-dark": isDefaultTheme ? "#8f147b" : "#0f5d22",
-    "--theme-surface": isDefaultTheme ? "#fff0fc" : "#f7fde3",
+    "--theme-surface": isDefaultTheme ? "#fff0fc" : "#fff0fc",
     "--theme-border": isDefaultTheme ? "#f4a8eb" : "#d8e8a4",
-    "--theme-text": isDefaultTheme ? "#641052" : "#284a2e",
-    "--theme-muted": isDefaultTheme ? "#72506b" : "#48654f",
+    "--theme-text": isDefaultTheme ? "#641052" : "#3d2a39",
+    "--theme-muted": isDefaultTheme ? "#72506b" : "#5a3a54",
     "--theme-strong": isDefaultTheme ? "#4d0e40" : "#0b2d16",
     "--theme-hover": isDefaultTheme ? "#ffe4fa" : "#eff8d0",
     "--theme-highlight": isDefaultTheme ? "#bff2ec" : "#ffef8d",
@@ -487,7 +487,7 @@ export function PedidoCheckout({
                   ? "bg-[linear-gradient(180deg,#881337,#be123c_52%,#f9a8d4)]"
                   : isDefaultTheme
                     ? "bg-[linear-gradient(180deg,#8f147b,#e800d9_52%,#bff2ec)]"
-                    : "bg-[linear-gradient(180deg,#1b5e20,#2e7d32_45%,#fdd835)]"
+                    : "bg-[linear-gradient(180deg,#6b0f5c,#2e7d32_45%,#fdd835)]"
               )}
             >
               <Image

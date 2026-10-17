@@ -210,8 +210,8 @@ export function CartTransparentPayment({
     return (
       <div className="mx-auto max-w-xl rounded-3xl border border-emerald-200 bg-white p-6 text-center shadow-sm sm:p-8">
         <CheckCircle2 className="mx-auto h-16 w-16 text-emerald-600" />
-        <h2 className="mt-4 text-2xl font-black text-[#0b3d18]">Pagamento aprovado!</h2>
-        <p className="mt-2 text-base leading-7 text-[#405348]">
+        <h2 className="mt-4 text-2xl font-black text-[#4a0a3f]">Pagamento aprovado!</h2>
+        <p className="mt-2 text-base leading-7 text-[#5a3a54]">
           Seu pedido foi confirmado. A equipe já recebeu as informações.
         </p>
       </div>
@@ -225,12 +225,12 @@ export function CartTransparentPayment({
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5">
-      <div className="rounded-2xl border border-[#b8ca7e] bg-white p-4 sm:p-6">
-        <p className="text-sm font-bold uppercase tracking-[0.12em] text-[#52705a]">Pedido criado</p>
+      <div className="rounded-2xl border border-[#c25bb4] bg-white p-4 sm:p-6">
+        <p className="text-sm font-bold uppercase tracking-[0.12em] text-[#5a3a54]">Pedido criado</p>
         <div className="mt-2 flex items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-black text-[#0b3d18]">{isPix ? "Pague com Pix" : "Pague com cartão"}</h2>
-            <p className="mt-1 text-base text-[#405348]">Valor: <strong>{formatCurrency(session.chargedAmount)}</strong></p>
+            <h2 className="text-2xl font-black text-[#4a0a3f]">{isPix ? "Pague com Pix" : "Pague com cartão"}</h2>
+            <p className="mt-1 text-base text-[#5a3a54]">Valor: <strong>{formatCurrency(session.chargedAmount)}</strong></p>
           </div>
           <Clock3 className="h-9 w-9 shrink-0 text-amber-600" />
         </div>
@@ -243,16 +243,16 @@ export function CartTransparentPayment({
       ) : null}
 
       {isPix ? (
-        <div className="rounded-3xl border border-[#b8ca7e] bg-white p-5 text-center sm:p-7">
+        <div className="rounded-3xl border border-[#c25bb4] bg-white p-5 text-center sm:p-7">
           {loadingPix ? (
             <div className="py-12">
-              <LoaderCircle className="mx-auto h-12 w-12 animate-spin text-[#176c2a]" />
-              <p className="mt-4 text-lg font-bold text-[#0b3d18]">Gerando seu Pix...</p>
+              <LoaderCircle className="mx-auto h-12 w-12 animate-spin text-[#8a0f78]" />
+              <p className="mt-4 text-lg font-bold text-[#4a0a3f]">Gerando seu Pix...</p>
             </div>
           ) : pix?.qrCode && pix.qrCodeBase64 && !pixExpired ? (
             <>
-              <p className="text-lg font-black text-[#0b3d18]">Abra o app do seu banco e leia o QR Code</p>
-              <div className="mx-auto mt-4 w-fit rounded-2xl border border-[#d6e7a2] bg-white p-3">
+              <p className="text-lg font-black text-[#4a0a3f]">Abra o app do seu banco e leia o QR Code</p>
+              <div className="mx-auto mt-4 w-fit rounded-2xl border border-[#e6c3e0] bg-white p-3">
                 <Image
                   src={pix.qrCodeBase64.startsWith("data:") ? pix.qrCodeBase64 : `data:image/png;base64,${pix.qrCodeBase64}`}
                   alt="QR Code para pagamento Pix"
@@ -262,15 +262,15 @@ export function CartTransparentPayment({
                   className="h-auto w-[min(70vw,280px)]"
                 />
               </div>
-              <p className="mt-5 text-base font-bold text-[#0b3d18]">Ou use o Pix copia e cola</p>
+              <p className="mt-5 text-base font-bold text-[#4a0a3f]">Ou use o Pix copia e cola</p>
               <textarea
                 readOnly
                 value={pix.qrCode}
                 aria-label="Código Pix copia e cola"
-                className="mt-2 min-h-24 w-full resize-none rounded-xl border border-[#9fb66a] bg-[#fbfff0] p-3 text-sm text-[#17251a]"
+                className="mt-2 min-h-24 w-full resize-none rounded-xl border border-[#9fb66a] bg-[#fff7fc] p-3 text-sm text-[#2b0a26]"
                 onFocus={(event) => event.currentTarget.select()}
               />
-              <Button type="button" onClick={() => void copyPix()} className="mt-3 min-h-12 w-full rounded-full bg-[#176c2a] text-base font-black text-white">
+              <Button type="button" onClick={() => void copyPix()} className="mt-3 min-h-12 w-full rounded-full bg-[#8a0f78] text-base font-black text-white">
                 {copied ? <Check className="mr-2 h-5 w-5" /> : <Copy className="mr-2 h-5 w-5" />}
                 {copied ? "Código copiado!" : "Copiar código Pix"}
               </Button>
@@ -281,7 +281,7 @@ export function CartTransparentPayment({
           ) : (
             <div className="py-6">
               <p className="text-lg font-bold text-red-800">O código Pix não está disponível.</p>
-              <Button type="button" onClick={() => void createPixPayment()} className="mt-4 min-h-12 rounded-full bg-[#176c2a] px-6 text-base font-black text-white">
+              <Button type="button" onClick={() => void createPixPayment()} className="mt-4 min-h-12 rounded-full bg-[#8a0f78] px-6 text-base font-black text-white">
                 <RefreshCw className="mr-2 h-5 w-5" />
                 Gerar novo Pix
               </Button>
@@ -297,9 +297,9 @@ export function CartTransparentPayment({
           Pagamento com cartão indisponível: configure NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY.
         </div>
       ) : (
-        <div className="rounded-3xl border border-[#b8ca7e] bg-white p-3 sm:p-6">
+        <div className="rounded-3xl border border-[#c25bb4] bg-white p-3 sm:p-6">
           {!cardReady ? (
-            <div className="flex items-center justify-center gap-3 py-4 text-base font-bold text-[#405348]">
+            <div className="flex items-center justify-center gap-3 py-4 text-base font-bold text-[#5a3a54]">
               <LoaderCircle className="h-5 w-5 animate-spin" /> Carregando pagamento seguro...
             </div>
           ) : null}
@@ -317,7 +317,7 @@ export function CartTransparentPayment({
                 style: {
                   theme: "default",
                   customVariables: {
-                    baseColor: "#176c2a",
+                    baseColor: "#8a0f78",
                     buttonTextColor: "#ffffff",
                     borderRadiusMedium: "12px",
                     fontSizeMedium: "16px",
@@ -340,7 +340,7 @@ export function CartTransparentPayment({
             }}
             onSubmit={(formData) => payCard(formData as CardFormData)}
           />
-          <p className="px-2 pb-2 text-center text-sm text-[#405348]">
+          <p className="px-2 pb-2 text-center text-sm text-[#5a3a54]">
             Os dados do cartão sao protegidos pelo Mercado Pago. Nosso servidor recebe somente um token seguro.
           </p>
         </div>

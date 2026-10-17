@@ -203,3 +203,16 @@ export function cleanProductDescription(description: string, lotSize?: number | 
   const lot = lotSize && lotSize > 0 ? `a cada ${lotSize} salgados` : "a cada lote de salgados";
   return description.replace(/por\s+cento\s+de\s+salgados?/gi, lot).trim();
 }
+
+/**
+ * Resumo curto da descrição. Descrições antigas misturam texto com a lista de sabores e as regras
+ * ("Cento de fritos: - Pastel - Coxinha Obs: ..."), que a página já mostra em campos próprios
+ * (e atualizados). Mantém só a frase inicial e some se for igual ao nome do produto.
+ */
+export function shortProductDescription(description: string, productName: string, lotSize?: number | null) {
+  const cleaned = cleanProductDescription(description, lotSize);
+  const cut = cleaned.split(/:\s*-|\s-\s|\bObs\b/i)[0].replace(/[:\s]+$/, "").trim();
+  if (cut.length < 3) return "";
+  const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return normalize(cut) === normalize(productName) ? "" : cut;
+}

@@ -1,8 +1,10 @@
 [phases.setup]
 nixPkgs = ["nodejs_22"]
 
+# O build precisa do TypeScript (devDependency). Com NODE_ENV=production o npm pularia as
+# devDependencies, e o "tsc" não existiria na hora do build. Por isso o --include=dev.
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm install --include=dev"]
 
 [phases.build]
 cmds = ["npm run build"]

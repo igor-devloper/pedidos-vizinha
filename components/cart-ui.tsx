@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { MetodoPagamento } from "@prisma/client";
-import { ArrowLeft, ArrowRight, LoaderCircle, MessageCircle, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, LoaderCircle, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +31,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { StoreSiteTheme } from "@/lib/site-theme";
 import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
-import { getWhatsAppOrderUrl } from "@/lib/whatsapp-link";
 import type { CartAudience } from "@/lib/cart";
 import { getAllowedSalgadoTypes, validateCartItemQuantities } from "@/lib/cart-quantity";
 
@@ -152,6 +152,45 @@ function useDesktopCart() {
 
 let notifyCartChanged: (() => void) | null = null;
 
+const OPEN_CART_EVENT = "vizinha:open-cart";
+const CART_COUNT_EVENT = "vizinha:cart-count";
+
+/** Botão "Meu pedido (n)" do cabeçalho do site: abre o carrinho da página (ou leva ao cardápio). */
+export function CartHeaderButton() {
+  const router = useRouter();
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/cart?audience=VIZINHA", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { itemCount?: number } | null) => {
+        if (active && data) setCount(data.itemCount || 0);
+      })
+      .catch(() => undefined);
+    const onCount = (event: Event) => setCount((event as CustomEvent<number>).detail);
+    window.addEventListener(CART_COUNT_EVENT, onCount);
+    return () => {
+      active = false;
+      window.removeEventListener(CART_COUNT_EVENT, onCount);
+    };
+  }, []);
+
+  return (
+    <Button
+      type="button"
+      onClick={() => {
+        if ((window as unknown as { __vizinhaCart?: boolean }).__vizinhaCart) window.dispatchEvent(new Event(OPEN_CART_EVENT));
+        else router.push("/cardapio");
+      }}
+      className="h-auto min-h-12 max-w-full whitespace-normal rounded-full bg-brand px-4 py-2 text-base font-extrabold text-white hover:bg-brand-dark sm:px-5"
+    >
+      <ShoppingCart className="mr-2 h-5 w-5" aria-hidden="true" />
+      Meu pedido ({count})
+    </Button>
+  );
+}
+
 function getMinDeliveryDate(minimumLeadHours: number) {
   const minDate = new Date(Date.now() + minimumLeadHours * 60 * 60 * 1000);
   minDate.setMinutes(
@@ -268,16 +307,18 @@ async function readCart(audience: CartAudience = "VIZINHA") {
 }
 
 function getCartThemeStyle(siteTheme: StoreSiteTheme) {
-  const isDefaultTheme = siteTheme === "PADRAO";
+  // A paleta verde foi aposentada: todos os temas usam a identidade da Vizinha (magenta do logo).
+  void siteTheme;
+  const isDefaultTheme = true;
 
   return {
     // Contraste de pelo menos 7:1 para texto e 3:1 para bordas de campos e botões.
-    "--cart-accent": isDefaultTheme ? "#8a0f78" : "#146b2e",
-    "--cart-accent-hover": isDefaultTheme ? "#6b0f5c" : "#0f5223",
-    "--cart-dark": isDefaultTheme ? "#4a0a3f" : "#0b3d18",
+    "--cart-accent": isDefaultTheme ? "#8a0f78" : "#8a0f78",
+    "--cart-accent-hover": isDefaultTheme ? "#6b0f5c" : "#6b0f5c",
+    "--cart-dark": isDefaultTheme ? "#4a0a3f" : "#4a0a3f",
     "--cart-muted": isDefaultTheme ? "#5a3a54" : "#30443a",
-    "--cart-border": isDefaultTheme ? "#c25bb4" : "#7f9f4a",
-    "--cart-surface": isDefaultTheme ? "#fff0fc" : "#f7fde3",
+    "--cart-border": isDefaultTheme ? "#c25bb4" : "#b24aa3",
+    "--cart-surface": isDefaultTheme ? "#fff0fc" : "#fff0fc",
     "--cart-badge": isDefaultTheme ? "#bff2ec" : "#f4d330",
   } as CSSProperties;
 }
@@ -366,7 +407,7 @@ export function AddToCartControls({
             size="icon"
             disabled={currentQuantity <= requiredMinimum}
             onClick={() => changeBy(-step)}
-            className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+            className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)] md:h-12 md:w-12"
             aria-label={`Diminuir a quantidade de ${productName}`}
           >
             <Minus className="h-6 w-6" aria-hidden="true" />
@@ -384,14 +425,14 @@ export function AddToCartControls({
               setErrorMessage(null);
               setAddedMessage(null);
             }}
-            className="h-14 min-w-[6rem] flex-1 rounded-full border-2 border-[var(--cart-border)] bg-white px-3 text-center text-2xl font-extrabold text-[var(--cart-dark)]"
+            className="h-14 min-w-[6rem] flex-1 rounded-full border-2 border-[var(--cart-border)] bg-white px-3 text-center text-2xl font-extrabold text-[var(--cart-dark)] md:h-12 md:text-xl"
           />
           <Button
             type="button"
             variant="outline"
             size="icon"
             onClick={() => changeBy(step)}
-            className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+            className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)] md:h-12 md:w-12"
             aria-label={`Aumentar a quantidade de ${productName}`}
           >
             <Plus className="h-6 w-6" aria-hidden="true" />
@@ -416,8 +457,8 @@ export function AddToCartControls({
 
         <p id={hintId} className="text-base text-[var(--cart-muted)]">
           {usesMinimumQuantity
-            ? `Mínimo de ${requiredMinimum} salgados. Os botões − e + mudam de 10 em 10; você também pode digitar o número.`
-            : "Use os botões − e + ou digite o número."}
+            ? `Mínimo de ${requiredMinimum} salgados. Use − e + ou digite o número.`
+            : "Use − e + ou digite o número."}
         </p>
       </div>
 
@@ -425,7 +466,7 @@ export function AddToCartControls({
         type="button"
         disabled={loading}
         onClick={() => void addToCart()}
-        className="h-auto min-h-14 w-full whitespace-normal rounded-full bg-[var(--cart-accent)] py-3 text-lg font-extrabold text-white hover:bg-[var(--cart-accent-hover)]"
+        className="h-auto min-h-14 w-full whitespace-normal rounded-full bg-[var(--cart-accent)] py-3 text-lg font-extrabold md:min-h-12 md:py-2 md:text-base text-white hover:bg-[var(--cart-accent-hover)]"
       >
         {loading ? <LoaderCircle className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" /> : <ShoppingCart className="mr-2 h-5 w-5" aria-hidden="true" />}
         {loading ? "Adicionando..." : "Adicionar ao pedido"}
@@ -451,12 +492,10 @@ export function FloatingCart({
   businessStatus,
   siteTheme,
   audience = "VIZINHA",
-  whatsappUrl = getWhatsAppOrderUrl(),
 }: {
   businessStatus: CartBusinessStatusData;
   siteTheme: StoreSiteTheme;
   audience?: CartAudience;
-  whatsappUrl?: string;
 }) {
   const [cart, setCart] = useState<CartData>(EMPTY_CART);
   const [open, setOpen] = useState(false);
@@ -471,6 +510,18 @@ export function FloatingCart({
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [touched, setTouched] = useState(false);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // Liga o botão do cabeçalho ao carrinho desta página.
+  useEffect(() => {
+    const flag = window as unknown as { __vizinhaCart?: boolean };
+    flag.__vizinhaCart = true;
+    const openFromHeader = () => setOpen(true);
+    window.addEventListener(OPEN_CART_EVENT, openFromHeader);
+    return () => {
+      flag.__vizinhaCart = false;
+      window.removeEventListener(OPEN_CART_EVENT, openFromHeader);
+    };
+  }, []);
   const [checkoutPaid, setCheckoutPaid] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -523,6 +574,10 @@ export function FloatingCart({
     setActionError(null);
     setCheckoutStep("REVIEW");
   };
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(CART_COUNT_EVENT, { detail: cart.itemCount }));
+  }, [cart.itemCount]);
 
   const goToStep = (step: 1 | 2 | 3 | 4) => {
     setCheckoutStep("FORM");
@@ -942,7 +997,7 @@ export function FloatingCart({
   const upcomingDays = getUpcomingOpenDays(minDeliveryDate, businessStatus.operationSchedule, 7)
     .filter((day) => businessStatus.isOpen || day !== getBusinessDateInputValue())
     .slice(0, 5);
-  const bigButton = "h-auto min-h-14 min-w-0 whitespace-normal rounded-full px-4 py-3 text-lg font-extrabold sm:px-6";
+  const bigButton = "h-auto min-h-14 min-w-0 whitespace-normal rounded-full px-4 py-3 text-lg font-extrabold sm:px-6 md:min-h-12 md:py-2 md:text-base";
   const radioCard = (selected: boolean) =>
     cn(
       "flex cursor-pointer items-start gap-3 rounded-2xl border-2 bg-white p-4 text-lg",
@@ -968,48 +1023,28 @@ export function FloatingCart({
 
   return (
     <>
-      {!open ? (
+      {!open && cart.itemCount > 0 ? (
         <div
           style={cartThemeStyle}
-          className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-[var(--cart-border)] bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.14)]"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-300 bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]"
         >
-          <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            {cart.itemCount > 0 ? (
-              <>
-                <p className="flex-1 text-lg font-extrabold text-[var(--cart-dark)]" aria-live="polite">
-                  Meu pedido: {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"} · {formatCurrency(cart.totalAmount)}
-                </p>
-                <Button
-                  type="button"
-                  onClick={() => setOpen(true)}
-                  className={cn(bigButton, "w-full bg-[var(--cart-accent)] text-white hover:bg-[var(--cart-accent-hover)] sm:w-auto")}
-                >
-                  <ShoppingCart className="mr-2 h-5 w-5" aria-hidden="true" />
-                  Ver meu pedido
-                </Button>
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-h-12 items-center justify-center text-base font-bold text-[#07391f] underline underline-offset-4"
-                >
-                  Prefiro pedir pelo WhatsApp
-                </a>
-              </>
-            ) : (
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#0b6b3a] px-6 text-lg font-extrabold text-white hover:bg-[#095a30]"
-              >
-                <MessageCircle className="h-6 w-6" aria-hidden="true" />
-                Pedir pelo WhatsApp
-              </a>
-            )}
+          <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <p className="text-lg font-bold text-slate-900" aria-live="polite">
+              Meu pedido: {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"} · {formatCurrency(cart.totalAmount)}
+            </p>
+            <Button
+              type="button"
+              onClick={() => setOpen(true)}
+              className={cn(bigButton, "w-full bg-[var(--cart-accent)] text-white hover:bg-[var(--cart-accent-hover)] sm:w-auto")}
+            >
+              <ShoppingCart className="mr-2 h-5 w-5" aria-hidden="true" />
+              Ver meu pedido
+            </Button>
           </div>
         </div>
       ) : null}
+
+      {open ? <div aria-hidden="true" className="fixed inset-0 z-40 bg-black/45" onClick={() => setOpen(false)} /> : null}
 
       <CartRoot
         modal={false}
@@ -1029,37 +1064,37 @@ export function FloatingCart({
           className={cn(
             "grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-white p-0",
             isDesktop
-              ? "h-[min(90vh,56rem)] w-[94vw] max-w-none rounded-2xl sm:w-[94vw] sm:max-w-none md:w-[92vw] md:max-w-4xl lg:w-[80vw] lg:max-w-4xl [&>[data-slot=dialog-close]]:hidden"
+              ? "h-[min(86vh,46rem)] w-[94vw] max-w-none rounded-2xl sm:w-[94vw] sm:max-w-none md:w-[92vw] md:max-w-3xl lg:w-[80vw] lg:max-w-3xl [&>[data-slot=dialog-close]]:hidden"
               : "max-h-[94vh] rounded-t-3xl border-x-0 border-b-0 [&>[data-slot=drawer-header]]:pt-2"
           )}
         >
-          <DialogHeader className={cn("gap-2 border-b-2 border-[var(--cart-border)] bg-white px-4 py-3 text-left sm:px-6", !isDesktop && "pt-6")}>
+          <DialogHeader className={cn("vz-gradient gap-2 px-4 py-3 text-left text-white sm:px-6", !isDesktop && "pt-6")}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 {isDesktop ? (
-                  <DialogTitle className="text-2xl font-extrabold text-[var(--cart-dark)]">
+                  <DialogTitle className="text-2xl font-extrabold text-white">
                     {checkoutSession ? "Pagamento" : inReview ? "Confira e pague" : "Meu pedido"}
                   </DialogTitle>
                 ) : (
-                  <DrawerTitle className="text-2xl font-extrabold text-[var(--cart-dark)]">
+                  <DrawerTitle className="text-2xl font-extrabold text-white">
                     {checkoutSession ? "Pagamento" : inReview ? "Confira e pague" : "Meu pedido"}
                   </DrawerTitle>
                 )}
                 {!checkoutSession && cart.items.length > 0 ? (
-                  <p className="mt-1 text-lg font-bold text-[var(--cart-muted)]">
+                  <p className="mt-1 text-lg font-bold text-white">
                     {inReview ? "Último passo" : `Passo ${wizardStep} de 4: ${stepTitles[wizardStep - 1]}`}
                   </p>
                 ) : null}
               </div>
               {isDesktop ? (
                 <DialogClose asChild>
-                  <Button type="button" variant="outline" className="h-12 shrink-0 rounded-full border-2 border-[var(--cart-border)] px-4 text-[var(--cart-dark)]">
+                  <Button type="button" variant="outline" className="h-12 shrink-0 rounded-full border-2 border-white bg-transparent px-4 text-white hover:bg-white/15 hover:text-white">
                     <X className="mr-1 h-5 w-5" aria-hidden="true" /> Fechar
                   </Button>
                 </DialogClose>
               ) : (
                 <DrawerClose asChild>
-                  <Button type="button" variant="outline" className="h-12 shrink-0 rounded-full border-2 border-[var(--cart-border)] px-4 text-[var(--cart-dark)]">
+                  <Button type="button" variant="outline" className="h-12 shrink-0 rounded-full border-2 border-white bg-transparent px-4 text-white hover:bg-white/15 hover:text-white">
                     <X className="mr-1 h-5 w-5" aria-hidden="true" /> Fechar
                   </Button>
                 </DrawerClose>
@@ -1068,13 +1103,13 @@ export function FloatingCart({
             {!checkoutSession && cart.items.length > 0 ? (
               <div className="flex gap-2" role="img" aria-label={inReview ? "Último passo" : `Passo ${wizardStep} de 4`}>
                 {[1, 2, 3, 4].map((n) => (
-                  <span key={n} className={cn("h-2 flex-1 rounded-full", inReview || n <= wizardStep ? "bg-[var(--cart-accent)]" : "bg-[var(--cart-border)]")} />
+                  <span key={n} className={cn("h-2 flex-1 rounded-full", inReview || n <= wizardStep ? "bg-white" : "bg-white/35")} />
                 ))}
               </div>
             ) : null}
           </DialogHeader>
 
-          <div ref={cartScrollRef} className="min-h-0 overflow-y-auto overscroll-contain bg-[var(--cart-surface)] px-4 py-5 sm:px-6">
+          <div ref={cartScrollRef} className="min-h-0 overflow-y-auto overscroll-contain bg-cream px-4 py-5 sm:px-6">
             {checkoutSession ? (
               <CartTransparentPayment
                 session={checkoutSession}
@@ -1094,7 +1129,7 @@ export function FloatingCart({
               </div>
             ) : inReview ? (
               <div className="mx-auto max-w-2xl space-y-4">
-                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none md:text-xl">
                   Confira tudo antes de pagar
                 </h2>
                 <div className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-5">
@@ -1143,7 +1178,7 @@ export function FloatingCart({
               </div>
             ) : wizardStep === 1 ? (
               <div className="mx-auto max-w-3xl space-y-5">
-                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none md:text-xl">
                   Confira o que você escolheu
                 </h2>
                 <ul className="space-y-5">
@@ -1157,7 +1192,7 @@ export function FloatingCart({
                     const draftUnits = Math.floor(Number(quantityDrafts[item.id] ?? item.requestedUnits)) || item.requestedUnits;
                     const busy = loadingId === item.id;
                     return (
-                      <li key={item.id} className="rounded-3xl border-2 border-[var(--cart-border)] bg-white p-4 sm:p-5">
+                      <li key={item.id} className="vz-card rounded-2xl border-2 border-[var(--cart-border)] p-4 shadow-sm sm:p-5">
                         <div className="flex gap-4">
                           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
                             <Image src={item.image} alt={`Foto de ${item.name}`} fill unoptimized className="object-cover" />
@@ -1179,7 +1214,7 @@ export function FloatingCart({
                               size="icon"
                               disabled={busy || (item.usesMinimumQuantity ? draftUnits - 10 < item.minimumQuantity : item.quantity <= 1)}
                               onClick={() => void setItemQuantity(item, item.usesMinimumQuantity ? Math.max(item.minimumQuantity, draftUnits - 10) : item.quantity - 1)}
-                              className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+                              className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)] md:h-12 md:w-12"
                               aria-label={`Diminuir a quantidade de ${item.name}`}
                             >
                               <Minus className="h-6 w-6" aria-hidden="true" />
@@ -1195,10 +1230,10 @@ export function FloatingCart({
                                 onChange={(event) => { setQuantityDrafts((current) => ({ ...current, [item.id]: event.target.value })); setItemError(null); }}
                                 onBlur={() => commitRequestedUnits(item)}
                                 onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-                                className="h-14 min-w-[6rem] flex-1 rounded-full border-2 border-[var(--cart-border)] text-center text-2xl font-extrabold"
+                                className="h-14 min-w-[6rem] flex-1 rounded-full border-2 border-[var(--cart-border)] text-center text-2xl font-extrabold md:h-12 md:text-xl"
                               />
                             ) : (
-                              <output id={`qtd-${item.id}`} className="flex h-14 min-w-[6rem] flex-1 items-center justify-center rounded-full border-2 border-[var(--cart-border)] text-2xl font-extrabold text-[var(--cart-dark)]">
+                              <output id={`qtd-${item.id}`} className="flex h-14 min-w-[6rem] flex-1 items-center justify-center rounded-full border-2 border-[var(--cart-border)] text-2xl md:h-12 md:text-xl font-extrabold text-[var(--cart-dark)]">
                                 {item.quantity}
                               </output>
                             )}
@@ -1208,7 +1243,7 @@ export function FloatingCart({
                               size="icon"
                               disabled={busy}
                               onClick={() => void setItemQuantity(item, item.usesMinimumQuantity ? draftUnits + 10 : item.quantity + 1)}
-                              className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)]"
+                              className="h-14 w-14 shrink-0 rounded-full border-2 border-[var(--cart-accent)] text-[var(--cart-accent)] md:h-12 md:w-12"
                               aria-label={`Aumentar a quantidade de ${item.name}`}
                             >
                               <Plus className="h-6 w-6" aria-hidden="true" />
@@ -1230,8 +1265,8 @@ export function FloatingCart({
                         ) : null}
 
                         {item.precisaSelecaoDeTipos ? (
-                          <fieldset className="mt-5 space-y-3 rounded-2xl bg-[var(--cart-surface)] p-3 sm:p-4">
-                            <legend className="px-1 text-xl font-extrabold text-[var(--cart-dark)]">
+                          <fieldset className="mt-5 space-y-3 rounded-2xl border border-mint-dark/25 bg-mint p-3 sm:p-4">
+                            <legend className="px-1 text-xl font-extrabold text-mint-dark">
                               {item.category === "COMBO" ? "O que vem no combo" : "Escolha os sabores"}
                             </legend>
 
@@ -1243,8 +1278,18 @@ export function FloatingCart({
                               </ul>
                             ) : (
                               <>
-                                <div aria-live="polite" className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-3 text-lg">
-                                  <p className={cn("font-extrabold", missing === 0 && selectedTotal === item.requestedUnits ? "text-[#07391f]" : "text-[var(--cart-dark)]")}>
+                                <div
+                                  aria-live="polite"
+                                  className={cn(
+                                    "rounded-2xl border-2 p-3 text-lg",
+                                    selectedTotal > item.requestedUnits
+                                      ? "border-closed bg-closed-soft text-closed"
+                                      : missing === 0
+                                        ? "border-open bg-open-soft text-open"
+                                        : "border-[#a16207] bg-notice text-notice-ink",
+                                  )}
+                                >
+                                  <p className="font-extrabold">
                                     Você escolheu {selectedTotal} de {item.requestedUnits} salgados.{" "}
                                     {selectedTotal > item.requestedUnits
                                       ? `Passou ${selectedTotal - item.requestedUnits}: tire alguns.`
@@ -1252,11 +1297,11 @@ export function FloatingCart({
                                         ? `Faltam ${missing}.`
                                         : "Tudo certo ✓"}
                                   </p>
-                                  <p className="text-[var(--cart-muted)]">
+                                  <p>
                                     Sabores escolhidos: {chosenCount} de {maxTypes} (é o máximo para essa quantidade).
                                   </p>
                                   {chosenCount >= maxTypes ? (
-                                    <p className="mt-1 font-semibold text-[var(--cart-dark)]">
+                                    <p className="mt-1 font-semibold">
                                       Você já escolheu o máximo de sabores. Para escolher outro, tire um sabor ou peça mais salgados.
                                     </p>
                                   ) : null}
@@ -1269,7 +1314,7 @@ export function FloatingCart({
                                       const blockedByLimit = current === 0 && chosenCount >= maxTypes;
                                       const rowId = `sabor-${item.id}-${sabor.replace(/\W+/g, "-")}`;
                                       return (
-                                        <li key={sabor} className="rounded-2xl border-2 border-[var(--cart-border)] bg-white p-3">
+                                        <li key={sabor} className={cn("rounded-2xl border-2 p-3", current > 0 ? "border-brand bg-brand-soft" : "border-slate-300 bg-white")}>
                                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                             <label htmlFor={rowId} className="text-lg font-bold text-[var(--cart-dark)]">{sabor}</label>
                                             <div className="flex flex-wrap items-center gap-2">
@@ -1288,7 +1333,7 @@ export function FloatingCart({
                                           {blockedByLimit ? <p className="mt-2 text-base text-[var(--cart-muted)]">Limite de sabores atingido.</p> : null}
                                           {missing > 0 && !blockedByLimit ? (
                                             <button type="button" onClick={() => setFlavorQuantity(item, sabor, current + missing)} className="mt-2 min-h-12 text-base font-bold text-[var(--cart-accent)] underline underline-offset-4">
-                                              Colocar os {missing} que faltam em {sabor}
+                                              Completar com {missing}
                                             </button>
                                           ) : null}
                                         </li>
@@ -1333,13 +1378,10 @@ export function FloatingCart({
                     );
                   })}
                 </ul>
-                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-center text-base font-bold text-[#07391f] underline underline-offset-4">
-                  Prefiro pedir pelo WhatsApp
-                </a>
               </div>
             ) : wizardStep === 2 ? (
               <div className="mx-auto max-w-2xl space-y-5">
-                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none md:text-xl">
                   Quem está fazendo o pedido?
                 </h2>
                 <div className="space-y-5 rounded-2xl border-2 border-[var(--cart-border)] bg-white p-4 sm:p-5">
@@ -1364,7 +1406,7 @@ export function FloatingCart({
               </div>
             ) : wizardStep === 3 ? (
               <div className="mx-auto max-w-2xl space-y-5">
-                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none md:text-xl">
                   Como e quando você quer receber?
                 </h2>
 
@@ -1452,7 +1494,7 @@ export function FloatingCart({
               </div>
             ) : (
               <div className="mx-auto max-w-2xl space-y-5">
-                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none">
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="text-2xl font-extrabold text-[var(--cart-dark)] outline-none md:text-xl">
                   Como você quer pagar?
                 </h2>
 
@@ -1499,7 +1541,7 @@ export function FloatingCart({
               <div className="mx-auto flex max-w-2xl gap-2 sm:gap-3">
                 <Button type="button" variant="outline" disabled={checkingOut} onClick={goBack} className={cn(bigButton, "flex-1 border-2 border-[var(--cart-accent)] text-[var(--cart-accent)] sm:flex-none")}>
                   <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
-                  {wizardStep === 1 && !inReview ? "Escolher mais" : "Voltar"}
+                  Voltar
                 </Button>
                 {inReview ? (
                   <Button type="button" disabled={checkingOut} onClick={() => void checkout()} className={cn(bigButton, "flex-[2] bg-[var(--cart-accent)] text-white hover:bg-[var(--cart-accent-hover)]")}>
