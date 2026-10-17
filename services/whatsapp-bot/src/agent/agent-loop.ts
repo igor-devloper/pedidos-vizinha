@@ -29,6 +29,8 @@ export type AgentRunResult = {
   rounds: number;
   /** Passou do limite de rodadas sem uma resposta final. */
   exceededRounds: boolean;
+  /** A resposta citava valores sem fonte e continuou assim após as correções: não deve ser enviada. */
+  blocked: boolean;
 };
 
 export async function runAgentLoop(options: {
@@ -36,16 +38,34 @@ export async function runAgentLoop(options: {
   history: AgentContent[];
   runTool: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
   maxRounds?: number;
+  /**
+   * Confere a resposta final antes de enviar. Devolve um aviso (texto) se ela não pode ser enviada;
+   * o aviso volta ao modelo para ele reescrever. Depois de `maxCorrections` tentativas, a resposta é barrada.
+   */
+  verifyReply?: (reply: string, toolCalls: ToolCallRecord[]) => string | null;
+  maxCorrections?: number;
 }): Promise<AgentRunResult> {
   const maxRounds = options.maxRounds ?? 8;
   const contents = [...options.history];
   const toolCalls: ToolCallRecord[] = [];
+  const maxCorrections = options.maxCorrections ?? 2;
+  let corrections = 0;
 
   for (let round = 1; round <= maxRounds; round += 1) {
     const turn = await options.model.generate(contents);
 
     if (turn.functionCalls.length === 0) {
-      return { reply: turn.text.trim(), toolCalls, rounds: round, exceededRounds: false };
+      const reply = turn.text.trim();
+      const problem = reply ? options.verifyReply?.(reply, toolCalls) ?? null : null;
+      if (!problem) {
+        return { reply, toolCalls, rounds: round, exceededRounds: false, blocked: false };
+      }
+      if (corrections >= maxCorrections) {
+        return { reply: "", toolCalls, rounds: round, exceededRounds: false, blocked: true };
+      }
+      corrections += 1;
+      contents.push(turn.modelContent, { role: "user", parts: [{ text: problem }] });
+      continue;
     }
 
     contents.push(turn.modelContent);
@@ -59,7 +79,7 @@ export async function runAgentLoop(options: {
     contents.push({ role: "user", parts: responses });
   }
 
-  return { reply: "", toolCalls, rounds: maxRounds, exceededRounds: true };
+  return { reply: "", toolCalls, rounds: maxRounds, exceededRounds: true, blocked: false };
 }
 
 /** Histórico da conversa → conteúdos do modelo, juntando mensagens seguidas do mesmo lado. */

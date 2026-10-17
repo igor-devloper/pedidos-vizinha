@@ -13,12 +13,19 @@ import type { InboundMessageJob } from "../types.js";
 import { patchDraft, resetDraft, type WhatsappDraft } from "../whatsapp-draft-repository.js";
 import { buildOwnerHandoffAlertMessage } from "../whatsapp-format.js";
 import { historyToContents, runAgentLoop, type AgentContent } from "./agent-loop.js";
+import {
+  addMoneyFromToolResult,
+  buildCorrectionNotice,
+  catalogMoney,
+  findUnverifiedMoney,
+  needsMenuAfterReply,
+} from "./guard.js";
 import type { AgentProduct } from "./cart.js";
 import { createGeminiModel } from "./gemini-model.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { createSiteApi, type StoreInfo } from "./site-api.js";
 import { describeDraft, type DraftState } from "./state.js";
-import { executeTool, type ToolDeps } from "./tools.js";
+import { buildMenuMessage, executeTool, type ToolDeps } from "./tools.js";
 
 const FALLBACK_REPLY =
   "Desculpe, tive um probleminha aqui. Pode me mandar sua mensagem de novo, por favor? Se preferir, a Vizinha também pode te atender.";
@@ -99,8 +106,11 @@ export async function handleAgentTurn(
     return;
   }
 
-  const { line: storeLine } = await buildStoreLine();
+  const { line: storeLine, info: storeInfo } = await buildStoreLine();
   const firstContact = !(await hasOutboundMessage(job.instanceId, job.remoteJid));
+
+  // Mensagens que seguem a resposta do modelo (o cardápio vem logo depois da saudação).
+  const afterReply: string[] = [];
 
   const deps: ToolDeps = {
     products,
@@ -115,6 +125,9 @@ export async function handleAgentTurn(
     },
     api: site,
     send,
+    sendAfterReply: (text) => {
+      afterReply.push(text);
+    },
     async notifyOwner(text) {
       await instanceManager.sendText(job.instanceId, config.ownerApprovalNumber, text).catch((error) => {
         logger.error({ error }, "Failed to notify the owner");
@@ -151,14 +164,28 @@ export async function handleAgentTurn(
     }),
   );
 
+  // Valores em reais que o modelo pode citar: cardápio, taxas de entrega, retratos do pedido e
+  // resultados das ferramentas. Qualquer outro valor é invenção e a resposta é barrada.
+  const allowedMoney = catalogMoney(products);
+  for (const area of storeInfo?.deliveryFees ?? []) allowedMoney.add(Number(area.fee.toFixed(2)));
+
   try {
     const result = await runAgentLoop({
       model,
       history,
       runTool: async (name, args) => {
         const result = await executeTool(name, args, deps);
+        addMoneyFromToolResult(allowedMoney, result);
         await logMessage(job.instanceId, job.remoteJid, "tool", name, { args, result });
         return result;
+      },
+      verifyReply: (reply) => {
+        const known = new Set(allowedMoney);
+        addMoneyFromToolResult(known, describeDraft(draft, products));
+        const unverified = findUnverifiedMoney(reply, known);
+        if (unverified.length === 0) return null;
+        logger.warn({ instanceId: job.instanceId, unverified }, "Agent reply quoted unverified prices; asking for a rewrite");
+        return buildCorrectionNotice(unverified);
       },
     });
 
@@ -179,9 +206,25 @@ export async function handleAgentTurn(
       return;
     }
 
+    if (result.blocked) {
+      await logMessage(job.instanceId, job.remoteJid, "event", "Resposta barrada: citava valores que não vieram do cardápio");
+      afterReply.length = 0;
+      await send("Um instante! Vou te mostrar o nosso cardápio certinho. 😊");
+      await send(buildMenuMessage(products, deps.business));
+      return;
+    }
+
     if (result.reply) {
       await send(result.reply);
-    } else if (sentCount === 0) {
+    }
+
+    // Primeiro contato: o cardápio sempre sai pelo código, mesmo que o modelo não peça.
+    if (needsMenuAfterReply(firstContact, result.toolCalls.map((call) => call.name))) {
+      afterReply.push(buildMenuMessage(products, deps.business));
+    }
+    for (const message of afterReply) await send(message);
+
+    if (!result.reply && sentCount === 0) {
       await send(CONFUSED_REPLY);
     }
   } catch (error) {

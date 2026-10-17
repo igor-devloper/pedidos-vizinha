@@ -36,6 +36,8 @@ export type ToolDeps = {
   api: SiteApi;
   /** Mensagem direta ao cliente (resumo, Pix...), enviada na hora e registrada no histórico. */
   send(text: string): Promise<void>;
+  /** Mensagem direta enviada DEPOIS da resposta do modelo (ex.: o cardápio, que segue a saudação). */
+  sendAfterReply?(text: string): void;
   notifyOwner(text: string): Promise<void>;
   handoff(reason: string): Promise<void>;
   lastCustomerText(): string;
@@ -119,7 +121,7 @@ export const TOOL_DECLARATIONS = [
   {
     name: "enviar_cardapio",
     description:
-      "Envia ao cliente a mensagem do cardápio (produtos, preços, mínimos e sabores), já formatada. Use quando o cliente pedir o cardápio/preços ou no começo, para quem ainda não sabe o que pedir. Depois só pergunte o que ele quer; não repita o conteúdo.",
+      "Envia ao cliente a mensagem oficial do cardápio (produtos, preços, mínimos e sabores), montada pelo sistema. É a ÚNICA forma de mostrar o cardápio: você nunca escreve a lista de produtos ou preços. Use quando o cliente pedir o cardápio/preços e no primeiro contato. A mensagem sai logo depois da sua.",
   },
   {
     name: "ver_cardapio",
@@ -607,9 +609,16 @@ async function finalizeOrder(deps: ToolDeps): Promise<ToolResult> {
 export async function executeTool(name: string, args: Record<string, unknown>, deps: ToolDeps): Promise<ToolResult> {
   try {
     switch (name) {
-      case "enviar_cardapio":
-        await deps.send(buildMenuMessage(deps.products, deps.business));
-        return { ok: true, instrucao: "Cardápio enviado. Não repita o conteúdo; pergunte o que o cliente quer pedir." };
+      case "enviar_cardapio": {
+        const menu = buildMenuMessage(deps.products, deps.business);
+        if (deps.sendAfterReply) deps.sendAfterReply(menu);
+        else await deps.send(menu);
+        return {
+          ok: true,
+          instrucao:
+            "O cardápio oficial será enviado logo DEPOIS da sua mensagem. Não escreva produtos, sabores nem preços; termine dizendo que o cardápio vem logo abaixo e pergunte o que o cliente quer pedir.",
+        };
+      }
       case "ver_cardapio":
         return await viewMenu(deps);
       case "ver_horarios":
