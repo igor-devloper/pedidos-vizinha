@@ -43,10 +43,6 @@ export const config = {
   ownerApprovalNumber: readOptional("OWNER_APPROVAL_NUMBER", "558387137721"),
   pickupAddress: readOptional("PICKUP_ADDRESS", "Endereço de retirada não configurado"),
   pickupReference: process.env.PICKUP_REFERENCE?.trim() || undefined,
-  pickupHours: readOptional(
-    "PICKUP_HOURS",
-    "terça a sabádo, das 10h as 17h. Domingo, das 9h as 13h. Segunda, fechado."
-  ),
   authDir: readOptional("AUTH_DIR", "./data/auth"),
   storeDir: readOptional("STORE_DIR", "./data/store"),
   instanceFile: readOptional("INSTANCE_FILE", "./data/instances.json"),

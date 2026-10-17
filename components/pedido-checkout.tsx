@@ -1017,9 +1017,6 @@ export function PedidoCheckout({
               <p className="mt-1">
                 Tipos ativos: {activeTypes} de {maxAllowedTypes}
               </p>
-              <p className="mt-1">
-                Atendimento: de terça a sábado, das 10h às 17h. Aos domingos, das 9h às 13h. Fechamos às segundas-feiras.
-              </p>
               {!businessStatus.isOpen ? (
                 <p className="mt-1 font-medium text-amber-700">
                   Aviso: o atendimento está fechado neste momento. Pedidos para datas futuras continuam disponíveis.

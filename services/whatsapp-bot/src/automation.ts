@@ -6,6 +6,7 @@ import {
 } from "./bot-order-repository.js";
 import { handleAgentTurn } from "./agent/turn.js";
 import { config } from "./config.js";
+import { getStoreHours } from "./store-hours.js";
 import { getActivePause } from "./conversation-repository.js";
 import { requestWhatsappOrder } from "./internal-order-client.js";
 import { findMatchingFlow } from "./flow-repository.js";
@@ -47,44 +48,19 @@ import {
   formatWhatsAppMessage,
 } from "./whatsapp-format.js";
 
-function isOutsideBusinessHours(now = new Date()) {
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Sao_Paulo",
-    weekday: "short",
-  }).format(now);
-  const hourMinute = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const hour = Number(hourMinute.find((part) => part.type === "hour")?.value || 0);
-  const minute = Number(hourMinute.find((part) => part.type === "minute")?.value || 0);
-  const totalMinutes = hour * 60 + minute;
-  const map = {
-    Sun: { open: 9 * 60, close: 13 * 60 },
-    Mon: null,
-    Tue: { open: 10 * 60, close: 17 * 60 },
-    Wed: { open: 10 * 60, close: 17 * 60 },
-    Thu: { open: 10 * 60, close: 17 * 60 },
-    Fri: { open: 10 * 60, close: 17 * 60 },
-    Sat: { open: 10 * 60, close: 17 * 60 },
-  } as const;
-
-  const schedule = map[weekday as keyof typeof map];
-  if (!schedule) {
-    return true;
-  }
-
-  return totalMinutes < schedule.open || totalMinutes > schedule.close;
-}
-
-function appendOutsideHoursNotice(text: string) {
-  if (!isOutsideBusinessHours()) {
+/** Aviso de "fora do horário" com o horário REAL do painel. Sem resposta do site, não afirma nada. */
+async function appendOutsideHoursNotice(text: string) {
+  const hours = await getStoreHours();
+  if (!hours || hours.openNow) {
     return text;
   }
 
-  return `${text}\n\n⏰ *Aviso de horario*\nAgora estamos fora do horario de atendimento.\nHorario da Vizinha: ${config.pickupHours}\nSe voce abrir o site neste momento, ele pode aparecer como fechado.`;
+  return `${text}
+
+⏰ *Aviso de horario*
+Agora estamos fora do horario de atendimento.
+Horario da Vizinha: ${hours.summary}
+Voce ja pode encomendar para os dias em que abrimos.`;
 }
 
 function normalizeText(value: string) {
@@ -370,10 +346,11 @@ async function buildSupportReply(text: string) {
   const normalized = normalizeText(text);
 
   if (isHoursQuestion(normalized)) {
+    const hours = await getStoreHours();
     return formatWhatsAppMessage([
       "🕒 *Horário da Vizinha*",
       [
-        `Atendemos ${config.pickupHours}`,
+        hours ? `Atendemos: ${hours.summary}.` : "Não consegui consultar o horário agora. Veja no site ou aguarde a Vizinha.",
         "⏰ A tolerância de atraso é de 15 minutos para ambas as partes.",
       ],
     ]);
@@ -478,7 +455,7 @@ async function maybeHandleDeliveryRequest(job: InboundMessageJob, lead: BotLead)
 }
 
 async function sendAndTrack(job: InboundMessageJob, lead: BotLead | null, text: string) {
-  const outboundText = !lead?.lastOutboundText ? appendOutsideHoursNotice(text) : text;
+  const outboundText = !lead?.lastOutboundText ? await appendOutsideHoursNotice(text) : text;
   logger.info(
     {
       instanceId: job.instanceId,
@@ -507,7 +484,7 @@ async function sendTextToNumber(
   text: string,
   options?: { appendOutsideHoursNotice?: boolean }
 ) {
-  const outboundText = options?.appendOutsideHoursNotice ? appendOutsideHoursNotice(text) : text;
+  const outboundText = options?.appendOutsideHoursNotice ? await appendOutsideHoursNotice(text) : text;
   await instanceManager.sendText(instanceId, normalizeOutboundNumber(number), outboundText);
 }
 

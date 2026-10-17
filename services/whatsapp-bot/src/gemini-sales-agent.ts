@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 import { config } from "./config.js";
+import { getStoreHours } from "./store-hours.js";
 import { logger } from "./logger.js";
 import type { BotLead } from "./lead-repository.js";
 import { formatProductPriceForCustomer, getStoreSettings, listActiveProducts } from "./product-repository.js";
@@ -125,7 +126,7 @@ function buildLeadSnapshot(lead: BotLead | null) {
   ].join("\n");
 }
 
-function buildPrompt(job: InboundMessageJob, lead: BotLead | null, products: ProductRecord[], settings: unknown, draft: unknown) {
+function buildPrompt(job: InboundMessageJob, lead: BotLead | null, products: ProductRecord[], settings: unknown, draft: unknown, hoursSummary: string) {
   return `
 Você é a atendente virtual da ${config.businessName}.
 
@@ -183,7 +184,7 @@ Regras importantes:
 Dados do negócio:
 - endereço/base: ${config.pickupAddress}
 - referência: ${config.pickupReference || "Não informada"}
-- horário-base: ${config.pickupHours}
+- horário de funcionamento (vem das configurações do painel; não invente outro): ${hoursSummary}
 
 Produtos ativos:
 ${formatProductsForPrompt(products)}
@@ -228,7 +229,8 @@ export async function runSalesAgent(job: InboundMessageJob, lead: BotLead | null
 
   const products = await listActiveProducts();
   const settings = await getStoreSettings();
-  const prompt = buildPrompt(job, lead, products, settings, draft);
+  const hours = await getStoreHours();
+  const prompt = buildPrompt(job, lead, products, settings, draft, hours?.summary ?? "indisponível agora: não afirme horários");
 
   try {
     const response = await ai.models.generateContent({
