@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getFullStoreStatus } from "@/lib/business-hours";
-import { DELIVERY_FEES } from "@/lib/delivery";
+import { DELIVERY_AREA_DESCRIPTION, DELIVERY_CITY, DELIVERY_FEES } from "@/lib/delivery";
 import { hasValidInternalAuthorization } from "@/lib/internal-auth";
 import { buildStoreInfo, describeWeeklyHours } from "@/lib/whatsapp-schedule";
 
@@ -20,6 +20,7 @@ export async function GET(request: Request) {
     }),
     allowMultipleOrdersPerSlot: settings.allowMultipleOrdersPerSlot,
     weekly: describeWeeklyHours(settings.operationSchedule),
+    deliveryArea: `Entregamos apenas ${DELIVERY_AREA_DESCRIPTION} (${DELIVERY_CITY}). Fora dessa área, só retirada.`,
     deliveryFees: DELIVERY_FEES.map(({ label, fee, neighborhoods }) => ({ area: label, fee, neighborhoods })),
   });
 }

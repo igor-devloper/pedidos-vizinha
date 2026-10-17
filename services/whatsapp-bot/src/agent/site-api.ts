@@ -17,6 +17,7 @@ export type StoreInfo = {
   acceptsOrdersForFutureDates: boolean;
   allowMultipleOrdersPerSlot: boolean;
   weekly: Array<{ weekday: number; name: string; open: boolean; openHour: number | null; closeHour: number | null; text: string }>;
+  deliveryArea?: string;
   deliveryFees: Array<{ area: string; fee: number; neighborhoods: string[] }>;
 };
 

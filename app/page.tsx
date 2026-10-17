@@ -401,7 +401,7 @@ export default async function HomePage() {
               <Cartao className="p-6">
                 <h3 className="flex items-center gap-2 text-xl font-extrabold text-ink">
                   <Truck className="h-6 w-6 text-brand" aria-hidden="true" />
-                  Entregamos no seu bairro
+                  Entregamos do Centro de Cabedelo até Camboinha
                 </h3>
                 <ul className="mt-4 divide-y divide-brand-soft text-lg">
                   {DELIVERY_FEES.map((area) => (
@@ -413,7 +413,7 @@ export default async function HomePage() {
                 </ul>
                 <p className="mt-4 flex items-start gap-2 text-base text-ink-muted">
                   <Check className="mt-1 h-5 w-5 shrink-0 text-open" aria-hidden="true" />
-                  Outro bairro? A taxa é combinada com a Vizinha.
+                  Fora dessa área, só retirada.
                 </p>
               </Cartao>
             </div>

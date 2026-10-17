@@ -197,13 +197,51 @@ test("só Pix e cartão; dinheiro é recusado; 'cartão' sozinho pergunta crédi
   assert.equal(h.draft.paymentMethod, "CARTAO_DEBITO");
 });
 
-test("entrega: taxa do bairro vem da tabela do site; bairro fora da tabela fica 'a combinar'", async () => {
+test("entrega: a taxa vem da tabela do site e só vale do Centro de Cabedelo até Camboinha", async () => {
   const h = harness();
   const known = await h.run("definir_entrega", { tipo: "entrega", rua: "Rua X", numero: "10", bairro: "Camboinha II" });
+  assert.equal(known.ok, true);
   assert.match(String(known.taxaDeEntrega), /^R\$\s8,00$/);
-  const unknown = await h.run("definir_entrega", { tipo: "entrega", bairro: "João Pessoa" });
-  assert.match(String(unknown.taxaDeEntrega), /a combinar/);
-  assert.deepEqual(unknown.faltaPreencher, ["itens do pedido", "nome do cliente", "data e horário", "pagar 50% ou 100%", "forma de pagamento (Pix ou cartão)"]);
+  assert.equal(h.draft.fulfillmentType, "DELIVERY");
+});
+
+test("fora da área (Poço, Intermares, João Pessoa) a entrega é recusada, nada é salvo e a ferramenta manda oferecer retirada", async () => {
+  for (const bairro of ["Poço", "Intermares", "Jacaré", "Ponta de Campina", "Bessa"]) {
+    const h = harness();
+    const result = await h.run("definir_entrega", { tipo: "entrega", rua: "Rua Y", numero: "5", bairro });
+    assert.equal(result.ok, false, bairro);
+    assert.match(String(result.erro), /Não entregamos/);
+    assert.match(String(result.instrucao), /RETIRADA/);
+    assert.notEqual(h.draft.fulfillmentType, "DELIVERY", `${bairro}: não pode salvar entrega`);
+    assert.equal(h.draft.deliveryNeighborhood, null);
+
+    const pickup = await h.run("definir_entrega", { tipo: "retirada" });
+    assert.equal(pickup.ok, true);
+    assert.equal(h.draft.fulfillmentType, "PICKUP");
+  }
+});
+
+test("'Centro' existe em várias cidades: pede a cidade e só aceita Cabedelo", async () => {
+  const h = harness();
+  const ambiguous = await h.run("definir_entrega", { tipo: "entrega", rua: "Rua Z", numero: "1", bairro: "Centro" });
+  assert.equal(ambiguous.ok, false);
+  assert.match(String(ambiguous.instrucao), /cidade/);
+
+  const otherCity = await h.run("definir_entrega", { tipo: "entrega", rua: "Rua Z", numero: "1", bairro: "Centro", cidade: "João Pessoa" });
+  assert.equal(otherCity.ok, false);
+  assert.match(String(otherCity.erro), /Não entregamos/);
+
+  const cabedelo = await h.run("definir_entrega", { tipo: "entrega", rua: "Rua Z", numero: "1", bairro: "Centro", cidade: "Cabedelo" });
+  assert.equal(cabedelo.ok, true);
+  assert.match(String(cabedelo.taxaDeEntrega), /^R\$\s5,00$/);
+  assert.equal(h.draft.deliveryNeighborhood, "Centro, Cabedelo");
+});
+
+test("antes de saber o bairro a entrega é aceita; quando o bairro chega fora da área, é recusado", async () => {
+  const h = harness();
+  assert.equal((await h.run("definir_entrega", { tipo: "entrega" })).ok, true);
+  const later = await h.run("definir_entrega", { tipo: "entrega", bairro: "Intermares" });
+  assert.equal(later.ok, false);
 });
 
 test("ver_resumo recusa pedido incompleto e lista o que falta", async () => {

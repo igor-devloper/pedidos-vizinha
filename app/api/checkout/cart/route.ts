@@ -16,7 +16,7 @@ import {
   calculatePaymentAmounts,
   validateDeliveryDate,
 } from "@/lib/pedidos";
-import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
+import { getDeliveryFee, OUT_OF_AREA_MESSAGE, type FulfillmentType } from "@/lib/delivery";
 import { CartQuantityValidationError, validateCartItemQuantities } from "@/lib/cart-quantity";
 
 function parseLocalScheduledAt(value?: string) {
@@ -145,8 +145,11 @@ export async function POST(req: Request) {
     }
 
     const delivery = fulfillmentType === "DELIVERY"
-      ? getDeliveryFee(deliveryNeighborhood)
-      : { fee: 0, label: "Retirada", agreed: true };
+      ? getDeliveryFee(deliveryNeighborhood, deliveryCity)
+      : { fee: 0, label: "Retirada", agreed: true, covered: true, needsCity: false };
+    if (fulfillmentType === "DELIVERY" && !delivery.covered) {
+      return NextResponse.json({ error: OUT_OF_AREA_MESSAGE }, { status: 400 });
+    }
     const orderTotal = Number((snapshot.totalAmount + delivery.fee).toFixed(2));
 
     if (customerName.length < 2) {

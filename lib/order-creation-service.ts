@@ -3,8 +3,9 @@ import { MetodoPagamento, OrderSource, OrderStatus, PedidoStatus, Prisma } from 
 import { getFullStoreStatus, isSameBusinessDate } from "@/lib/business-hours";
 import { validateCartItemQuantities } from "@/lib/cart-quantity";
 import { prisma } from "@/lib/db";
-import { getDeliveryFee } from "@/lib/delivery";
+import { getDeliveryFee, OUT_OF_AREA_MESSAGE } from "@/lib/delivery";
 import { recordOrderEvent } from "@/lib/order-audit";
+import { businessInstantToFixedUtcLocal } from "@/lib/scheduled-at";
 import { calculatePaymentAmounts, validateDeliveryDate } from "@/lib/pedidos";
 
 export type NormalizedOrderInput = {
@@ -44,11 +45,14 @@ export async function previewValidatedOrder(input: NormalizedOrderInput) {
   const leadHours = Math.max(settings.minimumLeadHours, ...normalizedItems.map(({ product }) => product.antecedenciaMinimaHoras ?? settings.minimumLeadHours));
   validateDeliveryDate(input.scheduledAt, new Date(), leadHours, { operationSchedule: settings.operationSchedule });
   if (!settings.allowMultipleOrdersPerSlot) {
-    const conflict = await prisma.order.findFirst({ where: { scheduledAt: input.scheduledAt, status: { not: OrderStatus.CANCELLED } }, select: { id: true } })
+    const conflict = await prisma.order.findFirst({ where: { scheduledAt: businessInstantToFixedUtcLocal(input.scheduledAt), status: { not: OrderStatus.CANCELLED } }, select: { id: true } })
       || await prisma.pedido.findFirst({ where: { dataEntrega: input.scheduledAt, status: { not: PedidoStatus.CANCELADO } }, select: { id: true } });
     if (conflict) throw new Error("Esse horário já está reservado.");
   }
-  const delivery = input.fulfillmentType === "DELIVERY" ? getDeliveryFee(input.deliveryNeighborhood || "") : { fee: 0, agreed: true };
+  const delivery = input.fulfillmentType === "DELIVERY" ? getDeliveryFee(input.deliveryNeighborhood || "") : { fee: 0, agreed: true, covered: true, needsCity: false };
+  if (input.fulfillmentType === "DELIVERY" && !delivery.covered) {
+    throw new Error(delivery.needsCity ? "Confirme se o endereço é em Cabedelo. Entregamos apenas do Centro de Cabedelo até Camboinha." : OUT_OF_AREA_MESSAGE);
+  }
   if (input.fulfillmentType === "DELIVERY" && (!input.deliveryAddress || !input.deliveryNumber || !input.deliveryNeighborhood)) throw new Error("Endereço de entrega incompleto.");
   const total = Number((normalizedItems.reduce((sum, item) => sum + item.subtotal, 0) + delivery.fee).toFixed(2));
   const payment = calculatePaymentAmounts(total, input.paymentPercentage, input.paymentMethod);
@@ -65,7 +69,7 @@ export async function createValidatedOrder(input: NormalizedOrderInput) {
   const externalReference = input.idempotencyKey ? `whatsapp-${input.idempotencyKey}` : `cart-${code}`;
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.create({ data: {
-      source: input.source, externalReference, code, scheduledAt: input.scheduledAt,
+      source: input.source, externalReference, code, scheduledAt: businessInstantToFixedUtcLocal(input.scheduledAt),
       customerName: name, customerPhone: phone, customerEmail: email,
       fulfillmentType: input.fulfillmentType,
       deliveryAddress: input.fulfillmentType === "DELIVERY" ? `${input.deliveryAddress}, ${input.deliveryNumber}` : null,

@@ -30,7 +30,7 @@ import {
 } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 import type { StoreSiteTheme } from "@/lib/site-theme";
-import { getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
+import { DELIVERY_AREA_DESCRIPTION, getDeliveryFee, type FulfillmentType } from "@/lib/delivery";
 import type { CartAudience } from "@/lib/cart";
 import { getAllowedSalgadoTypes, validateCartItemQuantities } from "@/lib/cart-quantity";
 
@@ -740,14 +740,14 @@ export function FloatingCart({
       Boolean(deliveryDate) &&
       deliveryTimeIsValid &&
       !storeClosedBlocksSelectedDate &&
-      (fulfillmentType === "PICKUP" || Boolean(deliveryPlace.placeId && deliveryPlace.neighborhood && deliveryReference.trim().length >= 3)),
+      (fulfillmentType === "PICKUP" || Boolean(deliveryPlace.placeId && deliveryPlace.neighborhood && deliveryReference.trim().length >= 3 && getDeliveryFee(deliveryPlace.neighborhood, deliveryPlace.city).covered)),
     [cart.items.length, checkingOut, customerEmail, customerName, customerPhone, deliveryDate, deliveryTimeIsValid, storeClosedBlocksSelectedDate, fulfillmentType, deliveryPlace, deliveryReference]
   );
   const allowsPartialPayment = useMemo(
     () => cart.items.length > 0 && cart.items.every((item) => item.permitePagamentoParcial),
     [cart.items]
   );
-  const deliveryFee = fulfillmentType === "DELIVERY" ? getDeliveryFee(deliveryPlace.neighborhood) : { fee: 0, label: "Retirada", agreed: true };
+  const deliveryFee = fulfillmentType === "DELIVERY" ? getDeliveryFee(deliveryPlace.neighborhood, deliveryPlace.city) : { fee: 0, label: "Retirada", agreed: true, covered: true, needsCity: false };
   const orderTotal = Number((cart.totalAmount + deliveryFee.fee).toFixed(2));
   const paymentPreview = useMemo(
     () => calculatePaymentAmounts(orderTotal, paymentPercentage, paymentMethod),
@@ -967,6 +967,7 @@ export function FloatingCart({
   const nameValid = customerName.trim().length >= 2;
   const phoneValid = customerPhone.replace(/\D/g, "").length >= 10;
   const emailValid = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
+  const deliveryOutOfArea = fulfillmentType === "DELIVERY" && Boolean(deliveryPlace.placeId) && !deliveryFee.covered;
   const deliveryAddressMissing = fulfillmentType === "DELIVERY" && (!deliveryPlace.placeId || !deliveryPlace.neighborhood);
   const deliveryReferenceMissing = fulfillmentType === "DELIVERY" && deliveryReference.trim().length < 3;
   const stepErrors: Array<string | null> = [
@@ -978,7 +979,9 @@ export function FloatingCart({
         : !emailValid
           ? "Falta um e-mail válido. Usamos só para o pagamento."
           : null,
-    deliveryAddressMissing
+    deliveryOutOfArea
+      ? `Não entregamos nesse endereço. Entregamos apenas ${DELIVERY_AREA_DESCRIPTION}. Escolha "Vou buscar" para retirar.`
+      : deliveryAddressMissing
       ? "Falta escolher o endereço na lista de sugestões."
       : deliveryReferenceMissing
         ? "Falta o ponto de referência para o entregador."
@@ -1418,7 +1421,7 @@ export function FloatingCart({
                   </label>
                   <label className={radioCard(fulfillmentType === "DELIVERY")}>
                     <input type="radio" name="recebimento" checked={fulfillmentType === "DELIVERY"} onChange={() => { setFulfillmentType("DELIVERY"); setActionError(null); }} className="mt-1 h-6 w-6 shrink-0 accent-[var(--cart-accent)]" />
-                    <span><strong className="block">Quero que entreguem</strong><span className="text-base text-[var(--cart-muted)]">A taxa depende do bairro.</span></span>
+                    <span><strong className="block">Quero que entreguem</strong><span className="text-base text-[var(--cart-muted)]">Só {DELIVERY_AREA_DESCRIPTION}.</span></span>
                   </label>
                 </fieldset>
 
@@ -1428,8 +1431,17 @@ export function FloatingCart({
                       <label htmlFor="cart-delivery-address" className="block text-lg font-bold text-[var(--cart-dark)]">Endereço de entrega</label>
                       <Input ref={addressInputRef} id="cart-delivery-address" autoComplete="off" defaultValue={deliveryAddress} onInput={() => { if (deliveryPlace.placeId) { setDeliveryPlace({ placeId: "", neighborhood: "", city: "", latitude: 0, longitude: 0 }); setDeliveryAddress(""); } }} aria-describedby="dica-endereco" className="h-14 text-lg" />
                       <p id="dica-endereco" className="text-base text-[var(--cart-muted)]">Digite a rua e o número e toque em uma das sugestões que aparecem.</p>
-                      {deliveryPlace.placeId ? (
-                        <p className="text-base font-bold text-[#07391f]">Bairro {deliveryPlace.neighborhood}: entrega {deliveryFee.agreed ? formatCurrency(deliveryFee.fee) : "com taxa a combinar"}.</p>
+                      {deliveryPlace.placeId && deliveryFee.covered ? (
+                        <p className="text-base font-bold text-[#07391f]">Bairro {deliveryPlace.neighborhood}: entrega {formatCurrency(deliveryFee.fee)}.</p>
+                      ) : deliveryOutOfArea ? (
+                        <div role="alert" className="space-y-2 rounded-2xl border-2 border-[#b91c1c] bg-[#fdeaea] p-3">
+                          <p className="text-base font-bold text-[#7f1111]">
+                            Não entregamos em {deliveryPlace.neighborhood || "esse endereço"}. Entregamos apenas {DELIVERY_AREA_DESCRIPTION}.
+                          </p>
+                          <Button type="button" variant="outline" onClick={() => { setFulfillmentType("PICKUP"); setActionError(null); }} className="border-2 border-[#7f1111] text-[#7f1111]">
+                            Mudar para retirada
+                          </Button>
+                        </div>
                       ) : touched && deliveryAddressMissing ? (
                         <p role="alert" className="text-base font-bold text-[#7f1111]">Falta escolher o endereço em uma das sugestões.</p>
                       ) : null}

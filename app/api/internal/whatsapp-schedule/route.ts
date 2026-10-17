@@ -4,6 +4,7 @@ import { OrderStatus, PedidoStatus } from "@prisma/client";
 import { getFullStoreStatus } from "@/lib/business-hours";
 import { prisma } from "@/lib/db";
 import { hasValidInternalAuthorization } from "@/lib/internal-auth";
+import { businessInstantToFixedUtcLocal } from "@/lib/scheduled-at";
 import { checkSchedule } from "@/lib/whatsapp-schedule";
 
 // Valida data/hora com as mesmas regras do checkout do site (horário, antecedência, horário já reservado).
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
   if (!settings.allowMultipleOrdersPerSlot) {
     const conflict =
       (await prisma.order.findFirst({
-        where: { scheduledAt, status: { not: OrderStatus.CANCELLED } },
+        where: { scheduledAt: businessInstantToFixedUtcLocal(scheduledAt), status: { not: OrderStatus.CANCELLED } },
         select: { id: true },
       })) ||
       (await prisma.pedido.findFirst({

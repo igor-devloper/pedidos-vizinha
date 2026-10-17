@@ -1,23 +1,65 @@
+/**
+ * Área de entrega: do Centro de Cabedelo até Camboinha. Fora dela só há retirada.
+ * Para ampliar ou reduzir a área, edite esta lista (bairros e taxa); o site, o bot e a página
+ * inicial leem daqui.
+ */
+export const DELIVERY_CITY = "Cabedelo";
+export const DELIVERY_AREA_DESCRIPTION = "do Centro de Cabedelo até Camboinha";
+export const OUT_OF_AREA_MESSAGE = `Entregamos apenas ${DELIVERY_AREA_DESCRIPTION}. Para outros bairros, escolha retirada.`;
+
 export const DELIVERY_FEES = [
   { label: "Ponta de Matos a Jardim Manguinhos", neighborhoods: ["Ponta de Matos", "Jardim Manguinhos", "J. Manguinhos", "Vila São João", "Vila Sao Joao", "Centro", "Manguinhos", "Camalaú", "Camalau"], fee: 5 },
   { label: "Camboinha I, II e III", neighborhoods: ["Camboinha", "Camboinha I", "Camboinha II", "Camboinha III"], fee: 8 },
-  { label: "Poço (Recanto e Praia)", neighborhoods: ["Poço", "Poco", "Recanto do Poço", "Praia do Poço"], fee: 10 },
-  { label: "Ponta de Campina", neighborhoods: ["Ponta de Campina"], fee: 15 },
-  { label: "Portal do Poço", neighborhoods: ["Portal do Poço", "Portal do Poco"], fee: 15 },
-  { label: "Intermares", neighborhoods: ["Intermares"], fee: 15 },
-  { label: "Jacaré", neighborhoods: ["Jacaré", "Jacare"], fee: 15 },
 ] as const;
+
+/** Nomes que existem em várias cidades (ex.: "Centro"): só valem se o endereço for em Cabedelo. */
+const NEEDS_CITY = new Set(["centro"]);
 
 export type FulfillmentType = "PICKUP" | "DELIVERY";
 
 export function normalizeLocation(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
-export function getDeliveryFee(neighborhood: string) {
-  const normalized = normalizeLocation(neighborhood);
-  const match = DELIVERY_FEES.find((area) =>
-    area.neighborhoods.some((name) => normalized.includes(normalizeLocation(name))),
-  );
-  return match ? { fee: match.fee, label: match.label, agreed: true } : { fee: 0, label: "A combinar", agreed: false };
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export type DeliveryQuote = {
+  fee: number;
+  label: string;
+  /** Dentro da área de entrega (taxa definida). */
+  agreed: boolean;
+  covered: boolean;
+  /** Bairro com nome genérico ("Centro") e sem a cidade: precisa confirmar que é em Cabedelo. */
+  needsCity: boolean;
+};
+
+/**
+ * Taxa de entrega e se o endereço está na área atendida. `city` é a cidade do endereço (ex.: do Google Maps);
+ * se vier junto do bairro no mesmo texto ("Centro, Cabedelo"), também vale.
+ */
+export function getDeliveryFee(neighborhood: string, city?: string): DeliveryQuote {
+  const target = normalizeLocation(neighborhood);
+  const cityText = normalizeLocation(city ?? "");
+  const outside = { fee: 0, label: "Fora da área de entrega", agreed: false, covered: false, needsCity: false };
+
+  if (!target) return outside;
+  // Cidade informada e diferente de Cabedelo: fora da área, qualquer que seja o bairro.
+  if (cityText && !cityText.includes(normalizeLocation(DELIVERY_CITY))) return outside;
+
+  for (const area of DELIVERY_FEES) {
+    for (const name of area.neighborhoods) {
+      const normalizedName = normalizeLocation(name);
+      if (!new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedName)}([^a-z0-9]|$)`).test(target)) continue;
+
+      const hasCity = cityText.includes("cabedelo") || target.includes("cabedelo");
+      if (NEEDS_CITY.has(normalizedName) && !hasCity) {
+        return { ...outside, needsCity: true };
+      }
+      return { fee: area.fee, label: area.label, agreed: true, covered: true, needsCity: false };
+    }
+  }
+
+  return outside;
 }

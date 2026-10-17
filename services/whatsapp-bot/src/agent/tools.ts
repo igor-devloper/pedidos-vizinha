@@ -20,6 +20,7 @@ import {
   weekdayOf,
   type LocalDate,
 } from "./dates.js";
+import { checkDeliveryArea } from "./delivery-area.js";
 import { stripAccents } from "./name-matching.js";
 import type { SiteApi, StoreInfo } from "./site-api.js";
 import { describeDraft, formatScheduledAt, missingFields, parseLines, type DraftState } from "./state.js";
@@ -48,6 +49,7 @@ export type ToolDeps = {
 
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const norm = (value: string) => stripAccents(value).toLowerCase().trim();
+const normalizeCity = norm;
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 function toInt(value: unknown) {
@@ -86,11 +88,6 @@ function openDaysAfter(date: LocalDate, weekly: StoreInfo["weekly"], count = 3) 
     if (entry?.open) days.push(`${describeLocalDate(candidate)}, das ${entry.openHour}h às ${entry.closeHour}h`);
   }
   return days;
-}
-
-function matchDeliveryArea(info: StoreInfo, neighborhood: string) {
-  const target = norm(neighborhood);
-  return info.deliveryFees.find((area) => area.neighborhoods.some((name) => target.includes(norm(name)))) ?? null;
 }
 
 export function buildMenuMessage(products: AgentProduct[], business: ToolDeps["business"]) {
@@ -190,7 +187,7 @@ export const TOOL_DECLARATIONS = [
   {
     name: "definir_entrega",
     description:
-      "Define entrega ou retirada. Em entrega, informe rua, número e bairro (referência é opcional; use 'Sem referência' se o cliente disser que não tem). Devolve a taxa de entrega do bairro, quando existir.",
+      "Define entrega ou retirada. A entrega só vale do Centro de Cabedelo até Camboinha; fora disso é SÓ retirada (a ferramenta recusa e você oferece retirada). Em entrega, informe rua, número, bairro e, quando o bairro for 'Centro', a cidade (referência é opcional; use 'Sem referência' se o cliente disser que não tem). Devolve a taxa de entrega do bairro.",
     parameters: {
       type: "OBJECT",
       properties: {
@@ -198,6 +195,7 @@ export const TOOL_DECLARATIONS = [
         rua: { type: "STRING" },
         numero: { type: "STRING" },
         bairro: { type: "STRING" },
+        cidade: { type: "STRING", description: "Cidade do endereço (obrigatória quando o bairro é Centro)." },
         referencia: { type: "STRING" },
       },
       required: ["tipo"],
@@ -310,8 +308,10 @@ async function addItem(args: Record<string, unknown>, deps: ToolDeps): Promise<T
 
 async function viewMenu(deps: ToolDeps): Promise<ToolResult> {
   let delivery: Array<{ area: string; taxa: string }> | undefined;
+  let deliveryArea: string | undefined;
   try {
     const info = await deps.api.storeInfo();
+    deliveryArea = info.deliveryArea;
     delivery = info.deliveryFees.map((area) => ({ area: area.area, taxa: money(area.fee) }));
   } catch {
     // taxas são complementares; o cardápio continua válido sem elas
@@ -338,7 +338,7 @@ async function viewMenu(deps: ToolDeps): Promise<ToolResult> {
     }),
     formasDePagamento: ["Pix", "Cartão de crédito", "Cartão de débito"],
     taxasDeEntrega: delivery,
-    bairroForaDaTabela: "A taxa é combinada com a Vizinha.",
+    areaDeEntrega: deliveryArea ?? "Entregamos apenas do Centro de Cabedelo até Camboinha. Fora dessa área, só retirada.",
   };
 }
 
@@ -397,22 +397,40 @@ async function setFulfillment(args: Record<string, unknown>, deps: ToolDeps): Pr
     };
   }
 
+  // A entrega só vale na área atendida: confere o bairro ANTES de salvar qualquer coisa.
+  const bairro = text(args.bairro) || deps.getDraft().deliveryNeighborhood || "";
+  const cidade = text(args.cidade);
+  let taxa: string | undefined;
+  if (bairro) {
+    const info = await deps.api.storeInfo();
+    const check = checkDeliveryArea(info.deliveryFees, bairro, cidade);
+    if (!check.covered) {
+      const area = info.deliveryArea ?? "Entregamos apenas do Centro de Cabedelo até Camboinha. Fora dessa área, só retirada.";
+      return check.needsCity
+        ? {
+            ok: false,
+            erro: `"${bairro}" existe em mais de uma cidade.`,
+            instrucao: "Pergunte em qual cidade fica o endereço (só entregamos em Cabedelo) e chame de novo com 'cidade'.",
+          }
+        : {
+            ok: false,
+            erro: `Não entregamos em ${bairro}${cidade ? ` (${cidade})` : ""}. ${area}`,
+            instrucao:
+              "Explique com gentileza que a entrega é só do Centro de Cabedelo até Camboinha e ofereça RETIRADA. Se o cliente aceitar, chame definir_entrega com tipo=retirada. Nunca combine entrega fora da área nem taxa especial.",
+          };
+    }
+    taxa = money(check.fee);
+  }
+
   const patch: Record<string, unknown> = { fulfillmentType: "DELIVERY", stage: "COLLECTING", summarySentAt: null };
   if (text(args.rua)) patch.deliveryStreet = text(args.rua);
   if (text(args.numero)) patch.deliveryNumber = text(args.numero);
-  if (text(args.bairro)) patch.deliveryNeighborhood = text(args.bairro);
+  if (text(args.bairro)) {
+    const alreadyHasCity = cidade && normalizeCity(text(args.bairro)).includes(normalizeCity(cidade));
+    patch.deliveryNeighborhood = cidade && !alreadyHasCity ? `${text(args.bairro)}, ${cidade}` : text(args.bairro);
+  }
   if (text(args.referencia)) patch.deliveryReference = text(args.referencia);
   const updated = await deps.patchDraft(patch);
-
-  let taxa: string | undefined;
-  if (updated.deliveryNeighborhood) {
-    try {
-      const area = matchDeliveryArea(await deps.api.storeInfo(), updated.deliveryNeighborhood);
-      taxa = area ? money(area.fee) : "a combinar com a Vizinha";
-    } catch {
-      taxa = undefined;
-    }
-  }
   return {
     ok: true,
     modalidade: "entrega",
