@@ -20,7 +20,7 @@ import {
   weekdayOf,
   type LocalDate,
 } from "./dates.js";
-import { checkDeliveryArea } from "./delivery-area.js";
+import { checkDeliveryArea, deliveryFeesFrom } from "./delivery-area.js";
 import { stripAccents } from "./name-matching.js";
 import type { SiteApi, StoreInfo } from "./site-api.js";
 import { describeDraft, formatScheduledAt, missingFields, parseLines, type DraftState } from "./state.js";
@@ -70,7 +70,7 @@ function parsePaymentMethod(value: unknown) {
   return null;
 }
 
-const AFFIRMATIVE = /^(sim|s|ss|simm+|pode|pode sim|pode ser|pode confirmar|confirmo|confirmado|confirma|confirmar|isso|isso mesmo|isso ai|ok|okay|okey|certo|certinho|correto|fechado|fechou|perfeito|otimo|beleza|blz|bora|vamos|positivo|tudo certo|ta certo|esta certo|ta bom|esta bom|quero|uhum|aham|claro|com certeza|tente novamente|tenta novamente|tentar novamente)\b/;
+const AFFIRMATIVE = /^((show|top|massa|beleza|blz|ok|okay|entao|então)\s+)*(show|top|massa|joia|bacana|de acordo|manda ver|pode gerar|pode fechar|pode finalizar|gera|gere|fecha|sim|s|ss|simm+|pode|pode sim|pode ser|pode confirmar|confirmo|confirmado|confirma|confirmar|isso|isso mesmo|isso ai|ok|okay|okey|certo|certinho|correto|fechado|fechou|perfeito|otimo|beleza|blz|bora|vamos|positivo|tudo certo|ta certo|esta certo|ta bom|esta bom|quero|uhum|aham|claro|com certeza|tente novamente|tenta novamente|tentar novamente)\b/;
 const HESITATION = /\b(mas|porem|so que|trocar|troca|mudar|muda|mude|alterar|altera|errado|errada|espera|aguarda|calma|nao)\b/;
 
 /** O cliente confirmou claramente? Trava extra contra o modelo finalizar sozinho. */
@@ -312,7 +312,7 @@ async function viewMenu(deps: ToolDeps): Promise<ToolResult> {
   try {
     const info = await deps.api.storeInfo();
     deliveryArea = info.deliveryArea;
-    delivery = info.deliveryFees.map((area) => ({ area: area.area, taxa: money(area.fee) }));
+    delivery = deliveryFeesFrom(info).map((area) => ({ area: area.area, taxa: money(area.fee) }));
   } catch {
     // taxas são complementares; o cardápio continua válido sem elas
   }
@@ -403,7 +403,7 @@ async function setFulfillment(args: Record<string, unknown>, deps: ToolDeps): Pr
   let taxa: string | undefined;
   if (bairro) {
     const info = await deps.api.storeInfo();
-    const check = checkDeliveryArea(info.deliveryFees, bairro, cidade);
+    const check = checkDeliveryArea(deliveryFeesFrom(info), bairro, cidade);
     if (!check.covered) {
       const area = info.deliveryArea ?? "Entregamos apenas do Centro de Cabedelo até Camboinha. Fora dessa área, só retirada.";
       return check.needsCity

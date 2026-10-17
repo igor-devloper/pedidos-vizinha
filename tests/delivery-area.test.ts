@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { DELIVERY_FEES, getDeliveryFee, OUT_OF_AREA_MESSAGE } from "../lib/delivery";
-import { checkDeliveryArea } from "../services/whatsapp-bot/src/agent/delivery-area.js";
+import { checkDeliveryArea, deliveryFeesFrom, LOCAL_DELIVERY_FEES } from "../services/whatsapp-bot/src/agent/delivery-area.js";
 
 test("a área de entrega é só do Centro de Cabedelo até Camboinha", () => {
   assert.deepEqual(DELIVERY_FEES.map((area) => area.fee), [5, 8]);
@@ -46,4 +46,21 @@ test("a cópia da regra no bot dá o mesmo resultado que a do site", () => {
     const bot = checkDeliveryArea(fees, neighborhood, city);
     assert.deepEqual({ covered: bot.covered, fee: bot.fee, needsCity: bot.needsCity }, { covered: site.covered, fee: site.fee, needsCity: site.needsCity }, `${neighborhood} / ${city}`);
   }
+});
+
+test("a lista do bot é igual à do site (para o bot não depender do deploy do site)", () => {
+  const site = DELIVERY_FEES.map(({ label, fee, neighborhoods }) => ({ area: label, fee, neighborhoods: [...neighborhoods] }));
+  assert.deepEqual(LOCAL_DELIVERY_FEES, site);
+});
+
+test("site antigo (sem deliveryArea) manda a lista velha: o bot usa a dele e continua barrando Poço e Intermares", () => {
+  const oldSite = {
+    deliveryFees: [{ area: "Poço", fee: 10, neighborhoods: ["Poço", "Intermares", "Jacaré", "Centro"] }],
+  };
+  const fees = deliveryFeesFrom(oldSite);
+  assert.equal(checkDeliveryArea(fees, "Intermares").covered, false);
+  assert.equal(checkDeliveryArea(fees, "Poço").covered, false);
+  assert.equal(checkDeliveryArea(fees, "Camboinha II").covered, true);
+  const newSite = { deliveryArea: "Entregamos apenas…", deliveryFees: LOCAL_DELIVERY_FEES };
+  assert.equal(deliveryFeesFrom(newSite), LOCAL_DELIVERY_FEES);
 });

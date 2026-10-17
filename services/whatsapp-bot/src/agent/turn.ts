@@ -24,10 +24,11 @@ import type { AgentProduct } from "./cart.js";
 import { createGeminiModel } from "./gemini-model.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { createSiteApi, type StoreInfo } from "./site-api.js";
+import { deliveryFeesFrom } from "./delivery-area.js";
 import { extractPayment } from "./payment-parse.js";
 import { isRepeatingItself } from "./repetition.js";
 import { describeDraft, missingFields, type DraftState } from "./state.js";
-import { buildMenuMessage, executeTool, type ToolDeps } from "./tools.js";
+import { buildMenuMessage, executeTool, isClearConfirmation, type ToolDeps } from "./tools.js";
 
 const FALLBACK_REPLY =
   "Desculpe, tive um probleminha aqui. Pode me mandar sua mensagem de novo, por favor? Se preferir, a Vizinha também pode te atender.";
@@ -182,6 +183,23 @@ export async function handleAgentTurn(
     history.push({ role: "user", parts: [{ text: job.text }] } satisfies AgentContent);
   }
 
+  // O cliente confirmou o resumo: o código cria o pedido e envia o link/Pix. Não depende de o modelo chamar a ferramenta
+  // (ele chegou a dizer "pedido finalizado, instruções enviadas" sem ter gerado nada).
+  if (draft.stage === "AWAITING_CONFIRMATION" && draft.summarySentAt && !draft.orderId && isClearConfirmation(job.text)) {
+    const result = await executeTool("finalizar_pedido", {}, deps);
+    await logMessage(job.instanceId, job.remoteJid, "tool", "finalizar_pedido", { args: {}, result, auto: true });
+    logger.info({ instanceId: job.instanceId, ok: result.ok !== false, erro: result.erro }, "Order confirmation handled by code");
+    if (result.ok !== false) {
+      await send("Assim que o pagamento for confirmado, eu aviso por aqui. Obrigada! 😊");
+      return;
+    }
+    if (result.tentarNovamente) {
+      await send("Tive um probleminha técnico para gerar o pagamento, mas seu pedido está salvo. Me diga *tente novamente* que eu tento de novo. 🙏");
+      return;
+    }
+    history.at(-1)?.parts.push({ text: `[Sistema] Não foi possível criar o pedido: ${String(result.erro)}. Explique ao cliente e ajuste o necessário.` });
+  }
+
   // Pedido completo e só falta o pagamento: "50", "50% no crédito", "pix" etc. são registrados pelo código,
   // sem depender de o modelo lembrar de chamar a ferramenta (ele chegou a repetir a pergunta em loop).
   const pending = missingFields(draft, products);
@@ -246,7 +264,7 @@ export async function handleAgentTurn(
   // Valores em reais que o modelo pode citar: cardápio, taxas de entrega, retratos do pedido e
   // resultados das ferramentas. Qualquer outro valor é invenção e a resposta é barrada.
   const allowedMoney = catalogMoney(products);
-  for (const area of storeInfo?.deliveryFees ?? []) allowedMoney.add(Number(area.fee.toFixed(2)));
+  for (const area of storeInfo ? deliveryFeesFrom(storeInfo) : []) allowedMoney.add(Number(area.fee.toFixed(2)));
 
   try {
     const result = await runAgentLoop({
@@ -258,7 +276,13 @@ export async function handleAgentTurn(
         await logMessage(job.instanceId, job.remoteJid, "tool", name, { args, result });
         return result;
       },
-      verifyReply: (reply) => {
+      verifyReply: (reply, toolCalls) => {
+        const claimsOrderDone = /(pedido (j[aá] )?(foi |est[aá] )?(finalizado|criado|confirmado|registrado)|instru[cç][oõ]es (de|para o) pagamento (j[aá] )?foram enviadas|link de pagamento (j[aá] )?(foi enviado|est[aá] acima))/i.test(reply);
+        const orderCreated = Boolean(draft.orderId) || toolCalls.some((call) => call.name === "finalizar_pedido" && call.result.ok !== false);
+        if (claimsOrderDone && !orderCreated) {
+          logger.warn({ instanceId: job.instanceId }, "Agent claimed the order was finalized without creating it; asking for a rewrite");
+          return "[Aviso do sistema] Você disse que o pedido foi finalizado, mas nenhum pedido foi criado e nenhum pagamento foi enviado. Não afirme isso. Se o cliente confirmou o resumo, chame finalizar_pedido; senão, diga o que ainda falta.";
+        }
         const known = new Set(allowedMoney);
         addMoneyFromToolResult(known, describeDraft(draft, products));
         const unverified = findUnverifiedMoney(reply, known);

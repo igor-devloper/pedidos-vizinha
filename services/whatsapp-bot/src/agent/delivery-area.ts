@@ -35,3 +35,22 @@ export function checkDeliveryArea(fees: DeliveryAreaFee[], neighborhood: string,
 
   return outside;
 }
+
+/**
+ * Área de entrega própria do bot (espelho de lib/delivery.ts do site, conferido por teste). Vale quando o site
+ * ainda é uma versão antiga e manda a lista de bairros de antes: a regra "só do Centro de Cabedelo até Camboinha"
+ * não pode depender do deploy do site.
+ */
+export const LOCAL_DELIVERY_FEES: DeliveryAreaFee[] = [
+  {
+    area: "Ponta de Matos a Jardim Manguinhos",
+    fee: 5,
+    neighborhoods: ["Ponta de Matos", "Jardim Manguinhos", "J. Manguinhos", "Vila São João", "Vila Sao Joao", "Centro", "Manguinhos", "Camalaú", "Camalau"],
+  },
+  { area: "Camboinha I, II e III", fee: 8, neighborhoods: ["Camboinha", "Camboinha I", "Camboinha II", "Camboinha III"] },
+];
+
+/** Lista de bairros a usar: a do site quando ele já é a versão nova (informa `deliveryArea`), senão a do bot. */
+export function deliveryFeesFrom(info: { deliveryArea?: string; deliveryFees: DeliveryAreaFee[] }): DeliveryAreaFee[] {
+  return info.deliveryArea ? info.deliveryFees : LOCAL_DELIVERY_FEES;
+}
