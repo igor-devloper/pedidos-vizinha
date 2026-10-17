@@ -11,6 +11,24 @@ import { formatCurrency } from "@/lib/pedidos";
 
 const mercadoPagoPublicKey = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY?.trim() || "";
 
+/**
+ * Preenchimento automático do iPhone, colar e ditado às vezes mudam o campo sem avisar o formulário do Mercado Pago:
+ * ele continua mostrando "Dado obrigatório" no nome e no documento mesmo com o texto lá. Reenviar o valor como se
+ * tivesse sido digitado faz o formulário perceber. É inofensivo quando o valor já estava registrado.
+ */
+function syncBrickInputs(container: HTMLElement | null) {
+  if (!container) return;
+  const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+  if (!setValue) return;
+  container.querySelectorAll<HTMLInputElement>("input:not([type=hidden]):not([type=checkbox]):not([type=radio])").forEach((input) => {
+    // O campo que a pessoa está digitando agora fica de fora, para o cursor não pular.
+    if (!input.value || input === document.activeElement) return;
+    setValue.call(input, input.value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 if (mercadoPagoPublicKey) {
   initMercadoPago(mercadoPagoPublicKey, { locale: "pt-BR" });
 }
@@ -93,6 +111,7 @@ export function CartTransparentPayment({
   const [copied, setCopied] = useState(false);
   const pixStarted = useRef(false);
   const paidNotified = useRef(false);
+  const cardBoxRef = useRef<HTMLDivElement | null>(null);
 
   const applyResponse = useCallback((data: PayResponse) => {
     if (data.status) setStatus(data.status);
@@ -166,6 +185,23 @@ export function CartTransparentPayment({
       onPaid?.();
     }
   }, [onPaid, status]);
+
+  useEffect(() => {
+    const box = cardBoxRef.current;
+    if (!box || !cardReady) return;
+    const sync = () => syncBrickInputs(box);
+    // Ao sair de um campo, ao encostar em qualquer lugar do formulário (inclui o botão Pagar) e quando o navegador preenche sozinho.
+    box.addEventListener("focusout", sync, true);
+    box.addEventListener("pointerdown", sync, true);
+    box.addEventListener("animationstart", sync, true);
+    const timer = window.setInterval(sync, 1500);
+    return () => {
+      box.removeEventListener("focusout", sync, true);
+      box.removeEventListener("pointerdown", sync, true);
+      box.removeEventListener("animationstart", sync, true);
+      window.clearInterval(timer);
+    };
+  }, [cardReady]);
 
   const payCard = async (formData: CardFormData) => {
     setMessage(null);
@@ -297,7 +333,7 @@ export function CartTransparentPayment({
           Pagamento com cartão indisponível: configure NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY.
         </div>
       ) : (
-        <div className="rounded-3xl border border-[#c25bb4] bg-white p-3 sm:p-6">
+        <div ref={cardBoxRef} className="rounded-3xl border border-[#c25bb4] bg-white p-3 sm:p-6">
           {!cardReady ? (
             <div className="flex items-center justify-center gap-3 py-4 text-base font-bold text-[#5a3a54]">
               <LoaderCircle className="h-5 w-5 animate-spin" /> Carregando pagamento seguro...
