@@ -25,6 +25,7 @@ import { createGeminiModel } from "./gemini-model.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { createSiteApi, type StoreInfo } from "./site-api.js";
 import { extractPayment } from "./payment-parse.js";
+import { isRepeatingItself } from "./repetition.js";
 import { describeDraft, missingFields, type DraftState } from "./state.js";
 import { buildMenuMessage, executeTool, type ToolDeps } from "./tools.js";
 
@@ -60,6 +61,34 @@ async function buildStoreLine(): Promise<{ line: string; info: StoreInfo | null 
     logger.warn({ error }, "Could not load store info for the agent prompt");
     return { line: "Status da loja indisponível agora: use ver_horarios antes de afirmar horários.", info: null };
   }
+}
+
+/**
+ * Resposta fixa depois de registrar o pagamento. Devolve null quando o modelo deve continuar
+ * (falta algo que não é pagamento, ou o resumo não pôde ser montado).
+ */
+async function buildPaymentReply(
+  result: Record<string, unknown>,
+  stillMissing: string[],
+  args: { percentual?: number; forma?: string },
+  deps: ToolDeps,
+): Promise<string[] | null> {
+  if (result.ok === false) {
+    return [`${String(result.erro)}\n\nPode ser pagando *100%* agora? Se sim, me diga também se prefere *Pix*, *cartão de crédito* ou *cartão de débito*. 😊`];
+  }
+
+  const needPercent = stillMissing.some((field) => /50% ou 100%/.test(field));
+  const needMethod = stillMissing.some((field) => /forma de pagamento/.test(field));
+  const onlyPaymentLeft = stillMissing.every((field) => /50% ou 100%|forma de pagamento/.test(field));
+  if (!onlyPaymentLeft) return null;
+
+  if (needPercent && needMethod) return null;
+  if (needPercent) return [`Anotei! Você prefere pagar *50%* agora ou *100%*? 😊`];
+  if (needMethod) return [`Anotei *${args.percentual}%*! E a forma de pagamento: *Pix*, *cartão de crédito* ou *cartão de débito*? 😊`];
+
+  // Pagamento completo e pedido completo: o resumo oficial sai direto.
+  const summary = await executeTool("ver_resumo", {}, deps);
+  return summary.ok === false ? null : [];
 }
 
 /** Pausa o bot na conversa e avisa a Vizinha. Usado pela ferramenta chamar_humano. */
@@ -167,11 +196,38 @@ export async function handleAgentTurn(
     const args = { ...choice };
     const result = await executeTool("definir_pagamento", args, deps);
     await logMessage(job.instanceId, job.remoteJid, "tool", "definir_pagamento", { args, result, auto: true });
+    const stillMissing = (result.faltaPreencher as string[] | undefined) ?? [];
+    logger.info(
+      { instanceId: job.instanceId, args, ok: result.ok !== false, erro: result.erro, stillMissing },
+      "Payment applied from the customer's message",
+    );
+
+    // O passo de pagamento é respondido pelo código: não depende de o modelo entender a resposta.
+    const paymentReply = await buildPaymentReply(result, stillMissing, args, deps);
+    if (paymentReply !== null) {
+      for (const text of paymentReply) await send(text);
+      return;
+    }
+
     const outcome = result.ok === false
       ? `não foi aceito: ${String(result.erro)}`
-      : `registrado. Ainda falta: ${(result.faltaPreencher as string[] | undefined)?.join(", ") || "nada"}`;
+      : `registrado. Ainda falta: ${stillMissing.join(", ") || "nada"}`;
     history.at(-1)?.parts.push({
       text: `[Sistema] O pagamento informado pelo cliente nesta mensagem foi ${outcome}. Não repita a pergunta sobre o que já foi registrado.`,
+    });
+  }
+
+  // Modelo preso em loop (repetindo quase a mesma fala): corta o histórico para ele reler só a mensagem atual.
+  if (isRepeatingItself(history)) {
+    logger.warn({ instanceId: job.instanceId }, "Agent history is repetitive; sending only the latest customer message");
+    const last = history.at(-1);
+    history.length = 0;
+    history.push({
+      role: "user",
+      parts: [
+        ...(last?.parts ?? [{ text: job.text }]),
+        { text: "[Sistema] Suas últimas respostas estavam repetidas. Leia a mensagem do cliente com atenção e use as ferramentas para registrar o que ele pediu." },
+      ],
     });
   }
 

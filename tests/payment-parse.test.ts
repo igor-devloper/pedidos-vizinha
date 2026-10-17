@@ -22,3 +22,12 @@ test("não adivinha quando é ambíguo", () => {
   assert.deepEqual(extractPayment("ok"), {});
   assert.deepEqual(extractPayment("150"), {});
 });
+
+test("números e palavras soltas fora de contexto de pagamento não viram pagamento", () => {
+  assert.deepEqual(extractPayment("quero 100 coxinhas"), {});
+  assert.deepEqual(extractPayment("qual o total?"), {});
+  assert.deepEqual(extractPayment("metade de cada sabor"), {});
+  assert.deepEqual(extractPayment("tudo bem?"), {});
+  assert.deepEqual(extractPayment("50"), { percentual: 50 });
+  assert.deepEqual(extractPayment("100"), { percentual: 100 });
+});

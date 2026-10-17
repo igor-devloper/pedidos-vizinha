@@ -48,6 +48,16 @@ export function createGeminiModel(systemInstruction: string): ModelClient {
             .map((part) => part.text)
             .join("");
 
+          logger.info(
+            {
+              finishReason: candidate?.finishReason,
+              promptTokens: response.usageMetadata?.promptTokenCount,
+              toolCalls: functionCalls.map((call) => call.name),
+              textChars: text.length,
+            },
+            "Gemini turn",
+          );
+
           if (!candidate?.content) {
             logger.warn({ finishReason: candidate?.finishReason }, "Gemini returned no content");
           }
