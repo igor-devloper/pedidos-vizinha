@@ -45,3 +45,4 @@ node_modules
 services/whatsapp-bot/node_modules
 services/whatsapp-bot/dist
 services/whatsapp-bot/data
+services/whatsapp-bot/.env
